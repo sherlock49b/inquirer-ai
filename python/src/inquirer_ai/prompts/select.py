@@ -4,7 +4,7 @@ from typing import Any
 
 from prompt_toolkit import Application
 from prompt_toolkit.formatted_text import FormattedText
-from prompt_toolkit.key_binding import KeyBindings
+from prompt_toolkit.key_binding import KeyBindings, KeyPressEvent
 from prompt_toolkit.layout import FormattedTextControl, HSplit, Layout, Window
 
 from inquirer_ai.choice import Choice
@@ -13,7 +13,7 @@ from inquirer_ai.prompts.base import BasePrompt
 from inquirer_ai.theme import RESET, get_theme
 
 
-class SelectPrompt(BasePrompt):
+class SelectPrompt(BasePrompt[Any]):
     def __init__(
         self,
         message: str,
@@ -56,22 +56,22 @@ class SelectPrompt(BasePrompt):
 
         @kb.add("up")
         @kb.add("k")
-        def _up(event: Any) -> None:
+        def _up(event: KeyPressEvent) -> None:
             nonlocal cursor
             cursor = (cursor - 1) % len(choices)
 
         @kb.add("down")
         @kb.add("j")
-        def _down(event: Any) -> None:
+        def _down(event: KeyPressEvent) -> None:
             nonlocal cursor
             cursor = (cursor + 1) % len(choices)
 
         @kb.add("enter")
-        def _enter(event: Any) -> None:
+        def _enter(event: KeyPressEvent) -> None:
             event.app.exit(result=choices[cursor].value)
 
         @kb.add("c-c")
-        def _abort(event: Any) -> None:
+        def _abort(event: KeyPressEvent) -> None:
             event.app.exit(result=None)
 
         def get_message() -> FormattedText:

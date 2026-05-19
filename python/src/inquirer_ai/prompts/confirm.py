@@ -9,7 +9,7 @@ from inquirer_ai.prompts.base import BasePrompt
 from inquirer_ai.theme import RESET, get_theme
 
 
-class ConfirmPrompt(BasePrompt):
+class ConfirmPrompt(BasePrompt[bool]):
     def __init__(self, message: str, *, default: bool = False) -> None:
         super().__init__(message, default=default)
 
@@ -34,7 +34,7 @@ class ConfirmPrompt(BasePrompt):
         while True:
             result = pt_prompt(message)
             if not result:
-                answer = self.default  # type: ignore[assignment]
+                answer: bool = self.default
                 break
             lower = result.strip().lower()
             if lower in ("y", "yes"):

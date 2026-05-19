@@ -1,2 +1,7 @@
 [tool.uv.workspace]
 members = ["python"]
+
+[dependency-groups]
+dev = [
+    "pyright>=1.1.409",
+]

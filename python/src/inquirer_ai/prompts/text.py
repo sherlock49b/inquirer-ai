@@ -9,7 +9,7 @@ from inquirer_ai.prompts.base import BasePrompt
 from inquirer_ai.theme import RESET, get_theme
 
 
-class TextPrompt(BasePrompt):
+class TextPrompt(BasePrompt[str]):
     @property
     def prompt_type(self) -> str:
         return "input"
