@@ -51,10 +51,15 @@ def main() -> None:
         setup_now = confirm("Set up selected features now?")
         answers["setup_now"] = setup_now
 
-    import json
-    import sys
-
-    sys.stderr.write(json.dumps(answers, indent=2) + "\n")
+    print()
+    print(f"Creating project: {answers['name']}")
+    print(f"  Language: {answers['language']}")
+    print(f"  Features: {', '.join(answers['features']) or 'none'}")
+    print(f"  Git: {'yes' if answers['git_init'] else 'no'}")
+    print(f"  License: {answers['license']}")
+    if "setup_now" in answers:
+        print(f"  Setup now: {'yes' if answers['setup_now'] else 'no'}")
+    print("Done!")
 
 
 if __name__ == "__main__":

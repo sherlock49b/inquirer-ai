@@ -2,6 +2,7 @@ from inquirer_ai.choice import Choice
 from inquirer_ai.core import prompt
 from inquirer_ai.exceptions import InquirerAIError, PromptAbortedError, ValidationError
 from inquirer_ai.mode import is_agent_mode
+from inquirer_ai.theme import Theme, get_theme, set_theme
 from inquirer_ai.prompts.checkbox import CheckboxPrompt
 from inquirer_ai.prompts.confirm import ConfirmPrompt
 from inquirer_ai.prompts.select import SelectPrompt
@@ -36,6 +37,9 @@ __all__ = [
     "ConfirmPrompt",
     "SelectPrompt",
     "CheckboxPrompt",
+    "Theme",
+    "get_theme",
+    "set_theme",
     "InquirerAIError",
     "PromptAbortedError",
     "ValidationError",

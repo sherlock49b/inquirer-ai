@@ -10,6 +10,7 @@ from prompt_toolkit.layout import FormattedTextControl, HSplit, Layout, Window
 from inquirer_ai.choice import Choice
 from inquirer_ai.exceptions import PromptAbortedError, ValidationError
 from inquirer_ai.prompts.base import BasePrompt
+from inquirer_ai.theme import RESET, get_theme
 
 
 class SelectPrompt(BasePrompt):
@@ -42,6 +43,7 @@ class SelectPrompt(BasePrompt):
         )
 
     def _execute_terminal(self) -> Any:
+        t = get_theme()
         cursor = 0
         choices = self.choices
         if self.default is not None:
@@ -72,27 +74,36 @@ class SelectPrompt(BasePrompt):
         def _abort(event: Any) -> None:
             event.app.exit(result=None)
 
+        def get_message() -> FormattedText:
+            return FormattedText([
+                (t.pt(t.question), "? "),
+                ("bold", self.message),
+            ])
+
         def get_formatted_choices() -> FormattedText:
             lines: list[tuple[str, str]] = []
             for i, c in enumerate(choices):
-                prefix = "❯ " if i == cursor else "  "
-                style = "bold" if i == cursor else ""
-                lines.append((style, f"{prefix}{c.name}"))
+                if i == cursor:
+                    lines.append((t.pt_bold(t.highlight), f"❯ {c.name}"))
+                else:
+                    lines.append(("", f"  {c.name}"))
                 if i < len(choices) - 1:
                     lines.append(("", "\n"))
             return FormattedText(lines)
 
         layout = Layout(
             HSplit([
-                Window(FormattedTextControl(f"? {self.message}"), height=1),
+                Window(FormattedTextControl(get_message), height=1),
                 Window(FormattedTextControl(get_formatted_choices)),
             ])
         )
 
         app: Application[Any] = Application(
-            layout=layout, key_bindings=kb, full_screen=False
+            layout=layout, key_bindings=kb, full_screen=False, erase_when_done=True
         )
         result = app.run()
         if result is None:
             raise PromptAbortedError("Prompt aborted by user")
+        name = next(c.name for c in choices if c.value == result)
+        print(f"{t.ansi(t.success)}✓{RESET} {self.message} {t.ansi(t.answer)}{name}{RESET}")
         return result

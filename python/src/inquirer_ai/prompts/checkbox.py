@@ -10,6 +10,7 @@ from prompt_toolkit.layout import FormattedTextControl, HSplit, Layout, Window
 from inquirer_ai.choice import Choice
 from inquirer_ai.exceptions import PromptAbortedError, ValidationError
 from inquirer_ai.prompts.base import BasePrompt
+from inquirer_ai.theme import RESET, get_theme
 
 
 class CheckboxPrompt(BasePrompt):
@@ -53,6 +54,7 @@ class CheckboxPrompt(BasePrompt):
         return result
 
     def _execute_terminal(self) -> list[Any]:
+        t = get_theme()
         cursor = 0
         choices = self.choices
         checked: set[int] = set()
@@ -83,6 +85,13 @@ class CheckboxPrompt(BasePrompt):
             else:
                 checked.add(cursor)
 
+        @kb.add("a")
+        def _toggle_all(event: Any) -> None:
+            if len(checked) == len(choices):
+                checked.clear()
+            else:
+                checked.update(range(len(choices)))
+
         @kb.add("enter")
         def _enter(event: Any) -> None:
             event.app.exit(result=[choices[i].value for i in sorted(checked)])
@@ -91,12 +100,23 @@ class CheckboxPrompt(BasePrompt):
         def _abort(event: Any) -> None:
             event.app.exit(result=None)
 
+        def get_message() -> FormattedText:
+            return FormattedText([
+                (t.pt(t.question), "? "),
+                ("bold", self.message),
+            ])
+
         def get_formatted_choices() -> FormattedText:
             lines: list[tuple[str, str]] = []
             for i, c in enumerate(choices):
                 arrow = "❯" if i == cursor else " "
                 mark = "◉" if i in checked else "◯"
-                style = "bold" if i == cursor else ""
+                if i == cursor:
+                    style = t.pt_bold(t.highlight)
+                elif i in checked:
+                    style = t.pt(t.selected)
+                else:
+                    style = ""
                 lines.append((style, f"{arrow} {mark} {c.name}"))
                 if i < len(choices) - 1:
                     lines.append(("", "\n"))
@@ -104,15 +124,18 @@ class CheckboxPrompt(BasePrompt):
 
         layout = Layout(
             HSplit([
-                Window(FormattedTextControl(f"? {self.message}"), height=1),
+                Window(FormattedTextControl(get_message), height=1),
                 Window(FormattedTextControl(get_formatted_choices)),
             ])
         )
 
         app: Application[Any] = Application(
-            layout=layout, key_bindings=kb, full_screen=False
+            layout=layout, key_bindings=kb, full_screen=False, erase_when_done=True
         )
         result = app.run()
         if result is None:
             raise PromptAbortedError("Prompt aborted by user")
+        names = [c.name for c in choices if c.value in result]
+        summary = ", ".join(names) if names else "none"
+        print(f"{t.ansi(t.success)}✓{RESET} {self.message} {t.ansi(t.answer)}{summary}{RESET}")
         return result

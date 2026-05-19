@@ -3,8 +3,10 @@ from __future__ import annotations
 from typing import Any
 
 from prompt_toolkit import prompt as pt_prompt
+from prompt_toolkit.formatted_text import FormattedText
 
 from inquirer_ai.prompts.base import BasePrompt
+from inquirer_ai.theme import RESET, get_theme
 
 
 class TextPrompt(BasePrompt):
@@ -18,8 +20,14 @@ class TextPrompt(BasePrompt):
         return str(value)
 
     def _execute_terminal(self) -> str:
+        t = get_theme()
         suffix = f" ({self.default})" if self.default else ""
-        result = pt_prompt(f"? {self.message}{suffix}: ")
+        message = FormattedText([
+            (t.pt(t.question), "? "),
+            ("bold", f"{self.message}{suffix}: "),
+        ])
+        result = pt_prompt(message)
         if not result and self.default:
-            return self.default
+            result = self.default
+        print(f"{t.ansi(t.success)}✓{RESET} {self.message} {t.ansi(t.answer)}{result}{RESET}")
         return result
