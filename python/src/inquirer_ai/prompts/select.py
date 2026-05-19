@@ -1,0 +1,98 @@
+from __future__ import annotations
+
+from typing import Any
+
+from prompt_toolkit import Application
+from prompt_toolkit.formatted_text import FormattedText
+from prompt_toolkit.key_binding import KeyBindings
+from prompt_toolkit.layout import FormattedTextControl, HSplit, Layout, Window
+
+from inquirer_ai.choice import Choice
+from inquirer_ai.exceptions import PromptAbortedError, ValidationError
+from inquirer_ai.prompts.base import BasePrompt
+
+
+class SelectPrompt(BasePrompt):
+    def __init__(
+        self,
+        message: str,
+        *,
+        choices: list[str | dict[str, Any] | Choice],
+        default: Any = None,
+    ) -> None:
+        super().__init__(message, default=default)
+        self.choices = [Choice.from_raw(c) for c in choices]
+
+    @property
+    def prompt_type(self) -> str:
+        return "select"
+
+    def _to_agent_dict(self) -> dict[str, Any]:
+        d = super()._to_agent_dict()
+        d["choices"] = [c.to_dict() for c in self.choices]
+        return d
+
+    def _validate_answer(self, value: Any) -> Any:
+        for c in self.choices:
+            if value == c.value or value == c.name:
+                return c.value
+        raise ValidationError(
+            f"Invalid choice: {value!r}. "
+            f"Valid: {[c.value for c in self.choices]}"
+        )
+
+    def _execute_terminal(self) -> Any:
+        cursor = 0
+        choices = self.choices
+        if self.default is not None:
+            for i, c in enumerate(choices):
+                if c.value == self.default or c.name == self.default:
+                    cursor = i
+                    break
+
+        kb = KeyBindings()
+
+        @kb.add("up")
+        @kb.add("k")
+        def _up(event: Any) -> None:
+            nonlocal cursor
+            cursor = (cursor - 1) % len(choices)
+
+        @kb.add("down")
+        @kb.add("j")
+        def _down(event: Any) -> None:
+            nonlocal cursor
+            cursor = (cursor + 1) % len(choices)
+
+        @kb.add("enter")
+        def _enter(event: Any) -> None:
+            event.app.exit(result=choices[cursor].value)
+
+        @kb.add("c-c")
+        def _abort(event: Any) -> None:
+            event.app.exit(result=None)
+
+        def get_formatted_choices() -> FormattedText:
+            lines: list[tuple[str, str]] = []
+            for i, c in enumerate(choices):
+                prefix = "❯ " if i == cursor else "  "
+                style = "bold" if i == cursor else ""
+                lines.append((style, f"{prefix}{c.name}"))
+                if i < len(choices) - 1:
+                    lines.append(("", "\n"))
+            return FormattedText(lines)
+
+        layout = Layout(
+            HSplit([
+                Window(FormattedTextControl(f"? {self.message}"), height=1),
+                Window(FormattedTextControl(get_formatted_choices)),
+            ])
+        )
+
+        app: Application[Any] = Application(
+            layout=layout, key_bindings=kb, full_screen=False
+        )
+        result = app.run()
+        if result is None:
+            raise PromptAbortedError("Prompt aborted by user")
+        return result
