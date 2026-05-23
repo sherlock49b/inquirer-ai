@@ -2,13 +2,45 @@ name: Release
 
 on:
   push:
+    branches: [main]
     tags: ["v*"]
 
 permissions:
   contents: write
 
 jobs:
+  auto-tag:
+    if: github.ref_type == 'branch'
+    runs-on: ubuntu-latest
+    outputs:
+      tag_created: ${{ steps.tag.outputs.created }}
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Read version
+        id: version
+        run: |
+          VERSION=$(grep '^version' python/pyproject.toml | head -1 | sed 's/.*"\(.*\)"/\1/')
+          echo "version=v${VERSION}" >> "$GITHUB_OUTPUT"
+
+      - name: Check and create tag
+        id: tag
+        run: |
+          if git rev-parse "${{ steps.version.outputs.version }}" >/dev/null 2>&1; then
+            echo "Tag ${{ steps.version.outputs.version }} already exists"
+            echo "created=false" >> "$GITHUB_OUTPUT"
+          else
+            git tag "${{ steps.version.outputs.version }}"
+            git push origin "${{ steps.version.outputs.version }}"
+            echo "created=true" >> "$GITHUB_OUTPUT"
+          fi
+
   release:
+    needs: [auto-tag]
+    if: always() && (needs.auto-tag.outputs.tag_created == 'true' || (needs.auto-tag.result == 'skipped' && github.ref_type == 'tag'))
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -25,9 +57,12 @@ jobs:
       - name: Create GitHub release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ needs.auto-tag.outputs.version || github.ref_name }}
           body: ${{ steps.changelog.outputs.content }}
 
   publish-pypi:
+    needs: [auto-tag]
+    if: always() && (needs.auto-tag.outputs.tag_created == 'true' || (needs.auto-tag.result == 'skipped' && github.ref_type == 'tag'))
     runs-on: ubuntu-latest
     defaults:
       run:
