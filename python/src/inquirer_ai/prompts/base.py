@@ -26,7 +26,13 @@ def _send_agent_handshake() -> None:
         "protocol": "inquirer-ai",
         "version": version("inquirer-ai"),
         "format": "jsonl",
-        "description": "Each prompt is a JSON line on stdout. Respond with a JSON line on stdin.",
+        "interaction": "sequential",
+        "description": (
+            "Interactive prompt protocol. Prompts are sent one at a time — "
+            "read one JSON line from stdout, respond with one JSON line on stdin, "
+            "then wait for the next prompt. Do NOT send all answers at once. "
+            "Use a named pipe (mkfifo) or line-buffered I/O for bidirectional communication."
+        ),
         "example_response": {"answer": "<value>"},
     }
     sys.stdout.write(json.dumps(meta, ensure_ascii=False) + "\n")

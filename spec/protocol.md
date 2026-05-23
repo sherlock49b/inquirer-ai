@@ -42,7 +42,8 @@ The first line emitted by the program is a handshake metadata object. It is sent
   "protocol": "inquirer-ai",
   "version": "0.1.0",
   "format": "jsonl",
-  "description": "Each prompt is a JSON line on stdout. Respond with a JSON line on stdin.",
+  "interaction": "sequential",
+  "description": "Interactive prompt protocol. Prompts are sent one at a time — read one JSON line from stdout, respond with one JSON line on stdin, then wait for the next prompt. Do NOT send all answers at once. Use a named pipe (mkfifo) or line-buffered I/O for bidirectional communication.",
   "example_response": {"answer": "<value>"}
 }
 ```
@@ -52,10 +53,13 @@ The first line emitted by the program is a handshake metadata object. It is sent
 | `protocol` | string | Always `"inquirer-ai"` |
 | `version` | string | Semantic version of the library |
 | `format` | string | Always `"jsonl"` |
+| `interaction` | string | Always `"sequential"` — prompts are one-at-a-time |
 | `description` | string | Human-readable protocol description |
 | `example_response` | object | Example of the expected response format |
 
 Agents SHOULD check for `"protocol": "inquirer-ai"` in the first line to confirm the protocol is supported.
+
+**Important:** The protocol is strictly sequential. The program sends one prompt, then blocks waiting for one response before sending the next prompt. Agents MUST NOT send all answers at once — each answer must be sent only after reading its corresponding prompt. For bidirectional communication, use a named pipe (`mkfifo`) or line-buffered I/O.
 
 ## Prompt Objects
 
