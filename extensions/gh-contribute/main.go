@@ -151,7 +151,7 @@ func doCreatePR() {
 
 	upstream := detectUpstream()
 
-	body := fmt.Sprintf("## Summary\n- %s\n\n## Test plan\n- %s%s\n\nCo-worked with [Claude Code](https://claude.com/claude-code)",
+	body := fmt.Sprintf("## Summary\n- %s\n\n## Test plan\n- %s%s",
 		summary, testPlan, breakingNote)
 
 	proceed, err := prompt.Confirm(prompt.ConfirmConfig{
