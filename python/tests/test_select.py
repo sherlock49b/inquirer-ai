@@ -53,6 +53,11 @@ def test_agent_mode_invalid_choice(monkeypatch):
         p.execute()
 
 
+def test_empty_choices_raises():
+    with pytest.raises(ValueError, match="choices cannot be empty"):
+        SelectPrompt("Choose DB", choices=[])
+
+
 def test_agent_dict_includes_choices():
     p = SelectPrompt(
         "Choose DB",

@@ -59,6 +59,11 @@ def test_agent_mode_not_a_list(monkeypatch):
         p.execute()
 
 
+def test_empty_choices_raises():
+    with pytest.raises(ValueError, match="choices cannot be empty"):
+        CheckboxPrompt("Select features", choices=[])
+
+
 def test_agent_mode_with_dict_choices(monkeypatch):
     monkeypatch.setenv("INQUIRER_AI_MODE", "agent")
     stdin = io.StringIO(json.dumps({"answer": ["auth"]}) + "\n")

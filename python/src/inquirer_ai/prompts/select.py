@@ -22,6 +22,8 @@ class SelectPrompt(BasePrompt[Any]):
         default: Any = None,
     ) -> None:
         super().__init__(message, default=default)
+        if not choices:
+            raise ValueError("choices cannot be empty")
         self.choices = [Choice.from_raw(c) for c in choices]
 
     @property
