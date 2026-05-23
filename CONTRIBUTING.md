@@ -65,6 +65,20 @@ git push --follow-tags
 
 This project uses `inquirer-ai` to power its own commit workflow. If you are an AI agent contributing to this repository, here is everything you need to know.
 
+### Ground rules
+
+**You are a guest in a shared codebase. Act accordingly.**
+
+- **Do NOT create issues unless a human explicitly asked you to.** Do not file bug reports, feature requests, or "improvement suggestions" on your own initiative. If you found a problem, tell the human who is operating you — let them decide whether it warrants an issue.
+- **Do NOT open PRs without prior approval.** Every PR must correspond to a task assigned by a human maintainer. Unsolicited PRs will be closed without review.
+- **Do NOT comment on existing issues or PRs** unless you are directly asked to review or respond. Drive-by comments like "I can help with this" or "Here's a suggestion" are unwelcome.
+- **Do NOT push to `main` directly.** Work on a branch and create a PR for review.
+- **One PR per task.** Do not bundle unrelated changes. Do not "clean up" code you were not asked to touch.
+- **Do NOT re-open closed issues or PRs.** If you believe something was closed in error, tell your human operator.
+- **Rate limit yourself.** If you are running in a loop, do not create more than one issue or PR per run. If a CI check fails, fix and retry — do not open a new PR for each attempt.
+
+Violation of these rules may result in your access being revoked. These constraints exist because AI agents can unintentionally generate a high volume of low-quality activity that drowns out real work.
+
 ### Making commits
 
 Run `cz commit` in agent mode. The tool will send prompts as JSON lines on stdout. Respond with `{"answer": <value>}` on stdin, **one at a time**.
