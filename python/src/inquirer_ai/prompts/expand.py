@@ -1,0 +1,86 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import Any
+
+from prompt_toolkit import prompt as pt_prompt
+from prompt_toolkit.formatted_text import FormattedText
+
+from inquirer_ai.exceptions import ValidationError
+from inquirer_ai.prompts.base import BasePrompt
+from inquirer_ai.theme import RESET, get_theme
+
+
+@dataclass
+class ExpandChoice:
+    key: str
+    name: str
+    value: Any
+
+
+class ExpandPrompt(BasePrompt[Any]):
+    def __init__(
+        self,
+        message: str,
+        *,
+        choices: list[dict[str, Any] | ExpandChoice],
+        **kwargs: Any,
+    ) -> None:
+        super().__init__(message, **kwargs)
+        if not choices:
+            raise ValueError("choices cannot be empty")
+        self.expand_choices = [self._parse(c) for c in choices]
+
+    @staticmethod
+    def _parse(raw: dict[str, Any] | ExpandChoice) -> ExpandChoice:
+        if isinstance(raw, ExpandChoice):
+            return raw
+        return ExpandChoice(
+            key=raw["key"].lower(),
+            name=raw.get("name", raw["key"]),
+            value=raw.get("value", raw["key"]),
+        )
+
+    @property
+    def prompt_type(self) -> str:
+        return "expand"
+
+    def _validate_answer(self, value: Any) -> Any:
+        if isinstance(value, str):
+            lower = value.lower()
+            for c in self.expand_choices:
+                if lower == c.key or value == c.value or value == c.name:
+                    return c.value
+        raise ValidationError(f"Invalid choice: {value!r}")
+
+    def _format_answer(self, value: Any) -> str:
+        for c in self.expand_choices:
+            if c.value == value:
+                return c.name
+        return str(value)
+
+    def _to_agent_dict(self) -> dict[str, Any]:
+        d = super()._to_agent_dict()
+        d["choices"] = [{"key": c.key, "name": c.name, "value": c.value} for c in self.expand_choices]
+        return d
+
+    def _execute_terminal(self) -> Any:
+        t = get_theme()
+        keys = "/".join(c.key for c in self.expand_choices)
+        while True:
+            message = FormattedText(
+                [
+                    (t.pt(t.question), f"{t.sym_question} "),
+                    ("bold", f"{self.message} ({keys}): "),
+                ]
+            )
+            raw = pt_prompt(message)
+            lower = raw.strip().lower()
+            if lower == "h" or lower == "help":
+                for c in self.expand_choices:
+                    print(f"  {c.key}) {c.name}")
+                continue
+            for c in self.expand_choices:
+                if lower == c.key:
+                    return c.value
+            print(f"{t.ansi(t.error)}  Invalid key. Press h for help.{RESET}")

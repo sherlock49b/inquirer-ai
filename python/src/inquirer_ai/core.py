@@ -8,8 +8,10 @@ from inquirer_ai.prompts.base import BasePrompt
 from inquirer_ai.prompts.checkbox import CheckboxPrompt
 from inquirer_ai.prompts.confirm import ConfirmPrompt
 from inquirer_ai.prompts.editor import EditorPrompt
+from inquirer_ai.prompts.expand import ExpandPrompt
 from inquirer_ai.prompts.number import NumberPrompt
 from inquirer_ai.prompts.password import PasswordPrompt
+from inquirer_ai.prompts.rawlist import RawlistPrompt
 from inquirer_ai.prompts.search import SearchPrompt
 from inquirer_ai.prompts.select import SelectPrompt
 from inquirer_ai.prompts.text import TextPrompt
@@ -39,6 +41,8 @@ _PROMPT_MAP: dict[str, type[BasePrompt[Any]]] = {
     "number": NumberPrompt,
     "search": SearchPrompt,
     "editor": EditorPrompt,
+    "rawlist": RawlistPrompt,
+    "expand": ExpandPrompt,
 }
 
 
