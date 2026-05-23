@@ -8,6 +8,8 @@ from inquirer_ai.exceptions import InquirerAIError, PromptAbortedError, Validati
 from inquirer_ai.mode import is_agent_mode
 from inquirer_ai.prompts.checkbox import CheckboxPrompt
 from inquirer_ai.prompts.confirm import ConfirmPrompt
+from inquirer_ai.prompts.number import NumberPrompt
+from inquirer_ai.prompts.password import PasswordPrompt
 from inquirer_ai.prompts.select import SelectPrompt
 from inquirer_ai.prompts.text import TextPrompt
 from inquirer_ai.theme import Theme, get_theme, set_theme
@@ -125,11 +127,38 @@ def checkbox(
     ).execute()
 
 
+def password(
+    message: str,
+    *,
+    mask: str | None = "*",
+    validate: Callable[[str], bool | str | None] | None = None,
+    filter: Callable[[str], str] | None = None,
+) -> str:
+    return PasswordPrompt(message, mask=mask, validate=validate, filter=filter).execute()
+
+
+def number(
+    message: str,
+    *,
+    default: int | float | None = None,
+    min: int | float | None = None,
+    max: int | float | None = None,
+    float_allowed: bool = True,
+    validate: Callable[[int | float], bool | str | None] | None = None,
+    filter: Callable[[int | float], int | float] | None = None,
+) -> int | float:
+    return NumberPrompt(
+        message, default=default, min=min, max=max, float_allowed=float_allowed, validate=validate, filter=filter
+    ).execute()
+
+
 __all__ = [
     "CheckboxPrompt",
     "Choice",
     "ConfirmPrompt",
     "InquirerAIError",
+    "NumberPrompt",
+    "PasswordPrompt",
     "PromptAbortedError",
     "Question",
     "SelectPrompt",
@@ -141,6 +170,8 @@ __all__ = [
     "confirm",
     "get_theme",
     "is_agent_mode",
+    "number",
+    "password",
     "prompt",
     "select",
     "set_theme",
