@@ -34,10 +34,10 @@ class CheckboxPrompt(ChoiceBasePrompt[list[Any]]):
     def _validate_answer(self, value: Any) -> list[Any]:
         if not isinstance(value, list):
             raise ValidationError(f"Expected a list, got {type(value).__name__}")
-        result = []
-        valid_values = {c.value for c in self.choices}
-        valid_names = {c.name for c in self.choices}
-        for v in value:
+        result: list[Any] = []
+        valid_values: set[Any] = {c.value for c in self.choices}
+        valid_names: set[str] = {c.name for c in self.choices}
+        for v in value:  # pyright: ignore[reportUnknownVariableType]
             if v in valid_values:
                 result.append(v)
             elif v in valid_names:
@@ -46,9 +46,7 @@ class CheckboxPrompt(ChoiceBasePrompt[list[Any]]):
                         result.append(c.value)
                         break
             else:
-                raise ValidationError(
-                    f"Invalid choice: {v!r}. Valid: {list(valid_values)}"
-                )
+                raise ValidationError(f"Invalid choice: {v!r}. Valid: {list(valid_values)}")
         return result
 
     def _format_answer(self, value: list[Any]) -> str:

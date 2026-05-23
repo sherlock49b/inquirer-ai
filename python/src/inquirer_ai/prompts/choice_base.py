@@ -28,7 +28,8 @@ class ChoiceBasePrompt(BasePrompt[T]):
         super().__init__(message, **kwargs)
         if not choices:
             raise ValueError("choices cannot be empty")
-        self.choices = [Choice.from_raw(c) for c in choices]
+        parsed: list[Choice[Any]] = [Choice.from_raw(c) for c in choices]  # pyright: ignore[reportUnknownMemberType]
+        self.choices = parsed
         self.page_size = page_size
 
     def _to_agent_dict(self) -> dict[str, Any]:
@@ -76,10 +77,12 @@ class ChoiceBasePrompt(BasePrompt[T]):
         self._build_keybindings(kb, choices, state)
 
         def get_message() -> FormattedText:
-            return FormattedText([
-                (t.pt(t.question), f"{t.sym_question} "),
-                ("bold", self.message),
-            ])
+            return FormattedText(
+                [
+                    (t.pt(t.question), f"{t.sym_question} "),
+                    ("bold", self.message),
+                ]
+            )
 
         def _visible_range() -> tuple[int, int]:
             cursor = state["cursor"]
@@ -104,15 +107,15 @@ class ChoiceBasePrompt(BasePrompt[T]):
             return FormattedText(lines)
 
         layout = Layout(
-            HSplit([
-                Window(FormattedTextControl(get_message), height=1),
-                Window(FormattedTextControl(get_formatted_choices)),
-            ])
+            HSplit(
+                [
+                    Window(FormattedTextControl(get_message), height=1),
+                    Window(FormattedTextControl(get_formatted_choices)),
+                ]
+            )
         )
 
-        app: Application[Any] = Application(
-            layout=layout, key_bindings=kb, full_screen=False, erase_when_done=True
-        )
+        app: Application[Any] = Application(layout=layout, key_bindings=kb, full_screen=False, erase_when_done=True)
         result = app.run()
         if result is None:
             raise PromptAbortedError("Prompt aborted by user")

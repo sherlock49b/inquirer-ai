@@ -5,11 +5,11 @@ from inquirer_ai.choice import Choice
 from inquirer_ai.core import Question, prompt
 from inquirer_ai.exceptions import InquirerAIError, PromptAbortedError, ValidationError
 from inquirer_ai.mode import is_agent_mode
-from inquirer_ai.theme import Theme, get_theme, set_theme
 from inquirer_ai.prompts.checkbox import CheckboxPrompt
 from inquirer_ai.prompts.confirm import ConfirmPrompt
 from inquirer_ai.prompts.select import SelectPrompt
 from inquirer_ai.prompts.text import TextPrompt
+from inquirer_ai.theme import Theme, get_theme, set_theme
 
 V = TypeVar("V")
 
@@ -73,7 +73,9 @@ def select(
     validate: Callable[[Any], bool | str | None] | None = None,
     filter: Callable[[Any], Any] | None = None,
 ) -> Any:
-    return SelectPrompt(message, choices=list(choices), default=default, page_size=page_size, validate=validate, filter=filter).execute()
+    return SelectPrompt(
+        message, choices=list(choices), default=default, page_size=page_size, validate=validate, filter=filter
+    ).execute()
 
 
 @overload
@@ -115,26 +117,28 @@ def checkbox(
     validate: Callable[[Any], bool | str | None] | None = None,
     filter: Callable[[Any], Any] | None = None,
 ) -> list[Any]:
-    return CheckboxPrompt(message, choices=list(choices), default=default, page_size=page_size, validate=validate, filter=filter).execute()
+    return CheckboxPrompt(
+        message, choices=list(choices), default=default, page_size=page_size, validate=validate, filter=filter
+    ).execute()
 
 
 __all__ = [
-    "text",
-    "confirm",
-    "select",
-    "checkbox",
-    "prompt",
-    "Question",
-    "is_agent_mode",
-    "Choice",
-    "TextPrompt",
-    "ConfirmPrompt",
-    "SelectPrompt",
     "CheckboxPrompt",
-    "Theme",
-    "get_theme",
-    "set_theme",
+    "Choice",
+    "ConfirmPrompt",
     "InquirerAIError",
     "PromptAbortedError",
+    "Question",
+    "SelectPrompt",
+    "TextPrompt",
+    "Theme",
     "ValidationError",
+    "checkbox",
+    "confirm",
+    "get_theme",
+    "is_agent_mode",
+    "prompt",
+    "select",
+    "set_theme",
+    "text",
 ]

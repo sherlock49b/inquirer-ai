@@ -30,10 +30,12 @@ class ConfirmPrompt(BasePrompt[bool]):
     def _execute_terminal(self) -> bool:
         t = get_theme()
         hint = "Y/n" if self.default else "y/N"
-        message = FormattedText([
-            (t.pt(t.question), f"{t.sym_question} "),
-            ("bold", f"{self.message} ({hint}): "),
-        ])
+        message = FormattedText(
+            [
+                (t.pt(t.question), f"{t.sym_question} "),
+                ("bold", f"{self.message} ({hint}): "),
+            ]
+        )
         while True:
             result = pt_prompt(message)
             if not result:

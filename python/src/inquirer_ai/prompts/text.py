@@ -22,10 +22,12 @@ class TextPrompt(BasePrompt[str]):
     def _execute_terminal(self) -> str:
         t = get_theme()
         suffix = f" ({self.default})" if self.default is not None else ""
-        message = FormattedText([
-            (t.pt(t.question), f"{t.sym_question} "),
-            ("bold", f"{self.message}{suffix}: "),
-        ])
+        message = FormattedText(
+            [
+                (t.pt(t.question), f"{t.sym_question} "),
+                ("bold", f"{self.message}{suffix}: "),
+            ]
+        )
         result = pt_prompt(message)
         if not result and self.default is not None:
             result = self.default

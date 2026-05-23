@@ -1,6 +1,5 @@
 import io
 import json
-from unittest.mock import call
 
 from inquirer_ai.prompts.confirm import ConfirmPrompt
 

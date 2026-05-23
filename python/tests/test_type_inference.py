@@ -1,4 +1,5 @@
 """Static type inference tests — verified by pyright, not executed at runtime."""
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING

@@ -26,11 +26,11 @@ class Choice(Generic[V]):
             return raw
         if isinstance(raw, str):
             return Choice(name=raw, value=raw)
-        if isinstance(raw, dict):
-            name = raw.get("name", str(raw.get("value", "")))
-            value = raw.get("value", name)
-            return Choice(name=name, value=value)
-        raise TypeError(f"Cannot convert {type(raw).__name__} to Choice")
+        if not isinstance(raw, dict):  # pyright: ignore[reportUnnecessaryIsInstance]
+            raise TypeError(f"Cannot convert {type(raw).__name__} to Choice")
+        name: str = raw.get("name", str(raw.get("value", "")))
+        value: Any = raw.get("value", name)
+        return Choice(name=name, value=value)
 
     def to_dict(self) -> dict[str, Any]:
         return {"name": self.name, "value": self.value}

@@ -34,12 +34,36 @@ Issues = "https://github.com/sherlock49b/inquirer-ai/issues"
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
+[tool.pyright]
+typeCheckingMode = "strict"
+reportUnusedFunction = false
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 120
+
+[tool.ruff.lint]
+select = [
+    "E",     # pycodestyle errors
+    "W",     # pycodestyle warnings
+    "F",     # pyflakes
+    "I",     # isort
+    "UP",    # pyupgrade
+    "B",     # flake8-bugbear
+    "SIM",   # flake8-simplify
+    "RUF",   # ruff-specific
+]
+ignore = [
+    "RUF001",  # ambiguous unicode — we use ❯ ◉ ◯ ✓ intentionally
+]
 
 [dependency-groups]
 dev = [
     "pyright>=1.1.409",
     "pytest>=8.0",
     "pytest-cov>=5.0",
+    "ruff>=0.11",
 ]

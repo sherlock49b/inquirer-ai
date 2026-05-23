@@ -30,10 +30,7 @@ class SelectPrompt(ChoiceBasePrompt[Any]):
         for c in self.choices:
             if value == c.value or value == c.name:
                 return c.value
-        raise ValidationError(
-            f"Invalid choice: {value!r}. "
-            f"Valid: {[c.value for c in self.choices]}"
-        )
+        raise ValidationError(f"Invalid choice: {value!r}. Valid: {[c.value for c in self.choices]}")
 
     def _format_answer(self, value: Any) -> str:
         for c in self.choices:
@@ -58,4 +55,5 @@ class SelectPrompt(ChoiceBasePrompt[Any]):
         return ("", f"  {choice.name}")
 
     def _get_result(self, state: dict[str, Any]) -> Any:
-        return self.choices[state["cursor"]].value
+        cursor: int = state["cursor"]
+        return self.choices[cursor].value

@@ -6,7 +6,7 @@ from dataclasses import dataclass
 RESET = "\033[0m"
 
 
-@dataclass
+@dataclass(frozen=True)
 class Theme:
     # oklch(0.74 0.090 280) - soft lavender for question mark
     question: str = "#9fa4e3"
@@ -43,7 +43,7 @@ class Theme:
         return f"fg:{hex_color} bold"
 
 
-_theme_var: ContextVar[Theme] = ContextVar("inquirer_ai_theme", default=Theme())
+_theme_var: ContextVar[Theme] = ContextVar("inquirer_ai_theme", default=Theme())  # noqa: B039
 
 
 def set_theme(theme: Theme) -> None:
