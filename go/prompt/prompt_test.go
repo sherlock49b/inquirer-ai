@@ -21,7 +21,6 @@ func agentSetup(t *testing.T, input string) (*os.File, *os.File, func()) {
 	agentStep = 0
 	agentWriter = nil
 	agentReader = nil
-	bufferedAnswer = nil
 
 	oldStdin := os.Stdin
 	oldStdout := os.Stdout

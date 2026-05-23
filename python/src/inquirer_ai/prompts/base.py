@@ -69,22 +69,6 @@ def _send_agent_handshake() -> None:
     out.write(json.dumps(meta, ensure_ascii=False) + "\n")
     out.flush()
 
-    # Read handshake ack or early answer
-    agent_in = _get_agent_in()
-    line = agent_in.readline()
-    if line:
-        try:
-            parsed: dict[str, Any] = json.loads(line)  # pyright: ignore[reportUnknownVariableType]
-            if isinstance(parsed, dict):  # pyright: ignore[reportUnnecessaryIsInstance]
-                if parsed.get("kind") == "handshake_ack":
-                    _agent_handshake_ack = parsed
-                elif "answer" in parsed:
-                    # Push back as first answer
-                    _agent_pushback_line = line
-                # else: ignore unrecognized JSON
-        except json.JSONDecodeError:
-            pass  # ignore invalid JSON during handshake
-
 
 class BasePrompt(ABC, Generic[T]):
     def __init__(
@@ -126,13 +110,22 @@ class BasePrompt(ABC, Generic[T]):
         }
 
     def _read_agent_line(self) -> str:
-        global _agent_pushback_line
+        global _agent_pushback_line, _agent_handshake_ack
         if _agent_pushback_line is not None:
             line = _agent_pushback_line
             _agent_pushback_line = None
             return line
         agent_in = _get_agent_in()
-        return agent_in.readline()
+        line = agent_in.readline()
+        if line:
+            try:
+                raw: Any = json.loads(line)
+                if isinstance(raw, dict) and raw.get("kind") == "handshake_ack":  # pyright: ignore[reportUnknownMemberType]
+                    _agent_handshake_ack = raw  # pyright: ignore[reportUnknownVariableType]
+                    return agent_in.readline()
+            except json.JSONDecodeError:
+                pass
+        return line
 
     def _execute_agent(self) -> T:
         global _agent_step
@@ -221,13 +214,22 @@ class BasePrompt(ABC, Generic[T]):
             return result
 
     async def _read_agent_line_async(self) -> str:
-        global _agent_pushback_line
+        global _agent_pushback_line, _agent_handshake_ack
         if _agent_pushback_line is not None:
             line = _agent_pushback_line
             _agent_pushback_line = None
             return line
         agent_in = _get_agent_in()
-        return await asyncio.get_running_loop().run_in_executor(None, agent_in.readline)
+        line = await asyncio.get_running_loop().run_in_executor(None, agent_in.readline)
+        if line:
+            try:
+                raw: Any = json.loads(line)
+                if isinstance(raw, dict) and raw.get("kind") == "handshake_ack":  # pyright: ignore[reportUnknownMemberType]
+                    _agent_handshake_ack = raw  # pyright: ignore[reportUnknownVariableType]
+                    return await asyncio.get_running_loop().run_in_executor(None, agent_in.readline)
+            except json.JSONDecodeError:
+                pass
+        return line
 
     async def _execute_agent_async(self) -> T:
         global _agent_step

@@ -17,8 +17,6 @@ var (
 	agentWriter   *os.File
 	agentReader   *os.File
 	agentIOOnce   sync.Once
-	// bufferedAnswer holds an answer received during handshake processing
-	bufferedAnswer *map[string]any
 )
 
 const version = "0.2.0"
@@ -59,26 +57,6 @@ func sendHandshake() {
 		}
 		data, _ := json.Marshal(meta)
 		fmt.Fprintln(agentWriter, string(data))
-
-		// Read one line after handshake: could be handshake_ack, answer, or ignored
-		scanner := getScanner()
-		if scanner.Scan() {
-			line := scanner.Text()
-			var resp map[string]any
-			if err := json.Unmarshal([]byte(line), &resp); err == nil {
-				kind, _ := resp["kind"].(string)
-				switch kind {
-				case "handshake_ack":
-					// Store capabilities (no-op for now, but ack is consumed)
-				default:
-					// Check if it has an "answer" key — buffer it
-					if _, ok := resp["answer"]; ok {
-						bufferedAnswer = &resp
-					}
-					// Otherwise ignore
-				}
-			}
-		}
 	})
 }
 
@@ -106,36 +84,31 @@ func AgentSend(payload map[string]any) error {
 }
 
 func AgentReceive() (any, error) {
-	// Check for buffered answer from handshake
-	if bufferedAnswer != nil {
-		resp := *bufferedAnswer
-		bufferedAnswer = nil
+	scanner := getScanner()
+	for {
+		if !scanner.Scan() {
+			if err := scanner.Err(); err != nil {
+				return nil, fmt.Errorf("%w: stdin: %v", ErrAborted, err)
+			}
+			return nil, fmt.Errorf("%w: stdin closed", ErrAborted)
+		}
+
+		line := scanner.Text()
+		var resp map[string]any
+		if err := json.Unmarshal([]byte(line), &resp); err != nil {
+			return nil, fmt.Errorf("%w: %v. Expected JSON like: {\"answer\": \"<value>\"}", ErrInvalidJSON, err)
+		}
+
+		if kind, _ := resp["kind"].(string); kind == "handshake_ack" {
+			continue
+		}
+
 		answer, ok := resp["answer"]
 		if !ok {
 			return nil, fmt.Errorf("%w: response must have an \"answer\" key", ErrInvalidJSON)
 		}
 		return answer, nil
 	}
-
-	scanner := getScanner()
-	if !scanner.Scan() {
-		if err := scanner.Err(); err != nil {
-			return nil, fmt.Errorf("%w: stdin: %v", ErrAborted, err)
-		}
-		return nil, fmt.Errorf("%w: stdin closed", ErrAborted)
-	}
-
-	line := scanner.Text()
-	var resp map[string]any
-	if err := json.Unmarshal([]byte(line), &resp); err != nil {
-		return nil, fmt.Errorf("%w: %v. Expected JSON like: {\"answer\": \"<value>\"}", ErrInvalidJSON, err)
-	}
-
-	answer, ok := resp["answer"]
-	if !ok {
-		return nil, fmt.Errorf("%w: response must have an \"answer\" key", ErrInvalidJSON)
-	}
-	return answer, nil
 }
 
 // AgentSendValidationError sends a validation error message to the agent.

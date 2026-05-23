@@ -103,33 +103,6 @@ function sendHandshake(): void {
   writeLine(meta);
 }
 
-async function readHandshakeResponse(): Promise<void> {
-  const line = await readLine();
-  if (line === null) return;
-  let parsed: Record<string, unknown>;
-  try {
-    parsed = JSON.parse(line) as Record<string, unknown>;
-  } catch {
-    // Not valid JSON, ignore
-    return;
-  }
-  if (
-    typeof parsed === "object" &&
-    parsed !== null &&
-    parsed["kind"] === "handshake_ack"
-  ) {
-    handshakeAck = parsed;
-  } else if (
-    typeof parsed === "object" &&
-    parsed !== null &&
-    "answer" in parsed
-  ) {
-    // Buffer it for the next agentReceive()
-    lineBuffer.unshift(line);
-  }
-  // Otherwise ignore
-}
-
 function readLine(): Promise<string | null> {
   ensureRL();
   const buffered = lineBuffer.shift();
@@ -145,7 +118,6 @@ export async function agentSend(
 ): Promise<void> {
   if (!handshakeSent) {
     sendHandshake();
-    await readHandshakeResponse();
   }
   agentStep++;
   writeLine({ kind: "prompt", step: agentStep, total: null, ...payload });
@@ -164,25 +136,31 @@ export function getHandshakeAck(): Record<string, unknown> | null {
 }
 
 export async function agentReceive(): Promise<unknown> {
-  const line = await readLine();
-  if (line === null) {
-    throw new Error(
-      'No response received (stdin closed). Expected JSON like: {"answer": "<value>"}',
-    );
+  while (true) {
+    const line = await readLine();
+    if (line === null) {
+      throw new Error(
+        'No response received (stdin closed). Expected JSON like: {"answer": "<value>"}',
+      );
+    }
+    let resp: Record<string, unknown>;
+    try {
+      resp = JSON.parse(line) as Record<string, unknown>;
+    } catch {
+      throw new Error(
+        `Invalid JSON response: ${line.trim()}. Expected JSON like: {"answer": "<value>"}`,
+      );
+    }
+    if (resp["kind"] === "handshake_ack") {
+      handshakeAck = resp;
+      continue;
+    }
+    if (typeof resp !== "object" || resp === null || !("answer" in resp)) {
+      throw new Error(
+        `Response must be a JSON object with an "answer" key, ` +
+          `e.g. {"answer": "<value>"}. Got: ${line.trim()}`,
+      );
+    }
+    return resp["answer"];
   }
-  let resp: Record<string, unknown>;
-  try {
-    resp = JSON.parse(line) as Record<string, unknown>;
-  } catch {
-    throw new Error(
-      `Invalid JSON response: ${line.trim()}. Expected JSON like: {"answer": "<value>"}`,
-    );
-  }
-  if (typeof resp !== "object" || resp === null || !("answer" in resp)) {
-    throw new Error(
-      `Response must be a JSON object with an "answer" key, ` +
-        `e.g. {"answer": "<value>"}. Got: ${line.trim()}`,
-    );
-  }
-  return resp["answer"];
 }

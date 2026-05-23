@@ -8,12 +8,7 @@ static HANDSHAKE: Once = Once::new();
 static STEP: AtomicUsize = AtomicUsize::new(0);
 const VERSION: &str = "0.2.0";
 
-/// A buffered answer received during the handshake phase.
-/// If the host responds with `{"answer": ...}` instead of a handshake_ack,
-/// we store it here so the next `agent_receive()` can return it.
-static BUFFERED_ANSWER: Mutex<Option<Value>> = Mutex::new(None);
-
-/// Capabilities advertised by the host in the handshake_ack.
+/// Capabilities advertised by the agent in the handshake_ack.
 #[allow(dead_code)]
 static HOST_CAPABILITIES: Mutex<Option<Value>> = Mutex::new(None);
 
@@ -103,24 +98,6 @@ fn send_handshake() {
             "example_response": {"answer": "<value>"}
         });
         let _ = write_line(&meta.to_string());
-
-        // Try to read a handshake_ack or an early answer
-        if let Ok(line) = read_input_line() {
-            if let Ok(obj) = serde_json::from_str::<Value>(line.trim()) {
-                if obj.get("kind").and_then(|v| v.as_str()) == Some("handshake_ack") {
-                    // Store capabilities from the ack
-                    if let Ok(mut caps) = HOST_CAPABILITIES.lock() {
-                        *caps = obj.get("capabilities").cloned();
-                    }
-                } else if obj.get("answer").is_some() {
-                    // Buffer this answer for the next agent_receive()
-                    if let Ok(mut buf) = BUFFERED_ANSWER.lock() {
-                        *buf = Some(obj);
-                    }
-                }
-                // Otherwise: unknown kind, ignore
-            }
-        }
     });
 }
 
@@ -146,22 +123,24 @@ pub fn agent_send(payload: &Value) -> Result<()> {
 }
 
 pub fn agent_receive() -> Result<Value> {
-    // Check for a buffered answer from the handshake phase
-    if let Ok(mut buf) = BUFFERED_ANSWER.lock() {
-        if let Some(obj) = buf.take() {
-            return extract_answer(&obj);
+    loop {
+        let line = read_input_line()?;
+
+        let resp: Value = serde_json::from_str(line.trim()).map_err(|e| {
+            InquirerError::Validation(format!(
+                "Invalid JSON response: {e}. Expected JSON like: {{\"answer\": \"<value>\"}}"
+            ))
+        })?;
+
+        if resp.get("kind").and_then(|v| v.as_str()) == Some("handshake_ack") {
+            if let Ok(mut caps) = HOST_CAPABILITIES.lock() {
+                *caps = resp.get("capabilities").cloned();
+            }
+            continue;
         }
+
+        return extract_answer(&resp);
     }
-
-    let line = read_input_line()?;
-
-    let resp: Value = serde_json::from_str(line.trim()).map_err(|e| {
-        InquirerError::Validation(format!(
-            "Invalid JSON response: {e}. Expected JSON like: {{\"answer\": \"<value>\"}}"
-        ))
-    })?;
-
-    extract_answer(&resp)
 }
 
 fn extract_answer(resp: &Value) -> Result<Value> {
