@@ -33,3 +33,24 @@ go vet ./prompt/ ./examples/...
 
 echo "pre-push: [go] full test suite with coverage..."
 go test ./prompt/ -v -cover -count=1
+
+# ── TypeScript ──
+cd "$ROOT/typescript"
+
+echo "pre-push: [typescript] tsc..."
+npx tsc --noEmit
+
+echo "pre-push: [typescript] full test suite..."
+npx vitest run
+
+# ── Rust ──
+cd "$ROOT/rust"
+
+echo "pre-push: [rust] fmt..."
+cargo fmt -- --check
+
+echo "pre-push: [rust] clippy..."
+cargo clippy -- -D warnings
+
+echo "pre-push: [rust] full test suite..."
+cargo test

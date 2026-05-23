@@ -33,3 +33,24 @@ go vet ./prompt/ ./examples/...
 
 echo "pre-commit: [go] test..."
 go test ./prompt/ -count=1 -short
+
+# ── TypeScript ──
+cd "$ROOT/typescript"
+
+echo "pre-commit: [typescript] tsc..."
+npx tsc --noEmit
+
+echo "pre-commit: [typescript] test..."
+npx vitest run
+
+# ── Rust ──
+cd "$ROOT/rust"
+
+echo "pre-commit: [rust] fmt..."
+cargo fmt -- --check
+
+echo "pre-commit: [rust] clippy..."
+cargo clippy -- -D warnings
+
+echo "pre-commit: [rust] test..."
+cargo test --quiet
