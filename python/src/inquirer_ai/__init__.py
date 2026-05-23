@@ -13,6 +13,7 @@ from inquirer_ai.prompts.editor import EditorPrompt
 from inquirer_ai.prompts.expand import ExpandChoice, ExpandPrompt
 from inquirer_ai.prompts.number import NumberPrompt
 from inquirer_ai.prompts.password import PasswordPrompt
+from inquirer_ai.prompts.path import PathPrompt
 from inquirer_ai.prompts.rawlist import RawlistPrompt
 from inquirer_ai.prompts.search import SearchPrompt
 from inquirer_ai.prompts.select import SelectPrompt
@@ -165,6 +166,32 @@ def search(
     filter: Callable[[Any], Any] | None = None,
 ) -> Any:
     return SearchPrompt(message, source=source, page_size=page_size, validate=validate, filter=filter).execute()
+
+
+def path(
+    message: str,
+    *,
+    default: str | None = None,
+    only_directories: bool = False,
+    validate: Callable[[str], bool | str | None] | None = None,
+    filter: Callable[[str], str] | None = None,
+) -> str:
+    return PathPrompt(
+        message, default=default, only_directories=only_directories, validate=validate, filter=filter
+    ).execute()
+
+
+async def path_async(
+    message: str,
+    *,
+    default: str | None = None,
+    only_directories: bool = False,
+    validate: Callable[[str], bool | str | None] | None = None,
+    filter: Callable[[str], str] | None = None,
+) -> str:
+    return await PathPrompt(
+        message, default=default, only_directories=only_directories, validate=validate, filter=filter
+    ).execute_async()
 
 
 def rawlist(
@@ -434,6 +461,7 @@ __all__ = [
     "InvalidChoiceError",
     "NumberPrompt",
     "PasswordPrompt",
+    "PathPrompt",
     "PromptAbortedError",
     "Question",
     "RawlistPrompt",
@@ -460,6 +488,8 @@ __all__ = [
     "number_async",
     "password",
     "password_async",
+    "path",
+    "path_async",
     "prompt",
     "rawlist",
     "rawlist_async",
