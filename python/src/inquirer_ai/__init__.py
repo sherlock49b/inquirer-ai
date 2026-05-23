@@ -1,4 +1,5 @@
 from collections.abc import Callable, Sequence
+from importlib.metadata import version
 from typing import Any, TypeVar, overload
 
 from inquirer_ai.choice import Choice
@@ -10,6 +11,8 @@ from inquirer_ai.prompts.confirm import ConfirmPrompt
 from inquirer_ai.prompts.select import SelectPrompt
 from inquirer_ai.prompts.text import TextPrompt
 from inquirer_ai.theme import Theme, get_theme, set_theme
+
+__version__ = version("inquirer-ai")
 
 V = TypeVar("V")
 
@@ -133,6 +136,7 @@ __all__ = [
     "TextPrompt",
     "Theme",
     "ValidationError",
+    "__version__",
     "checkbox",
     "confirm",
     "get_theme",
