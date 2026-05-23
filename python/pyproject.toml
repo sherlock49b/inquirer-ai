@@ -63,6 +63,7 @@ ignore = [
 
 [dependency-groups]
 dev = [
+    "hypothesis>=6.0",
     "pyright>=1.1.409",
     "pytest>=8.0",
     "pytest-cov>=5.0",
