@@ -2,7 +2,7 @@ from collections.abc import Callable, Sequence
 from importlib.metadata import version
 from typing import Any, TypeVar, overload
 
-from inquirer_ai.choice import Choice, Separator
+from inquirer_ai.choice import Choice, RawChoice, Separator
 from inquirer_ai.core import Question, prompt
 from inquirer_ai.exceptions import InquirerAIError, PromptAbortedError, ValidationError
 from inquirer_ai.mode import is_agent_mode
@@ -10,6 +10,7 @@ from inquirer_ai.prompts.checkbox import CheckboxPrompt
 from inquirer_ai.prompts.confirm import ConfirmPrompt
 from inquirer_ai.prompts.number import NumberPrompt
 from inquirer_ai.prompts.password import PasswordPrompt
+from inquirer_ai.prompts.search import SearchPrompt
 from inquirer_ai.prompts.select import SelectPrompt
 from inquirer_ai.prompts.text import TextPrompt
 from inquirer_ai.theme import Theme, get_theme, set_theme
@@ -129,6 +130,17 @@ def checkbox(
     ).execute()
 
 
+def search(
+    message: str,
+    *,
+    source: Callable[[str], list[RawChoice]],
+    page_size: int = 10,
+    validate: Callable[[Any], bool | str | None] | None = None,
+    filter: Callable[[Any], Any] | None = None,
+) -> Any:
+    return SearchPrompt(message, source=source, page_size=page_size, validate=validate, filter=filter).execute()
+
+
 def password(
     message: str,
     *,
@@ -163,6 +175,7 @@ __all__ = [
     "PasswordPrompt",
     "PromptAbortedError",
     "Question",
+    "SearchPrompt",
     "SelectPrompt",
     "Separator",
     "TextPrompt",
@@ -176,6 +189,7 @@ __all__ = [
     "number",
     "password",
     "prompt",
+    "search",
     "select",
     "set_theme",
     "text",
