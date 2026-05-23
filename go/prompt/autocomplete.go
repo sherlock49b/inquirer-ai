@@ -22,15 +22,11 @@ func Autocomplete(cfg AutocompleteConfig) (string, error) {
 }
 
 func autocompleteAgent(cfg AutocompleteConfig) (string, error) {
-	choiceItems := make([]map[string]any, len(cfg.Choices))
-	for i, c := range cfg.Choices {
-		choiceItems[i] = map[string]any{"name": c, "value": c}
-	}
 	payload := map[string]any{
 		"type":    "autocomplete",
 		"message": cfg.Message,
 		"default": nilIfEmpty(cfg.Default),
-		"choices": choiceItems,
+		"choices": cfg.Choices,
 	}
 	if err := AgentSend(payload); err != nil {
 		return "", err
