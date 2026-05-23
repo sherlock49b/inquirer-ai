@@ -38,35 +38,19 @@ func Checkbox(cfg CheckboxConfig) ([]any, error) {
 }
 
 func checkboxAgent(cfg CheckboxConfig, choices []resolvedChoice) ([]any, error) {
-	const maxRetries = 3
-	for attempt := 0; attempt < maxRetries; attempt++ {
-		payload := map[string]any{
-			"type":    "checkbox",
-			"message": cfg.Message,
-			"default": cfg.Default,
-			"choices": marshalItems(cfg.Choices),
-		}
-		if err := AgentSend(payload); err != nil {
-			return nil, err
-		}
-
-		answer, err := AgentReceive()
-		if err != nil {
-			return nil, err
-		}
-
+	payload := map[string]any{
+		"type":    "checkbox",
+		"message": cfg.Message,
+		"default": cfg.Default,
+		"choices": marshalItems(cfg.Choices),
+	}
+	raw, err := AgentPromptWithRetry(payload, func(answer any) (any, error) {
 		list, ok := answer.([]any)
 		if !ok {
-			valErr := fmt.Errorf("%w: expected a list", ErrValidation)
-			if attempt < maxRetries-1 {
-				AgentSendValidationError(valErr.Error())
-				continue
-			}
-			return nil, valErr
+			return nil, fmt.Errorf("%w: expected a list", ErrValidation)
 		}
 
 		var result []any
-		validChoices := true
 		for _, v := range list {
 			s := toString(v)
 			found := false
@@ -81,30 +65,15 @@ func checkboxAgent(cfg CheckboxConfig, choices []resolvedChoice) ([]any, error) 
 				}
 			}
 			if !found {
-				choiceErr := fmt.Errorf("%w: %q", ErrInvalidChoice, s)
-				if attempt < maxRetries-1 {
-					AgentSendValidationError(choiceErr.Error())
-					validChoices = false
-					break
-				}
-				return nil, choiceErr
+				return nil, fmt.Errorf("%w: %q", ErrInvalidChoice, s)
 			}
 		}
-		if !validChoices {
-			continue
-		}
-
-		final, err := applyCallbacksList(result, cfg.Validate, cfg.Filter)
-		if err != nil {
-			if attempt < maxRetries-1 {
-				AgentSendValidationError(err.Error())
-				continue
-			}
-			return nil, err
-		}
-		return final, nil
+		return applyCallbacksList(result, cfg.Validate, cfg.Filter)
+	})
+	if err != nil {
+		return nil, err
 	}
-	return nil, fmt.Errorf("%w: max retries exceeded", ErrValidation)
+	return raw.([]any), nil
 }
 
 func checkboxTerminal(cfg CheckboxConfig, choices []resolvedChoice) ([]any, error) {

@@ -39,47 +39,33 @@ func Number(cfg NumberConfig) (float64, error) {
 }
 
 func numberAgent(cfg NumberConfig) (float64, error) {
-	const maxRetries = 3
-	for attempt := 0; attempt < maxRetries; attempt++ {
-		payload := map[string]any{
-			"type":          "number",
-			"message":       cfg.Message,
-			"default":       cfg.Default,
-			"min":           cfg.Min,
-			"max":           cfg.Max,
-			"float_allowed": cfg.FloatAllowed,
-		}
-		if err := AgentSend(payload); err != nil {
-			return 0, err
-		}
-		answer, err := AgentReceive()
-		if err != nil {
-			return 0, err
-		}
+	payload := map[string]any{
+		"type":          "number",
+		"message":       cfg.Message,
+		"default":       cfg.Default,
+		"min":           cfg.Min,
+		"max":           cfg.Max,
+		"float_allowed": cfg.FloatAllowed,
+	}
+	raw, err := AgentPromptWithRetry(payload, func(answer any) (any, error) {
 		result, err := validateNumber(answer, cfg)
 		if err != nil {
-			if attempt < maxRetries-1 {
-				AgentSendValidationError(err.Error())
-				continue
-			}
-			return 0, err
+			return nil, err
 		}
 		if cfg.Filter != nil {
 			result = cfg.Filter(result)
 		}
 		if cfg.Validate != nil {
 			if err := cfg.Validate(result); err != nil {
-				valErr := fmt.Errorf("%w: %v", ErrValidation, err)
-				if attempt < maxRetries-1 {
-					AgentSendValidationError(valErr.Error())
-					continue
-				}
-				return 0, valErr
+				return nil, fmt.Errorf("%w: %v", ErrValidation, err)
 			}
 		}
 		return result, nil
+	})
+	if err != nil {
+		return 0, err
 	}
-	return 0, fmt.Errorf("%w: max retries exceeded", ErrValidation)
+	return raw.(float64), nil
 }
 
 func numberTerminal(cfg NumberConfig) (float64, error) {

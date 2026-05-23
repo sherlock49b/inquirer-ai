@@ -23,38 +23,28 @@ func Path(cfg PathConfig) (string, error) {
 }
 
 func pathAgent(cfg PathConfig) (string, error) {
-	const maxRetries = 3
-	for attempt := 0; attempt < maxRetries; attempt++ {
-		payload := map[string]any{
-			"type":             "path",
-			"message":          cfg.Message,
-			"default":          nilIfEmpty(cfg.Default),
-			"only_directories": cfg.OnlyDirectories,
-		}
-		if err := AgentSend(payload); err != nil {
-			return "", err
-		}
-		answer, err := AgentReceive()
-		if err != nil {
-			return "", err
-		}
+	payload := map[string]any{
+		"type":             "path",
+		"message":          cfg.Message,
+		"default":          nilIfEmpty(cfg.Default),
+		"only_directories": cfg.OnlyDirectories,
+	}
+	raw, err := AgentPromptWithRetry(payload, func(answer any) (any, error) {
 		result := toString(answer)
 		if result == "" && cfg.Default != "" {
 			result = cfg.Default
 		}
 		if cfg.Validate != nil {
 			if err := cfg.Validate(result); err != nil {
-				valErr := fmt.Errorf("%w: %v", ErrValidation, err)
-				if attempt < maxRetries-1 {
-					AgentSendValidationError(valErr.Error())
-					continue
-				}
-				return "", valErr
+				return nil, fmt.Errorf("%w: %v", ErrValidation, err)
 			}
 		}
 		return result, nil
+	})
+	if err != nil {
+		return "", err
 	}
-	return "", fmt.Errorf("%w: max retries exceeded", ErrValidation)
+	return raw.(string), nil
 }
 
 func pathTerminal(cfg PathConfig) (string, error) {

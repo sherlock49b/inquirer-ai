@@ -1,4 +1,4 @@
-use crate::agent::{agent_receive, agent_send, agent_send_validation_error};
+use crate::agent::agent_prompt_with_retry;
 use crate::choice::{Choice, ChoiceItem};
 use crate::errors::{InquirerError, Result};
 use crate::mode::is_agent_mode;
@@ -60,7 +60,6 @@ pub fn validate_rawlist(value: &Value, choices: &[Choice]) -> Result<Value> {
 }
 
 fn rawlist_agent(config: &RawlistConfig) -> Result<Value> {
-    const MAX_RETRIES: usize = 3;
     let choices_json: Vec<Value> = config
         .choices
         .iter()
@@ -73,22 +72,9 @@ fn rawlist_agent(config: &RawlistConfig) -> Result<Value> {
         "choices": choices_json,
     });
 
-    for attempt in 0..MAX_RETRIES {
-        agent_send(&payload)?;
-        let answer = agent_receive()?;
-        match validate_rawlist(&answer, &config.choices) {
-            Ok(v) => return Ok(v),
-            Err(InquirerError::Validation(msg)) => {
-                if attempt + 1 < MAX_RETRIES {
-                    agent_send_validation_error(&msg)?;
-                    continue;
-                }
-                return Err(InquirerError::Validation(msg));
-            }
-            Err(e) => return Err(e),
-        }
-    }
-    unreachable!()
+    agent_prompt_with_retry(&payload, |answer| {
+        validate_rawlist(&answer, &config.choices)
+    })
 }
 
 fn rawlist_terminal(config: &RawlistConfig) -> Result<Value> {

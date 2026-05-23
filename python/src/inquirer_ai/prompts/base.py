@@ -120,9 +120,9 @@ class BasePrompt(ABC, Generic[T]):
         line = agent_in.readline()
         if line:
             try:
-                raw: Any = json.loads(line)
-                if isinstance(raw, dict) and raw.get("kind") == "handshake_ack":  # pyright: ignore[reportUnknownMemberType]
-                    _agent_handshake_ack = raw  # pyright: ignore[reportUnknownVariableType]
+                parsed_ack: dict[str, Any] = json.loads(line)
+                if isinstance(parsed_ack, dict) and parsed_ack.get("kind") == "handshake_ack":  # pyright: ignore[reportUnnecessaryIsInstance]
+                    _agent_handshake_ack = parsed_ack
                     return agent_in.readline()
             except json.JSONDecodeError:
                 pass
@@ -224,9 +224,9 @@ class BasePrompt(ABC, Generic[T]):
         line = await asyncio.get_running_loop().run_in_executor(None, agent_in.readline)
         if line:
             try:
-                raw: Any = json.loads(line)
-                if isinstance(raw, dict) and raw.get("kind") == "handshake_ack":  # pyright: ignore[reportUnknownMemberType]
-                    _agent_handshake_ack = raw  # pyright: ignore[reportUnknownVariableType]
+                parsed_ack: dict[str, Any] = json.loads(line)
+                if isinstance(parsed_ack, dict) and parsed_ack.get("kind") == "handshake_ack":  # pyright: ignore[reportUnnecessaryIsInstance]
+                    _agent_handshake_ack = parsed_ack
                     return await asyncio.get_running_loop().run_in_executor(None, agent_in.readline)
             except json.JSONDecodeError:
                 pass

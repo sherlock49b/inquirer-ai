@@ -111,6 +111,33 @@ func AgentReceive() (any, error) {
 	}
 }
 
+// AgentPromptWithRetry sends a prompt payload to the agent and retries on
+// validation errors up to 3 times total. The validate function receives the
+// raw answer from the agent and should return the processed result or an error.
+// On error the helper sends a validation-error message and re-sends the prompt.
+func AgentPromptWithRetry(payload map[string]any, validate func(any) (any, error)) (any, error) {
+	const maxRetries = 3
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		if err := AgentSend(payload); err != nil {
+			return nil, err
+		}
+		answer, err := AgentReceive()
+		if err != nil {
+			return nil, err
+		}
+		result, err := validate(answer)
+		if err != nil {
+			if attempt < maxRetries-1 {
+				AgentSendValidationError(err.Error())
+				continue
+			}
+			return nil, err
+		}
+		return result, nil
+	}
+	return nil, fmt.Errorf("%w: max retries exceeded", ErrValidation)
+}
+
 // AgentSendValidationError sends a validation error message to the agent.
 func AgentSendValidationError(msg string) error {
 	initAgentIO()

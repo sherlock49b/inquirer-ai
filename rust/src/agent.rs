@@ -2,15 +2,11 @@ use crate::errors::{InquirerError, Result};
 use serde_json::Value;
 use std::io::{self, BufRead, Write};
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::{Mutex, Once};
+use std::sync::Once;
 
 static HANDSHAKE: Once = Once::new();
 static STEP: AtomicUsize = AtomicUsize::new(0);
 const VERSION: &str = "0.2.0";
-
-/// Capabilities advertised by the agent in the handshake_ack.
-#[allow(dead_code)]
-static HOST_CAPABILITIES: Mutex<Option<Value>> = Mutex::new(None);
 
 // ---------------------------------------------------------------------------
 // fd-based I/O helpers
@@ -133,9 +129,6 @@ pub fn agent_receive() -> Result<Value> {
         })?;
 
         if resp.get("kind").and_then(|v| v.as_str()) == Some("handshake_ack") {
-            if let Ok(mut caps) = HOST_CAPABILITIES.lock() {
-                *caps = resp.get("capabilities").cloned();
-            }
             continue;
         }
 
@@ -166,6 +159,31 @@ pub fn agent_send_error(msg: &str) -> Result<()> {
         "message": msg,
     });
     write_line(&payload.to_string())
+}
+
+/// Send a prompt payload to the agent, receive a response, validate it, and
+/// retry up to 3 times on validation errors.
+pub fn agent_prompt_with_retry<T>(
+    payload: &Value,
+    validate: impl Fn(Value) -> Result<T>,
+) -> Result<T> {
+    const MAX_RETRIES: usize = 3;
+    for attempt in 0..MAX_RETRIES {
+        agent_send(payload)?;
+        let answer = agent_receive()?;
+        match validate(answer) {
+            Ok(val) => return Ok(val),
+            Err(InquirerError::Validation(msg)) => {
+                if attempt + 1 < MAX_RETRIES {
+                    agent_send_validation_error(&msg)?;
+                    continue;
+                }
+                return Err(InquirerError::Validation(msg));
+            }
+            Err(e) => return Err(e),
+        }
+    }
+    unreachable!()
 }
 
 #[cfg(test)]

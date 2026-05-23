@@ -1,5 +1,5 @@
-use crate::agent::{agent_receive, agent_send, agent_send_validation_error};
-use crate::errors::{InquirerError, Result};
+use crate::agent::agent_prompt_with_retry;
+use crate::errors::Result;
 use crate::mode::is_agent_mode;
 use crate::terminal::{format_question, format_success, read_line};
 use serde_json::{json, Value};
@@ -41,32 +41,24 @@ fn validate_answer(value: &Value, default: &Option<String>) -> String {
 }
 
 fn text_agent(config: &TextConfig) -> Result<String> {
-    const MAX_RETRIES: usize = 3;
     let payload = json!({
         "type": "input",
         "message": config.message,
         "default": config.default,
     });
 
-    for attempt in 0..MAX_RETRIES {
-        agent_send(&payload)?;
-        let answer = agent_receive()?;
+    agent_prompt_with_retry(&payload, |answer| {
         let mut result = validate_answer(&answer, &config.default);
         if let Some(f) = &config.filter {
             result = f(result);
         }
         if let Some(v) = &config.validate {
             if let Err(msg) = v(&result) {
-                if attempt + 1 < MAX_RETRIES {
-                    agent_send_validation_error(&msg)?;
-                    continue;
-                }
-                return Err(InquirerError::Validation(msg));
+                return Err(crate::errors::InquirerError::Validation(msg));
             }
         }
-        return Ok(result);
-    }
-    unreachable!()
+        Ok(result)
+    })
 }
 
 fn text_terminal(config: &TextConfig) -> Result<String> {
