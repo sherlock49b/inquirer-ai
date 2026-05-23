@@ -1,9 +1,10 @@
 import io
 import json
+from unittest.mock import patch
 
 import pytest
 
-from inquirer_ai.exceptions import ValidationError
+from inquirer_ai.exceptions import PromptAbortedError, ValidationError
 from inquirer_ai.prompts.select import SelectPrompt
 
 
@@ -70,3 +71,26 @@ def test_agent_dict_includes_choices():
         {"name": "MySQL", "value": "MySQL"},
     ]
     assert d["default"] == "MySQL"
+
+
+def test_terminal_mode_basic(monkeypatch):
+    monkeypatch.setenv("INQUIRER_AI_MODE", "human")
+    with patch("inquirer_ai.prompts.select.Application") as mock_app_cls:
+        mock_app_cls.return_value.run.return_value = "pg"
+        p = SelectPrompt(
+            "Choose DB",
+            choices=[
+                {"name": "PostgreSQL", "value": "pg"},
+                {"name": "MySQL", "value": "mysql"},
+            ],
+        )
+        assert p.execute() == "pg"
+
+
+def test_terminal_mode_abort(monkeypatch):
+    monkeypatch.setenv("INQUIRER_AI_MODE", "human")
+    with patch("inquirer_ai.prompts.select.Application") as mock_app_cls:
+        mock_app_cls.return_value.run.return_value = None
+        p = SelectPrompt("Choose DB", choices=["PostgreSQL", "MySQL"])
+        with pytest.raises(PromptAbortedError):
+            p.execute()
