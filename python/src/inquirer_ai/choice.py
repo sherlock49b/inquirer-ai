@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Generic, TypeVar, overload
 
 V = TypeVar("V")
@@ -10,6 +10,9 @@ V = TypeVar("V")
 class Choice(Generic[V]):
     name: str
     value: V
+    disabled: bool | str = False
+    short: str | None = None
+    description: str | None = None
 
     @overload
     @classmethod
@@ -30,7 +33,36 @@ class Choice(Generic[V]):
             raise TypeError(f"Cannot convert {type(raw).__name__} to Choice")
         name: str = raw.get("name", str(raw.get("value", "")))
         value: Any = raw.get("value", name)
-        return Choice(name=name, value=value)
+        disabled: bool | str = raw.get("disabled", False)
+        short: str | None = raw.get("short")
+        description: str | None = raw.get("description")
+        return Choice(name=name, value=value, disabled=disabled, short=short, description=description)
 
     def to_dict(self) -> dict[str, Any]:
-        return {"name": self.name, "value": self.value}
+        d: dict[str, Any] = {"name": self.name, "value": self.value}
+        if self.disabled:
+            d["disabled"] = self.disabled
+        if self.short is not None:
+            d["short"] = self.short
+        if self.description is not None:
+            d["description"] = self.description
+        return d
+
+
+@dataclass
+class Separator:
+    text: str = field(default="────────")
+
+    def to_dict(self) -> dict[str, Any]:
+        return {"type": "separator", "text": self.text}
+
+
+ChoiceItem = Choice[Any] | Separator
+RawChoice = str | dict[str, Any] | Choice[Any] | Separator
+
+
+def parse_choice(raw: RawChoice) -> ChoiceItem:
+    if isinstance(raw, Separator):
+        return raw
+    result: Choice[Any] = Choice.from_raw(raw)  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType]
+    return result

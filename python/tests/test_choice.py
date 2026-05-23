@@ -1,6 +1,12 @@
+import io
+import json
+
 import pytest
 
-from inquirer_ai.choice import Choice
+from inquirer_ai.choice import Choice, Separator
+from inquirer_ai.exceptions import ValidationError
+from inquirer_ai.prompts.select import SelectPrompt
+from tests.conftest import parse_prompt_from_stdout
 
 
 def test_from_string():
@@ -35,3 +41,74 @@ def test_from_invalid_type():
 def test_to_dict():
     c = Choice(name="PostgreSQL", value="pg")
     assert c.to_dict() == {"name": "PostgreSQL", "value": "pg"}
+
+
+def test_disabled_choice_from_dict():
+    c = Choice.from_raw({"name": "Option", "value": "opt", "disabled": "coming soon"})
+    assert c.disabled == "coming soon"
+
+
+def test_disabled_choice_to_dict():
+    c = Choice(name="X", value="x", disabled=True)
+    d = c.to_dict()
+    assert d["disabled"] is True
+
+
+def test_short_and_description():
+    c = Choice.from_raw({"name": "PostgreSQL", "value": "pg", "short": "PG", "description": "Relational DB"})
+    assert c.short == "PG"
+    assert c.description == "Relational DB"
+    d = c.to_dict()
+    assert d["short"] == "PG"
+    assert d["description"] == "Relational DB"
+
+
+def test_separator_to_dict():
+    s = Separator("--- Section ---")
+    assert s.to_dict() == {"type": "separator", "text": "--- Section ---"}
+
+
+def test_separator_default_text():
+    s = Separator()
+    assert s.text == "────────"
+
+
+def test_select_with_separator(monkeypatch):
+    monkeypatch.setenv("INQUIRER_AI_MODE", "agent")
+    stdin = io.StringIO(json.dumps({"answer": "b"}) + "\n")
+    stdout = io.StringIO()
+    monkeypatch.setattr("sys.stdin", stdin)
+    monkeypatch.setattr("sys.stdout", stdout)
+
+    p = SelectPrompt("Pick", choices=["a", Separator(), "b"])
+    assert p.execute() == "b"
+    prompt_data = parse_prompt_from_stdout(stdout)
+    assert prompt_data["choices"][1] == {"type": "separator", "text": "────────"}
+
+
+def test_select_with_disabled_choice(monkeypatch):
+    monkeypatch.setenv("INQUIRER_AI_MODE", "agent")
+    stdin = io.StringIO(json.dumps({"answer": "b"}) + "\n")
+    stdout = io.StringIO()
+    monkeypatch.setattr("sys.stdin", stdin)
+    monkeypatch.setattr("sys.stdout", stdout)
+
+    p = SelectPrompt("Pick", choices=["a", Choice("disabled_opt", "d", disabled="not available"), "b"])
+    assert p.execute() == "b"
+
+
+def test_select_disabled_choice_rejected(monkeypatch):
+    monkeypatch.setenv("INQUIRER_AI_MODE", "agent")
+    stdin = io.StringIO(json.dumps({"answer": "d"}) + "\n")
+    stdout = io.StringIO()
+    monkeypatch.setattr("sys.stdin", stdin)
+    monkeypatch.setattr("sys.stdout", stdout)
+
+    p = SelectPrompt("Pick", choices=["a", Choice("Disabled", "d", disabled=True), "b"])
+    with pytest.raises(ValidationError):
+        p.execute()
+
+
+def test_all_disabled_raises():
+    with pytest.raises(ValueError, match="at least one selectable"):
+        SelectPrompt("Pick", choices=[Choice("X", "x", disabled=True)])

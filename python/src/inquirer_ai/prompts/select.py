@@ -4,7 +4,7 @@ from typing import Any
 
 from prompt_toolkit.key_binding import KeyBindings
 
-from inquirer_ai.choice import Choice
+from inquirer_ai.choice import Choice, ChoiceItem, RawChoice, Separator
 from inquirer_ai.exceptions import ValidationError
 from inquirer_ai.prompts.choice_base import ChoiceBasePrompt
 from inquirer_ai.theme import get_theme
@@ -15,7 +15,7 @@ class SelectPrompt(ChoiceBasePrompt[Any]):
         self,
         message: str,
         *,
-        choices: list[str | dict[str, Any] | Choice[Any]],
+        choices: list[RawChoice],
         default: Any = None,
         page_size: int = 10,
         **kwargs: Any,
@@ -27,33 +27,49 @@ class SelectPrompt(ChoiceBasePrompt[Any]):
         return "select"
 
     def _validate_answer(self, value: Any) -> Any:
+        valid: list[Any] = []
         for c in self.choices:
+            if c.disabled:
+                continue
             if value == c.value or value == c.name:
                 return c.value
-        raise ValidationError(f"Invalid choice: {value!r}. Valid: {[c.value for c in self.choices]}")
+            valid.append(c.value)
+        raise ValidationError(f"Invalid choice: {value!r}. Valid: {valid}")
 
     def _format_answer(self, value: Any) -> str:
         for c in self.choices:
             if c.value == value:
-                return c.name
+                return c.short or c.name
         return str(value)
 
     def _init_cursor(self) -> int:
         if self.default is not None:
-            for i, c in enumerate(self.choices):
-                if c.value == self.default or c.name == self.default:
+            for i, item in enumerate(self.items):
+                if (
+                    isinstance(item, Choice)
+                    and not item.disabled
+                    and (item.value == self.default or item.name == self.default)
+                ):
                     return i
-        return 0
+        return self._selectable_indices()[0]
 
     def _build_keybindings(self, kb: KeyBindings, choices: list[Choice[Any]], state: dict[str, Any]) -> None:
         pass
 
-    def _format_choice_line(self, index: int, choice: Choice[Any], state: dict[str, Any]) -> tuple[str, str]:
+    def _format_choice_line(self, index: int, item: ChoiceItem, state: dict[str, Any]) -> tuple[str, str]:
         t = get_theme()
+        if isinstance(item, Separator):
+            return (t.pt(t.muted), f"  {item.text}")
+        if item.disabled:
+            reason = f" ({item.disabled})" if isinstance(item.disabled, str) else ""
+            return (t.pt(t.muted), f"  {item.name}{reason} (disabled)")
         if index == state["cursor"]:
-            return (t.pt_bold(t.highlight), f"{t.sym_pointer} {choice.name}")
-        return ("", f"  {choice.name}")
+            desc = f" - {item.description}" if item.description else ""
+            return (t.pt_bold(t.highlight), f"{t.sym_pointer} {item.name}{desc}")
+        return ("", f"  {item.name}")
 
     def _get_result(self, state: dict[str, Any]) -> Any:
         cursor: int = state["cursor"]
-        return self.choices[cursor].value
+        item = self.items[cursor]
+        assert isinstance(item, Choice)
+        return item.value

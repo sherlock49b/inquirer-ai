@@ -2,7 +2,7 @@ from collections.abc import Callable, Sequence
 from importlib.metadata import version
 from typing import Any, TypeVar, overload
 
-from inquirer_ai.choice import Choice
+from inquirer_ai.choice import Choice, Separator
 from inquirer_ai.core import Question, prompt
 from inquirer_ai.exceptions import InquirerAIError, PromptAbortedError, ValidationError
 from inquirer_ai.mode import is_agent_mode
@@ -162,6 +162,7 @@ __all__ = [
     "PromptAbortedError",
     "Question",
     "SelectPrompt",
+    "Separator",
     "TextPrompt",
     "Theme",
     "ValidationError",
