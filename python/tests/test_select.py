@@ -75,7 +75,7 @@ def test_agent_dict_includes_choices():
 
 def test_terminal_mode_basic(monkeypatch):
     monkeypatch.setenv("INQUIRER_AI_MODE", "human")
-    with patch("inquirer_ai.prompts.select.Application") as mock_app_cls:
+    with patch("inquirer_ai.prompts.choice_base.Application") as mock_app_cls:
         mock_app_cls.return_value.run.return_value = "pg"
         p = SelectPrompt(
             "Choose DB",
@@ -89,7 +89,7 @@ def test_terminal_mode_basic(monkeypatch):
 
 def test_terminal_mode_abort(monkeypatch):
     monkeypatch.setenv("INQUIRER_AI_MODE", "human")
-    with patch("inquirer_ai.prompts.select.Application") as mock_app_cls:
+    with patch("inquirer_ai.prompts.choice_base.Application") as mock_app_cls:
         mock_app_cls.return_value.run.return_value = None
         p = SelectPrompt("Choose DB", choices=["PostgreSQL", "MySQL"])
         with pytest.raises(PromptAbortedError):

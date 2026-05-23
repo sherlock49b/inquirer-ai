@@ -2,18 +2,15 @@ from __future__ import annotations
 
 from typing import Any
 
-from prompt_toolkit import Application
-from prompt_toolkit.formatted_text import FormattedText
 from prompt_toolkit.key_binding import KeyBindings, KeyPressEvent
-from prompt_toolkit.layout import FormattedTextControl, HSplit, Layout, Window
 
 from inquirer_ai.choice import Choice
-from inquirer_ai.exceptions import PromptAbortedError, ValidationError
-from inquirer_ai.prompts.base import BasePrompt
+from inquirer_ai.exceptions import ValidationError
+from inquirer_ai.prompts.choice_base import ChoiceBasePrompt
 from inquirer_ai.theme import get_theme
 
 
-class CheckboxPrompt(BasePrompt[list[Any]]):
+class CheckboxPrompt(ChoiceBasePrompt[list[Any]]):
     def __init__(
         self,
         message: str,
@@ -23,20 +20,16 @@ class CheckboxPrompt(BasePrompt[list[Any]]):
         page_size: int = 10,
         **kwargs: Any,
     ) -> None:
-        super().__init__(message, default=default or [], **kwargs)
-        if not choices:
-            raise ValueError("choices cannot be empty")
-        self.choices = [Choice.from_raw(c) for c in choices]
-        self.page_size = page_size
+        super().__init__(message, choices=choices, default=default or [], page_size=page_size, **kwargs)
+        self._checked: set[int] = set()
+        if self.default:
+            for i, c in enumerate(self.choices):
+                if c.value in self.default or c.name in self.default:
+                    self._checked.add(i)
 
     @property
     def prompt_type(self) -> str:
         return "checkbox"
-
-    def _to_agent_dict(self) -> dict[str, Any]:
-        d = super()._to_agent_dict()
-        d["choices"] = [c.to_dict() for c in self.choices]
-        return d
 
     def _validate_answer(self, value: Any) -> list[Any]:
         if not isinstance(value, list):
@@ -62,33 +55,12 @@ class CheckboxPrompt(BasePrompt[list[Any]]):
         names = [c.name for c in self.choices if c.value in value]
         return ", ".join(names) if names else "none"
 
-    def _execute_terminal(self) -> list[Any]:
-        t = get_theme()
-        cursor = 0
-        choices = self.choices
-        checked: set[int] = set()
-
-        if self.default:
-            for i, c in enumerate(choices):
-                if c.value in self.default or c.name in self.default:
-                    checked.add(i)
-
-        kb = KeyBindings()
-
-        @kb.add("up")
-        @kb.add("k")
-        def _up(event: KeyPressEvent) -> None:
-            nonlocal cursor
-            cursor = (cursor - 1) % len(choices)
-
-        @kb.add("down")
-        @kb.add("j")
-        def _down(event: KeyPressEvent) -> None:
-            nonlocal cursor
-            cursor = (cursor + 1) % len(choices)
+    def _build_keybindings(self, kb: KeyBindings, choices: list[Choice], state: dict[str, Any]) -> None:
+        checked = self._checked
 
         @kb.add("space")
         def _toggle(event: KeyPressEvent) -> None:
+            cursor = state["cursor"]
             if cursor in checked:
                 checked.discard(cursor)
             else:
@@ -101,61 +73,17 @@ class CheckboxPrompt(BasePrompt[list[Any]]):
             else:
                 checked.update(range(len(choices)))
 
-        @kb.add("enter")
-        def _enter(event: KeyPressEvent) -> None:
-            event.app.exit(result=[choices[i].value for i in sorted(checked)])
+    def _format_choice_line(self, index: int, choice: Choice, state: dict[str, Any]) -> tuple[str, str]:
+        t = get_theme()
+        arrow = "❯" if index == state["cursor"] else " "
+        mark = "◉" if index in self._checked else "◯"
+        if index == state["cursor"]:
+            style = t.pt_bold(t.highlight)
+        elif index in self._checked:
+            style = t.pt(t.selected)
+        else:
+            style = ""
+        return (style, f"{arrow} {mark} {choice.name}")
 
-        @kb.add("c-c")
-        def _abort(event: KeyPressEvent) -> None:
-            event.app.exit(result=None)
-
-        def get_message() -> FormattedText:
-            return FormattedText([
-                (t.pt(t.question), "? "),
-                ("bold", self.message),
-            ])
-
-        def _visible_range() -> tuple[int, int]:
-            total = len(choices)
-            ps = min(self.page_size, total)
-            start = max(0, min(cursor - ps // 2, total - ps))
-            return start, start + ps
-
-        def get_formatted_choices() -> FormattedText:
-            lines: list[tuple[str, str]] = []
-            start, end = _visible_range()
-            if start > 0:
-                lines.append((t.pt(t.muted), "  (more above)"))
-                lines.append(("", "\n"))
-            for i in range(start, end):
-                c = choices[i]
-                arrow = "❯" if i == cursor else " "
-                mark = "◉" if i in checked else "◯"
-                if i == cursor:
-                    style = t.pt_bold(t.highlight)
-                elif i in checked:
-                    style = t.pt(t.selected)
-                else:
-                    style = ""
-                lines.append((style, f"{arrow} {mark} {c.name}"))
-                if i < end - 1:
-                    lines.append(("", "\n"))
-            if end < len(choices):
-                lines.append(("", "\n"))
-                lines.append((t.pt(t.muted), "  (more below)"))
-            return FormattedText(lines)
-
-        layout = Layout(
-            HSplit([
-                Window(FormattedTextControl(get_message), height=1),
-                Window(FormattedTextControl(get_formatted_choices)),
-            ])
-        )
-
-        app: Application[Any] = Application(
-            layout=layout, key_bindings=kb, full_screen=False, erase_when_done=True
-        )
-        result = app.run()
-        if result is None:
-            raise PromptAbortedError("Prompt aborted by user")
-        return result
+    def _get_result(self, state: dict[str, Any]) -> list[Any]:
+        return [self.choices[i].value for i in sorted(self._checked)]

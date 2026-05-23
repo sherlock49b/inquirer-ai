@@ -2,18 +2,15 @@ from __future__ import annotations
 
 from typing import Any
 
-from prompt_toolkit import Application
-from prompt_toolkit.formatted_text import FormattedText
-from prompt_toolkit.key_binding import KeyBindings, KeyPressEvent
-from prompt_toolkit.layout import FormattedTextControl, HSplit, Layout, Window
+from prompt_toolkit.key_binding import KeyBindings
 
 from inquirer_ai.choice import Choice
-from inquirer_ai.exceptions import PromptAbortedError, ValidationError
-from inquirer_ai.prompts.base import BasePrompt
+from inquirer_ai.exceptions import ValidationError
+from inquirer_ai.prompts.choice_base import ChoiceBasePrompt
 from inquirer_ai.theme import get_theme
 
 
-class SelectPrompt(BasePrompt[Any]):
+class SelectPrompt(ChoiceBasePrompt[Any]):
     def __init__(
         self,
         message: str,
@@ -23,20 +20,11 @@ class SelectPrompt(BasePrompt[Any]):
         page_size: int = 10,
         **kwargs: Any,
     ) -> None:
-        super().__init__(message, default=default, **kwargs)
-        if not choices:
-            raise ValueError("choices cannot be empty")
-        self.choices = [Choice.from_raw(c) for c in choices]
-        self.page_size = page_size
+        super().__init__(message, choices=choices, default=default, page_size=page_size, **kwargs)
 
     @property
     def prompt_type(self) -> str:
         return "select"
-
-    def _to_agent_dict(self) -> dict[str, Any]:
-        d = super()._to_agent_dict()
-        d["choices"] = [c.to_dict() for c in self.choices]
-        return d
 
     def _validate_answer(self, value: Any) -> Any:
         for c in self.choices:
@@ -53,80 +41,21 @@ class SelectPrompt(BasePrompt[Any]):
                 return c.name
         return str(value)
 
-    def _execute_terminal(self) -> Any:
-        t = get_theme()
-        cursor = 0
-        choices = self.choices
+    def _init_cursor(self) -> int:
         if self.default is not None:
-            for i, c in enumerate(choices):
+            for i, c in enumerate(self.choices):
                 if c.value == self.default or c.name == self.default:
-                    cursor = i
-                    break
+                    return i
+        return 0
 
-        kb = KeyBindings()
+    def _build_keybindings(self, kb: KeyBindings, choices: list[Choice], state: dict[str, Any]) -> None:
+        pass
 
-        @kb.add("up")
-        @kb.add("k")
-        def _up(event: KeyPressEvent) -> None:
-            nonlocal cursor
-            cursor = (cursor - 1) % len(choices)
+    def _format_choice_line(self, index: int, choice: Choice, state: dict[str, Any]) -> tuple[str, str]:
+        t = get_theme()
+        if index == state["cursor"]:
+            return (t.pt_bold(t.highlight), f"❯ {choice.name}")
+        return ("", f"  {choice.name}")
 
-        @kb.add("down")
-        @kb.add("j")
-        def _down(event: KeyPressEvent) -> None:
-            nonlocal cursor
-            cursor = (cursor + 1) % len(choices)
-
-        @kb.add("enter")
-        def _enter(event: KeyPressEvent) -> None:
-            event.app.exit(result=choices[cursor].value)
-
-        @kb.add("c-c")
-        def _abort(event: KeyPressEvent) -> None:
-            event.app.exit(result=None)
-
-        def get_message() -> FormattedText:
-            return FormattedText([
-                (t.pt(t.question), "? "),
-                ("bold", self.message),
-            ])
-
-        def _visible_range() -> tuple[int, int]:
-            total = len(choices)
-            ps = min(self.page_size, total)
-            start = max(0, min(cursor - ps // 2, total - ps))
-            return start, start + ps
-
-        def get_formatted_choices() -> FormattedText:
-            lines: list[tuple[str, str]] = []
-            start, end = _visible_range()
-            if start > 0:
-                lines.append((t.pt(t.muted), "  (more above)"))
-                lines.append(("", "\n"))
-            for i in range(start, end):
-                c = choices[i]
-                if i == cursor:
-                    lines.append((t.pt_bold(t.highlight), f"❯ {c.name}"))
-                else:
-                    lines.append(("", f"  {c.name}"))
-                if i < end - 1:
-                    lines.append(("", "\n"))
-            if end < len(choices):
-                lines.append(("", "\n"))
-                lines.append((t.pt(t.muted), "  (more below)"))
-            return FormattedText(lines)
-
-        layout = Layout(
-            HSplit([
-                Window(FormattedTextControl(get_message), height=1),
-                Window(FormattedTextControl(get_formatted_choices)),
-            ])
-        )
-
-        app: Application[Any] = Application(
-            layout=layout, key_bindings=kb, full_screen=False, erase_when_done=True
-        )
-        result = app.run()
-        if result is None:
-            raise PromptAbortedError("Prompt aborted by user")
-        return result
+    def _get_result(self, state: dict[str, Any]) -> Any:
+        return self.choices[state["cursor"]].value

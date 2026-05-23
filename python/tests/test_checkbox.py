@@ -101,7 +101,7 @@ def test_agent_mode_with_dict_choices(monkeypatch):
 
 def test_terminal_mode_basic(monkeypatch):
     monkeypatch.setenv("INQUIRER_AI_MODE", "human")
-    with patch("inquirer_ai.prompts.checkbox.Application") as mock_app_cls:
+    with patch("inquirer_ai.prompts.choice_base.Application") as mock_app_cls:
         mock_app_cls.return_value.run.return_value = ["Auth", "DB"]
         p = CheckboxPrompt("Select features", choices=["Auth", "DB", "Cache"])
         assert p.execute() == ["Auth", "DB"]
@@ -109,7 +109,7 @@ def test_terminal_mode_basic(monkeypatch):
 
 def test_terminal_mode_empty_selection(monkeypatch):
     monkeypatch.setenv("INQUIRER_AI_MODE", "human")
-    with patch("inquirer_ai.prompts.checkbox.Application") as mock_app_cls:
+    with patch("inquirer_ai.prompts.choice_base.Application") as mock_app_cls:
         mock_app_cls.return_value.run.return_value = []
         p = CheckboxPrompt("Select features", choices=["Auth", "DB"])
         assert p.execute() == []
@@ -117,7 +117,7 @@ def test_terminal_mode_empty_selection(monkeypatch):
 
 def test_terminal_mode_abort(monkeypatch):
     monkeypatch.setenv("INQUIRER_AI_MODE", "human")
-    with patch("inquirer_ai.prompts.checkbox.Application") as mock_app_cls:
+    with patch("inquirer_ai.prompts.choice_base.Application") as mock_app_cls:
         mock_app_cls.return_value.run.return_value = None
         p = CheckboxPrompt("Select features", choices=["Auth", "DB"])
         with pytest.raises(PromptAbortedError):
