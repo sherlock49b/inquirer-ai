@@ -6,6 +6,7 @@ import pytest
 
 from inquirer_ai.exceptions import PromptAbortedError, ValidationError
 from inquirer_ai.prompts.select import SelectPrompt
+from tests.conftest import parse_prompt_from_stdout
 
 
 def test_agent_mode_by_value(monkeypatch):
@@ -25,7 +26,7 @@ def test_agent_mode_by_value(monkeypatch):
     result = p.execute()
     assert result == "pg"
 
-    prompt_data = json.loads(stdout.getvalue().strip())
+    prompt_data = parse_prompt_from_stdout(stdout)
     assert prompt_data["type"] == "select"
     assert len(prompt_data["choices"]) == 2
 

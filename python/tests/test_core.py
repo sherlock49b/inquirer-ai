@@ -30,7 +30,8 @@ def test_prompt_multiple_questions(monkeypatch):
 
     assert answers == {"username": "Alice", "ok": True, "db": "pg"}
 
-    lines = stdout.getvalue().strip().split("\n")
+    all_lines = stdout.getvalue().strip().split("\n")
+    lines = [line for line in all_lines if '"type"' in line]
     assert len(lines) == 3
     assert json.loads(lines[0])["type"] == "input"
     assert json.loads(lines[1])["type"] == "confirm"

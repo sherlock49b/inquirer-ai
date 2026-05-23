@@ -2,6 +2,7 @@ import io
 import json
 
 from inquirer_ai.prompts.confirm import ConfirmPrompt
+from tests.conftest import parse_prompt_from_stdout
 
 
 def test_agent_mode_true(monkeypatch):
@@ -15,7 +16,7 @@ def test_agent_mode_true(monkeypatch):
     result = p.execute()
 
     assert result is True
-    prompt_data = json.loads(stdout.getvalue().strip())
+    prompt_data = parse_prompt_from_stdout(stdout)
     assert prompt_data["type"] == "confirm"
 
 

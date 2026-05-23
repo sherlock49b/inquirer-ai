@@ -5,6 +5,7 @@ import pytest
 
 from inquirer_ai.exceptions import ValidationError
 from inquirer_ai.prompts.text import TextPrompt
+from tests.conftest import parse_prompt_from_stdout
 
 
 def test_agent_mode_basic(monkeypatch):
@@ -18,7 +19,7 @@ def test_agent_mode_basic(monkeypatch):
     result = p.execute()
 
     assert result == "hello"
-    prompt_data = json.loads(stdout.getvalue().strip())
+    prompt_data = parse_prompt_from_stdout(stdout)
     assert prompt_data["type"] == "input"
     assert prompt_data["message"] == "Enter name"
 
@@ -34,7 +35,7 @@ def test_agent_mode_with_default(monkeypatch):
     result = p.execute()
 
     assert result == "world"
-    prompt_data = json.loads(stdout.getvalue().strip())
+    prompt_data = parse_prompt_from_stdout(stdout)
     assert prompt_data["default"] == "world"
 
 

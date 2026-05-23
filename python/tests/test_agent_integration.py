@@ -6,7 +6,7 @@ import sys
 import textwrap
 
 
-def _run_agent_script(script: str, stdin_lines: list[dict[str, object]]) -> list[dict[str, object]]:
+def _run_agent_script_raw(script: str, stdin_lines: list[dict[str, object]]) -> list[dict[str, object]]:
     stdin_payload = "\n".join(json.dumps(line) for line in stdin_lines) + "\n"
     result = subprocess.run(
         [sys.executable, "-c", textwrap.dedent(script)],
@@ -18,10 +18,16 @@ def _run_agent_script(script: str, stdin_lines: list[dict[str, object]]) -> list
     )
     if result.returncode != 0:
         raise RuntimeError(f"Script failed:\nstdout: {result.stdout}\nstderr: {result.stderr}")
-    prompts: list[dict[str, object]] = []
+    lines: list[dict[str, object]] = []
     for line in result.stdout.strip().splitlines():
-        prompts.append(json.loads(line))
-    return prompts
+        lines.append(json.loads(line))
+    return lines
+
+
+def _run_agent_script(script: str, stdin_lines: list[dict[str, object]]) -> list[dict[str, object]]:
+    lines = _run_agent_script_raw(script, stdin_lines)
+    assert lines and lines[0].get("protocol") == "inquirer-ai"
+    return lines[1:]
 
 
 class TestTextAgentProtocol:
@@ -170,3 +176,27 @@ class TestMultiPromptSequence:
         assert prompts[0]["type"] == "input"
         assert prompts[1]["type"] == "confirm"
         assert prompts[2] == {"name": "Eve", "ok": True}
+
+
+class TestHandshake:
+    def test_handshake_is_first_line(self):
+        script = """\
+        import inquirer_ai
+        answer = inquirer_ai.text("Hi?")
+        """
+        lines = _run_agent_script_raw(script, [{"answer": "x"}])
+        handshake = lines[0]
+        assert handshake["protocol"] == "inquirer-ai"
+        assert handshake["version"] == "0.1.0"
+        assert handshake["format"] == "jsonl"
+        assert "answer" in str(handshake["example_response"])
+
+    def test_handshake_sent_only_once(self):
+        script = """\
+        import inquirer_ai, json, sys
+        inquirer_ai.text("A?")
+        inquirer_ai.text("B?")
+        """
+        lines = _run_agent_script_raw(script, [{"answer": "x"}, {"answer": "y"}])
+        protocol_lines = [line for line in lines if line.get("protocol") == "inquirer-ai"]
+        assert len(protocol_lines) == 1

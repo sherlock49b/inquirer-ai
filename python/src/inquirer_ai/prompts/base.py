@@ -11,6 +11,26 @@ from inquirer_ai.mode import is_agent_mode
 
 T = TypeVar("T")
 
+_agent_handshake_sent = False
+
+
+def _send_agent_handshake() -> None:
+    global _agent_handshake_sent
+    if _agent_handshake_sent:
+        return
+    _agent_handshake_sent = True
+    from importlib.metadata import version
+
+    meta = {
+        "protocol": "inquirer-ai",
+        "version": version("inquirer-ai"),
+        "format": "jsonl",
+        "description": "Each prompt is a JSON line on stdout. Respond with a JSON line on stdin.",
+        "example_response": {"answer": "<value>"},
+    }
+    sys.stdout.write(json.dumps(meta, ensure_ascii=False) + "\n")
+    sys.stdout.flush()
+
 
 class BasePrompt(ABC, Generic[T]):
     def __init__(
@@ -47,17 +67,23 @@ class BasePrompt(ABC, Generic[T]):
         }
 
     def _execute_agent(self) -> T:
+        _send_agent_handshake()
         payload = self._to_agent_dict()
         sys.stdout.write(json.dumps(payload, ensure_ascii=False) + "\n")
         sys.stdout.flush()
         line = sys.stdin.readline()
         if not line:
-            raise PromptAbortedError("No response received (stdin closed)")
+            raise PromptAbortedError('No response received (stdin closed). Expected JSON like: {"answer": "<value>"}')
         try:
             response = json.loads(line)
         except json.JSONDecodeError as e:
-            raise ValidationError(f"Invalid JSON response: {e}") from e
-        return self._validate_answer(response.get("answer"))
+            raise ValidationError(f'Invalid JSON response: {e}. Expected JSON like: {{"answer": "<value>"}}') from e
+        if not isinstance(response, dict) or "answer" not in response:
+            raise ValidationError(
+                f'Response must be a JSON object with an "answer" key, '
+                f'e.g. {{"answer": "<value>"}}. Got: {line.strip()}'
+            )
+        return self._validate_answer(response["answer"])  # pyright: ignore[reportUnknownArgumentType]
 
     def _run_user_validation(self, value: T) -> str | None:
         if not self.validate_fn:

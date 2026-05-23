@@ -6,6 +6,7 @@ import pytest
 
 from inquirer_ai.exceptions import PromptAbortedError, ValidationError
 from inquirer_ai.prompts.checkbox import CheckboxPrompt
+from tests.conftest import parse_prompt_from_stdout
 
 
 def test_agent_mode_basic(monkeypatch):
@@ -19,7 +20,7 @@ def test_agent_mode_basic(monkeypatch):
     result = p.execute()
     assert result == ["Auth", "DB"]
 
-    prompt_data = json.loads(stdout.getvalue().strip())
+    prompt_data = parse_prompt_from_stdout(stdout)
     assert prompt_data["type"] == "checkbox"
     assert len(prompt_data["choices"]) == 3
 
