@@ -3,7 +3,7 @@ name = "inquirer-ai"
 version = "0.1.0"
 description = "Interactive CLI prompts for both humans and AI agents"
 readme = "README.md"
-license = "MIT"
+license = {text = "MIT"}
 authors = [
     { name = "sherlock49b", email = "chenyinfeng50@gmail.com" },
 ]
@@ -59,6 +59,16 @@ select = [
 ]
 ignore = [
     "RUF001",  # ambiguous unicode — we use ❯ ◉ ◯ ✓ intentionally
+]
+
+[project.optional-dependencies]
+dev = [
+    "hypothesis>=6.0",
+    "pyright>=1.1.409",
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+    "pytest-cov>=5.0",
+    "ruff>=0.11",
 ]
 
 [dependency-groups]
