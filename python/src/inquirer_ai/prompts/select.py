@@ -20,12 +20,14 @@ class SelectPrompt(BasePrompt[Any]):
         *,
         choices: list[str | dict[str, Any] | Choice],
         default: Any = None,
+        page_size: int = 10,
         **kwargs: Any,
     ) -> None:
         super().__init__(message, default=default, **kwargs)
         if not choices:
             raise ValueError("choices cannot be empty")
         self.choices = [Choice.from_raw(c) for c in choices]
+        self.page_size = page_size
 
     @property
     def prompt_type(self) -> str:
@@ -89,15 +91,29 @@ class SelectPrompt(BasePrompt[Any]):
                 ("bold", self.message),
             ])
 
+        def _visible_range() -> tuple[int, int]:
+            total = len(choices)
+            ps = min(self.page_size, total)
+            start = max(0, min(cursor - ps // 2, total - ps))
+            return start, start + ps
+
         def get_formatted_choices() -> FormattedText:
             lines: list[tuple[str, str]] = []
-            for i, c in enumerate(choices):
+            start, end = _visible_range()
+            if start > 0:
+                lines.append((t.pt(t.muted), "  (more above)"))
+                lines.append(("", "\n"))
+            for i in range(start, end):
+                c = choices[i]
                 if i == cursor:
                     lines.append((t.pt_bold(t.highlight), f"❯ {c.name}"))
                 else:
                     lines.append(("", f"  {c.name}"))
-                if i < len(choices) - 1:
+                if i < end - 1:
                     lines.append(("", "\n"))
+            if end < len(choices):
+                lines.append(("", "\n"))
+                lines.append((t.pt(t.muted), "  (more below)"))
             return FormattedText(lines)
 
         layout = Layout(

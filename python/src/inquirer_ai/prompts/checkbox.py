@@ -20,12 +20,14 @@ class CheckboxPrompt(BasePrompt[list[Any]]):
         *,
         choices: list[str | dict[str, Any] | Choice],
         default: list[Any] | None = None,
+        page_size: int = 10,
         **kwargs: Any,
     ) -> None:
         super().__init__(message, default=default or [], **kwargs)
         if not choices:
             raise ValueError("choices cannot be empty")
         self.choices = [Choice.from_raw(c) for c in choices]
+        self.page_size = page_size
 
     @property
     def prompt_type(self) -> str:
@@ -113,9 +115,20 @@ class CheckboxPrompt(BasePrompt[list[Any]]):
                 ("bold", self.message),
             ])
 
+        def _visible_range() -> tuple[int, int]:
+            total = len(choices)
+            ps = min(self.page_size, total)
+            start = max(0, min(cursor - ps // 2, total - ps))
+            return start, start + ps
+
         def get_formatted_choices() -> FormattedText:
             lines: list[tuple[str, str]] = []
-            for i, c in enumerate(choices):
+            start, end = _visible_range()
+            if start > 0:
+                lines.append((t.pt(t.muted), "  (more above)"))
+                lines.append(("", "\n"))
+            for i in range(start, end):
+                c = choices[i]
                 arrow = "❯" if i == cursor else " "
                 mark = "◉" if i in checked else "◯"
                 if i == cursor:
@@ -125,8 +138,11 @@ class CheckboxPrompt(BasePrompt[list[Any]]):
                 else:
                     style = ""
                 lines.append((style, f"{arrow} {mark} {c.name}"))
-                if i < len(choices) - 1:
+                if i < end - 1:
                     lines.append(("", "\n"))
+            if end < len(choices):
+                lines.append(("", "\n"))
+                lines.append((t.pt(t.muted), "  (more below)"))
             return FormattedText(lines)
 
         layout = Layout(

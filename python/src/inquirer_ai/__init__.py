@@ -37,10 +37,11 @@ def select(
     *,
     choices: list[str | dict[str, Any] | Choice],
     default: Any = None,
+    page_size: int = 10,
     validate: Callable[[Any], bool | str | None] | None = None,
     filter: Callable[[Any], Any] | None = None,
 ) -> Any:
-    return SelectPrompt(message, choices=choices, default=default, validate=validate, filter=filter).execute()
+    return SelectPrompt(message, choices=choices, default=default, page_size=page_size, validate=validate, filter=filter).execute()
 
 
 def checkbox(
@@ -48,10 +49,11 @@ def checkbox(
     *,
     choices: list[str | dict[str, Any] | Choice],
     default: list[Any] | None = None,
+    page_size: int = 10,
     validate: Callable[[Any], bool | str | None] | None = None,
     filter: Callable[[Any], Any] | None = None,
 ) -> list[Any]:
-    return CheckboxPrompt(message, choices=choices, default=default, validate=validate, filter=filter).execute()
+    return CheckboxPrompt(message, choices=choices, default=default, page_size=page_size, validate=validate, filter=filter).execute()
 
 
 __all__ = [
