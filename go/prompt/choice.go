@@ -1,5 +1,7 @@
 package prompt
 
+import "encoding/json"
+
 // Choice represents a selectable option in list-based prompts.
 type Choice struct {
 	Name        string `json:"name"`
@@ -14,8 +16,12 @@ type Separator struct {
 	Text string `json:"text"`
 }
 
+// MarshalJSON serializes a Separator with a "type":"separator" field.
 func (s Separator) MarshalJSON() ([]byte, error) {
-	return []byte(`{"type":"separator","text":"` + s.Text + `"}`), nil
+	return json.Marshal(struct {
+		Type string `json:"type"`
+		Text string `json:"text"`
+	}{Type: "separator", Text: s.Text})
 }
 
 // ChoiceItem is the interface implemented by Choice and Separator.
