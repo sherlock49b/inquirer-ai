@@ -335,6 +335,8 @@ Invalid JSON response: ... Expected JSON like: {"answer": "<value>"}
 |----------|---------|--------|
 | Python | `inquirer-ai` (PyPI) | Complete — 12 prompt types, async support |
 | Go | `github.com/sherlock49b/inquirer-ai/go/prompt` | Complete — 12 prompt types |
+| TypeScript | `inquirer-ai` (npm) | Complete — 12 prompt types |
+| Rust | `inquirer-ai` (crates.io) | Complete — 12 prompt types |
 
 ## Versioning
 

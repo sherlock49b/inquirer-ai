@@ -1,0 +1,53 @@
+{
+  "name": "inquirer-ai",
+  "version": "0.1.0",
+  "description": "Dual-mode interactive CLI prompts — terminal UI for humans, JSON line protocol for AI agents",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "lint": "tsc --noEmit",
+    "clean": "rm -rf dist"
+  },
+  "keywords": [
+    "cli",
+    "prompt",
+    "interactive",
+    "terminal",
+    "inquirer",
+    "ai",
+    "agent",
+    "json",
+    "jsonl"
+  ],
+  "license": "MIT",
+  "author": "sherlock49b",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/sherlock49b/inquirer-ai.git",
+    "directory": "typescript"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^25.9.1",
+    "@vitest/coverage-v8": "^3.2.1",
+    "fast-check": "^4.8.0",
+    "typescript": "^5.8.3",
+    "vitest": "^3.2.1"
+  }
+}
