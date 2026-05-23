@@ -27,5 +27,8 @@ jobs:
       - name: Install dependencies
         run: uv sync --group dev
 
+      - name: Type check
+        run: uv run pyright src/
+
       - name: Run tests
         run: uv run pytest -v --cov=inquirer_ai --cov-report=term-missing
