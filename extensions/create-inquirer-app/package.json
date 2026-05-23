@@ -1,0 +1,30 @@
+{
+  "name": "create-inquirer-app",
+  "version": "0.1.0",
+  "description": "Scaffold a new interactive CLI project using inquirer-ai",
+  "type": "module",
+  "bin": {
+    "create-inquirer-app": "./src/index.js"
+  },
+  "files": [
+    "src",
+    "templates"
+  ],
+  "keywords": [
+    "cli",
+    "scaffold",
+    "inquirer",
+    "ai",
+    "create"
+  ],
+  "license": "MIT",
+  "author": "sherlock49b",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/sherlock49b/inquirer-ai.git",
+    "directory": "extensions/create-inquirer-app"
+  },
+  "dependencies": {
+    "inquirer-ai": "file:../../typescript"
+  }
+}
