@@ -15,7 +15,7 @@ class CheckboxPrompt(ChoiceBasePrompt[list[Any]]):
         self,
         message: str,
         *,
-        choices: list[str | dict[str, Any] | Choice],
+        choices: list[str | dict[str, Any] | Choice[Any]],
         default: list[Any] | None = None,
         page_size: int = 10,
         **kwargs: Any,
@@ -55,7 +55,7 @@ class CheckboxPrompt(ChoiceBasePrompt[list[Any]]):
         names = [c.name for c in self.choices if c.value in value]
         return ", ".join(names) if names else "none"
 
-    def _build_keybindings(self, kb: KeyBindings, choices: list[Choice], state: dict[str, Any]) -> None:
+    def _build_keybindings(self, kb: KeyBindings, choices: list[Choice[Any]], state: dict[str, Any]) -> None:
         checked = self._checked
 
         @kb.add("space")
@@ -73,7 +73,7 @@ class CheckboxPrompt(ChoiceBasePrompt[list[Any]]):
             else:
                 checked.update(range(len(choices)))
 
-    def _format_choice_line(self, index: int, choice: Choice, state: dict[str, Any]) -> tuple[str, str]:
+    def _format_choice_line(self, index: int, choice: Choice[Any], state: dict[str, Any]) -> tuple[str, str]:
         t = get_theme()
         arrow = t.sym_pointer if index == state["cursor"] else " "
         mark = t.sym_checked if index in self._checked else t.sym_unchecked

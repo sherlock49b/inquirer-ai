@@ -18,8 +18,8 @@ class BasePrompt(ABC, Generic[T]):
         message: str,
         *,
         default: Any = None,
-        validate: Callable[[Any], bool | str | None] | None = None,
-        filter: Callable[[Any], Any] | None = None,
+        validate: Callable[[T], bool | str | None] | None = None,
+        filter: Callable[[T], T] | None = None,
     ) -> None:
         self.message = message
         self.default = default
@@ -78,7 +78,7 @@ class BasePrompt(ABC, Generic[T]):
             result = self._execute_agent() if agent else self._execute_terminal()
 
             if self.filter_fn:
-                result = self.filter_fn(result)  # type: ignore[assignment]
+                result = self.filter_fn(result)
 
             error = self._run_user_validation(result)
             if error:

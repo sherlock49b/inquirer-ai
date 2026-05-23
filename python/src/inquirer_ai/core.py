@@ -19,7 +19,7 @@ class _QuestionRequired(TypedDict):
 
 class Question(_QuestionRequired, total=False):
     default: Any
-    choices: list[str | dict[str, Any] | Choice]
+    choices: list[str | dict[str, Any] | Choice[Any]]
     validate: Callable[[Any], bool | str | None]
     filter: Callable[[Any], Any]
 

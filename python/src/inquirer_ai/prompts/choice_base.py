@@ -21,7 +21,7 @@ class ChoiceBasePrompt(BasePrompt[T]):
         self,
         message: str,
         *,
-        choices: list[str | dict[str, Any] | Choice],
+        choices: list[str | dict[str, Any] | Choice[Any]],
         page_size: int = 10,
         **kwargs: Any,
     ) -> None:
@@ -37,10 +37,10 @@ class ChoiceBasePrompt(BasePrompt[T]):
         return d
 
     @abstractmethod
-    def _build_keybindings(self, kb: KeyBindings, choices: list[Choice], state: dict[str, Any]) -> None: ...
+    def _build_keybindings(self, kb: KeyBindings, choices: list[Choice[Any]], state: dict[str, Any]) -> None: ...
 
     @abstractmethod
-    def _format_choice_line(self, index: int, choice: Choice, state: dict[str, Any]) -> tuple[str, str]: ...
+    def _format_choice_line(self, index: int, choice: Choice[Any], state: dict[str, Any]) -> tuple[str, str]: ...
 
     @abstractmethod
     def _get_result(self, state: dict[str, Any]) -> Any: ...

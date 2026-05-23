@@ -15,7 +15,7 @@ class SelectPrompt(ChoiceBasePrompt[Any]):
         self,
         message: str,
         *,
-        choices: list[str | dict[str, Any] | Choice],
+        choices: list[str | dict[str, Any] | Choice[Any]],
         default: Any = None,
         page_size: int = 10,
         **kwargs: Any,
@@ -48,10 +48,10 @@ class SelectPrompt(ChoiceBasePrompt[Any]):
                     return i
         return 0
 
-    def _build_keybindings(self, kb: KeyBindings, choices: list[Choice], state: dict[str, Any]) -> None:
+    def _build_keybindings(self, kb: KeyBindings, choices: list[Choice[Any]], state: dict[str, Any]) -> None:
         pass
 
-    def _format_choice_line(self, index: int, choice: Choice, state: dict[str, Any]) -> tuple[str, str]:
+    def _format_choice_line(self, index: int, choice: Choice[Any], state: dict[str, Any]) -> tuple[str, str]:
         t = get_theme()
         if index == state["cursor"]:
             return (t.pt_bold(t.highlight), f"{t.sym_pointer} {choice.name}")
