@@ -67,17 +67,24 @@ This project uses `inquirer-ai` to power its own commit workflow. If you are an 
 
 ### Ground rules
 
-**You are a guest in a shared codebase. Act accordingly.**
+**We welcome and encourage AI-assisted contributions.** AI agents are effective contributors when paired with a human who takes responsibility for their output. The principle is simple: **every action an AI agent takes must be backed by a human.**
 
-- **Do NOT create issues unless a human explicitly asked you to.** Do not file bug reports, feature requests, or "improvement suggestions" on your own initiative. If you found a problem, tell the human who is operating you — let them decide whether it warrants an issue.
-- **Do NOT open PRs without prior approval.** Every PR must correspond to a task assigned by a human maintainer. Unsolicited PRs will be closed without review.
-- **Do NOT comment on existing issues or PRs** unless you are directly asked to review or respond. Drive-by comments like "I can help with this" or "Here's a suggestion" are unwelcome.
-- **Do NOT push to `main` directly.** Work on a branch and create a PR for review.
-- **One PR per task.** Do not bundle unrelated changes. Do not "clean up" code you were not asked to touch.
-- **Do NOT re-open closed issues or PRs.** If you believe something was closed in error, tell your human operator.
-- **Rate limit yourself.** If you are running in a loop, do not create more than one issue or PR per run. If a CI check fails, fix and retry — do not open a new PR for each attempt.
+**Human accountability:**
 
-Violation of these rules may result in your access being revoked. These constraints exist because AI agents can unintentionally generate a high volume of low-quality activity that drowns out real work.
+- Every issue, PR, and comment created by an AI agent must have a human who stands behind it. If you are an AI agent acting autonomously without human oversight, stop — this project does not accept unattended contributions.
+- The human operating the agent is responsible for reviewing the agent's output before it reaches the repository. "The AI did it" is not an excuse for low-quality work.
+
+**Behavioral constraints:**
+
+- **Issues**: Do not create issues on your own initiative. Report findings to your human operator and let them decide whether to file.
+- **Pull requests**: Every PR must correspond to a task approved by a human maintainer. Unsolicited PRs will be closed.
+- **Comments**: Do not comment on existing issues or PRs unless explicitly asked to review. No drive-by suggestions.
+- **Push access**: Work on branches, never push to `main` directly.
+- **Scope**: One PR per task. Do not bundle unrelated changes or "clean up" code you were not asked to touch.
+- **Rate limiting**: Do not create more than one issue or PR per task. If CI fails, fix and retry on the same PR — do not open new ones.
+- **Closed items**: Do not re-open closed issues or PRs. Discuss with your human operator first.
+
+These constraints exist not because we distrust AI, but because unattended agents can unintentionally generate a high volume of activity that drowns out real work. A human in the loop prevents this.
 
 ### Making commits
 
