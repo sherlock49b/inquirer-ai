@@ -5,6 +5,7 @@ import subprocess
 import tempfile
 from typing import Any
 
+from inquirer_ai.exceptions import EditorError
 from inquirer_ai.prompts.base import BasePrompt
 
 
@@ -39,5 +40,10 @@ class EditorPrompt(BasePrompt[str]):
             subprocess.run([editor, tmp_path], check=True)
             with open(tmp_path) as f:
                 return f.read()
+        except FileNotFoundError:
+            raise EditorError(f"Editor not found: {editor!r}. Set $VISUAL or $EDITOR.") from None
+        except subprocess.CalledProcessError as e:
+            raise EditorError(f"Editor exited with code {e.returncode}") from None
         finally:
-            os.unlink(tmp_path)
+            if os.path.exists(tmp_path):
+                os.unlink(tmp_path)

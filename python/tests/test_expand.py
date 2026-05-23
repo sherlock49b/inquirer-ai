@@ -3,7 +3,7 @@ import json
 
 import pytest
 
-from inquirer_ai.exceptions import ValidationError
+from inquirer_ai.exceptions import InvalidChoiceError, ValidationError
 from inquirer_ai.prompts.expand import ExpandChoice, ExpandPrompt
 from tests.conftest import parse_prompt_from_stdout
 
@@ -61,8 +61,22 @@ def test_expand_choice_instance():
 
 
 def test_empty_choices_raises():
-    with pytest.raises(ValueError, match="choices cannot be empty"):
+    with pytest.raises(InvalidChoiceError, match="choices cannot be empty"):
         ExpandPrompt("Ok?", choices=[])
+
+
+def test_duplicate_keys_raises():
+    choices = [
+        {"key": "y", "name": "Yes", "value": True},
+        {"key": "y", "name": "Yep", "value": True},
+    ]
+    with pytest.raises(InvalidChoiceError, match="Duplicate"):
+        ExpandPrompt("Ok?", choices=choices)
+
+
+def test_missing_key_raises():
+    with pytest.raises(InvalidChoiceError, match="must have a 'key'"):
+        ExpandPrompt("Ok?", choices=[{"name": "Yes"}])
 
 
 def test_terminal_mode(monkeypatch):

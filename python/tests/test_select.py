@@ -4,7 +4,7 @@ from unittest.mock import patch
 
 import pytest
 
-from inquirer_ai.exceptions import PromptAbortedError, ValidationError
+from inquirer_ai.exceptions import InvalidChoiceError, PromptAbortedError, ValidationError
 from inquirer_ai.prompts.select import SelectPrompt
 from tests.conftest import parse_prompt_from_stdout
 
@@ -56,7 +56,7 @@ def test_agent_mode_invalid_choice(monkeypatch):
 
 
 def test_empty_choices_raises():
-    with pytest.raises(ValueError, match="choices cannot be empty"):
+    with pytest.raises(InvalidChoiceError, match="choices cannot be empty"):
         SelectPrompt("Choose DB", choices=[])
 
 

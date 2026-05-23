@@ -103,7 +103,10 @@ class BasePrompt(ABC, Generic[T]):
         agent = is_agent_mode()
 
         while True:
-            result = self._execute_agent() if agent else self._execute_terminal()
+            try:
+                result = self._execute_agent() if agent else self._execute_terminal()
+            except EOFError:
+                raise PromptAbortedError("Prompt aborted (stdin closed)") from None
 
             if self.filter_fn:
                 result = self.filter_fn(result)

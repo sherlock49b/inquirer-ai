@@ -3,7 +3,7 @@ import json
 
 import pytest
 
-from inquirer_ai.exceptions import ValidationError
+from inquirer_ai.exceptions import InvalidChoiceError, ValidationError
 from inquirer_ai.prompts.rawlist import RawlistPrompt
 from tests.conftest import parse_prompt_from_stdout
 
@@ -48,7 +48,7 @@ def test_agent_mode_invalid(monkeypatch):
 
 
 def test_empty_choices_raises():
-    with pytest.raises(ValueError, match="choices cannot be empty"):
+    with pytest.raises(InvalidChoiceError, match="choices cannot be empty"):
         RawlistPrompt("Pick", choices=[])
 
 

@@ -4,7 +4,7 @@ import json
 import pytest
 
 from inquirer_ai.choice import Choice, Separator
-from inquirer_ai.exceptions import ValidationError
+from inquirer_ai.exceptions import InvalidChoiceError, ValidationError
 from inquirer_ai.prompts.select import SelectPrompt
 from tests.conftest import parse_prompt_from_stdout
 
@@ -34,7 +34,7 @@ def test_from_choice_instance():
 
 
 def test_from_invalid_type():
-    with pytest.raises(TypeError):
+    with pytest.raises(InvalidChoiceError):
         Choice.from_raw(123)  # type: ignore[arg-type]
 
 
@@ -71,6 +71,11 @@ def test_separator_to_dict():
 def test_separator_default_text():
     s = Separator()
     assert s.text == "────────"
+
+
+def test_empty_dict_raises():
+    with pytest.raises(InvalidChoiceError, match="must have at least"):
+        Choice.from_raw({})
 
 
 def test_select_with_separator(monkeypatch):
@@ -110,5 +115,5 @@ def test_select_disabled_choice_rejected(monkeypatch):
 
 
 def test_all_disabled_raises():
-    with pytest.raises(ValueError, match="at least one selectable"):
+    with pytest.raises(InvalidChoiceError, match="at least one selectable"):
         SelectPrompt("Pick", choices=[Choice("X", "x", disabled=True)])

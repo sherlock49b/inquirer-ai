@@ -6,7 +6,7 @@ from typing import Any
 from prompt_toolkit import prompt as pt_prompt
 from prompt_toolkit.formatted_text import FormattedText
 
-from inquirer_ai.exceptions import ValidationError
+from inquirer_ai.exceptions import InvalidChoiceError, ValidationError
 from inquirer_ai.prompts.base import BasePrompt
 from inquirer_ai.theme import RESET, get_theme
 
@@ -28,13 +28,19 @@ class ExpandPrompt(BasePrompt[Any]):
     ) -> None:
         super().__init__(message, **kwargs)
         if not choices:
-            raise ValueError("choices cannot be empty")
+            raise InvalidChoiceError("choices cannot be empty")
         self.expand_choices = [self._parse(c) for c in choices]
+        keys = [c.key for c in self.expand_choices]
+        dupes = {k for k in keys if keys.count(k) > 1}
+        if dupes:
+            raise InvalidChoiceError(f"Duplicate expand keys: {dupes}")
 
     @staticmethod
     def _parse(raw: dict[str, Any] | ExpandChoice) -> ExpandChoice:
         if isinstance(raw, ExpandChoice):
             return raw
+        if "key" not in raw:
+            raise InvalidChoiceError("ExpandChoice dict must have a 'key' field")
         return ExpandChoice(
             key=raw["key"].lower(),
             name=raw.get("name", raw["key"]),

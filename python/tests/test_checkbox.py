@@ -4,7 +4,7 @@ from unittest.mock import patch
 
 import pytest
 
-from inquirer_ai.exceptions import PromptAbortedError, ValidationError
+from inquirer_ai.exceptions import InvalidChoiceError, PromptAbortedError, ValidationError
 from inquirer_ai.prompts.checkbox import CheckboxPrompt
 from tests.conftest import parse_prompt_from_stdout
 
@@ -62,7 +62,7 @@ def test_agent_mode_not_a_list(monkeypatch):
 
 
 def test_empty_choices_raises():
-    with pytest.raises(ValueError, match="choices cannot be empty"):
+    with pytest.raises(InvalidChoiceError, match="choices cannot be empty"):
         CheckboxPrompt("Select features", choices=[])
 
 

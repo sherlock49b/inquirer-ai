@@ -4,7 +4,7 @@ from typing import Any, TypeVar, overload
 
 from inquirer_ai.choice import Choice, RawChoice, Separator
 from inquirer_ai.core import Question, prompt
-from inquirer_ai.exceptions import InquirerAIError, PromptAbortedError, ValidationError
+from inquirer_ai.exceptions import EditorError, InquirerAIError, InvalidChoiceError, PromptAbortedError, ValidationError
 from inquirer_ai.mode import is_agent_mode
 from inquirer_ai.prompts.checkbox import CheckboxPrompt
 from inquirer_ai.prompts.confirm import ConfirmPrompt
@@ -206,10 +206,12 @@ __all__ = [
     "CheckboxPrompt",
     "Choice",
     "ConfirmPrompt",
+    "EditorError",
     "EditorPrompt",
     "ExpandChoice",
     "ExpandPrompt",
     "InquirerAIError",
+    "InvalidChoiceError",
     "NumberPrompt",
     "PasswordPrompt",
     "PromptAbortedError",

@@ -6,7 +6,7 @@ from prompt_toolkit import prompt as pt_prompt
 from prompt_toolkit.formatted_text import FormattedText
 
 from inquirer_ai.choice import Choice
-from inquirer_ai.exceptions import ValidationError
+from inquirer_ai.exceptions import InvalidChoiceError, ValidationError
 from inquirer_ai.prompts.base import BasePrompt
 from inquirer_ai.theme import RESET, get_theme
 
@@ -21,7 +21,7 @@ class RawlistPrompt(BasePrompt[Any]):
     ) -> None:
         super().__init__(message, **kwargs)
         if not choices:
-            raise ValueError("choices cannot be empty")
+            raise InvalidChoiceError("choices cannot be empty")
         self.choices: list[Choice[Any]] = [Choice.from_raw(c) for c in choices]  # pyright: ignore[reportUnknownMemberType]
 
     @property

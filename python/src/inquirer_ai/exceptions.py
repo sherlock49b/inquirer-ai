@@ -11,3 +11,11 @@ class ValidationError(InquirerAIError):
 
 class PromptAbortedError(InquirerAIError):
     pass
+
+
+class InvalidChoiceError(ValidationError):
+    pass
+
+
+class EditorError(InquirerAIError):
+    pass

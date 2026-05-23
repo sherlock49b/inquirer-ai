@@ -9,7 +9,7 @@ from prompt_toolkit.key_binding import KeyBindings, KeyPressEvent
 from prompt_toolkit.layout import FormattedTextControl, HSplit, Layout, Window
 
 from inquirer_ai.choice import Choice, ChoiceItem, RawChoice, parse_choice
-from inquirer_ai.exceptions import PromptAbortedError
+from inquirer_ai.exceptions import InvalidChoiceError, PromptAbortedError
 from inquirer_ai.prompts.base import BasePrompt
 from inquirer_ai.theme import get_theme
 
@@ -28,11 +28,11 @@ class ChoiceBasePrompt(BasePrompt[T]):
     ) -> None:
         super().__init__(message, **kwargs)
         if not choices:
-            raise ValueError("choices cannot be empty")
+            raise InvalidChoiceError("choices cannot be empty")
         self.items: list[ChoiceItem] = [parse_choice(c) for c in choices]  # pyright: ignore[reportUnknownMemberType]
         self.choices: list[Choice[Any]] = [c for c in self.items if isinstance(c, Choice)]
         if not any(not c.disabled for c in self.choices):
-            raise ValueError("choices must contain at least one selectable item")
+            raise InvalidChoiceError("choices must contain at least one selectable item")
         self.page_size = page_size
         self.loop = loop
 

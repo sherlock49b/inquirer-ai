@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Generic, TypeVar, overload
 
+from inquirer_ai.exceptions import InvalidChoiceError
+
 V = TypeVar("V")
 
 
@@ -30,7 +32,9 @@ class Choice(Generic[V]):
         if isinstance(raw, str):
             return Choice(name=raw, value=raw)
         if not isinstance(raw, dict):  # pyright: ignore[reportUnnecessaryIsInstance]
-            raise TypeError(f"Cannot convert {type(raw).__name__} to Choice")
+            raise InvalidChoiceError(f"Cannot convert {type(raw).__name__} to Choice")
+        if "name" not in raw and "value" not in raw:
+            raise InvalidChoiceError("Choice dict must have at least 'name' or 'value'")
         name: str = raw.get("name", str(raw.get("value", "")))
         value: Any = raw.get("value", name)
         disabled: bool | str = raw.get("disabled", False)
