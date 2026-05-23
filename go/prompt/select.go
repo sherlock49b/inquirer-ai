@@ -70,67 +70,7 @@ func selectAgent(cfg SelectConfig, choices []resolvedChoice) (any, error) {
 }
 
 func selectTerminal(cfg SelectConfig, choices []resolvedChoice) (any, error) {
-	t := DefaultTheme
-	selectable := selectableIndices(choices)
-	if len(selectable) == 0 {
-		return nil, fmt.Errorf("%w: no selectable choices", ErrInvalidChoice)
-	}
-
-	cursor := selectable[0]
-	if cfg.Default != "" {
-		for _, idx := range selectable {
-			c := choices[idx]
-			if toString(c.value) == cfg.Default || c.name == cfg.Default {
-				cursor = idx
-				break
-			}
-		}
-	}
-
-	for {
-		fmt.Printf("\033[2J\033[H")
-		fmt.Printf("%s %s\n", t.SymQuestion, cfg.Message)
-		start, end := visibleRange(cursor, len(choices), cfg.PageSize)
-		if start > 0 {
-			fmt.Println("  (more above)")
-		}
-		for i := start; i < end; i++ {
-			c := choices[i]
-			if c.isSeparator {
-				fmt.Printf("  %s\n", c.name)
-				continue
-			}
-			if !c.selectable {
-				fmt.Printf("  %s (disabled)\n", c.name)
-				continue
-			}
-			if i == cursor {
-				fmt.Printf("%s %s\n", t.SymPointer, c.name)
-			} else {
-				fmt.Printf("  %s\n", c.name)
-			}
-		}
-		if end < len(choices) {
-			fmt.Println("  (more below)")
-		}
-
-		key, err := readKey()
-		if err != nil {
-			return nil, ErrAborted
-		}
-		switch key {
-		case keyUp:
-			cursor = moveCursor(cursor, -1, selectable, *cfg.Loop)
-		case keyDown:
-			cursor = moveCursor(cursor, 1, selectable, *cfg.Loop)
-		case keyEnter:
-			c := choices[cursor]
-			fmt.Printf("\033[2J\033[H%s %s %s\n", t.SymSuccess, cfg.Message, c.name)
-			return c.value, nil
-		case keyCtrlC:
-			return nil, ErrAborted
-		}
-	}
+	return runSelectTUI(cfg, choices)
 }
 
 type resolvedChoice struct {

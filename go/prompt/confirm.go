@@ -56,7 +56,6 @@ func confirmAgent(cfg ConfirmConfig) (bool, error) {
 }
 
 func confirmTerminal(cfg ConfirmConfig) (bool, error) {
-	t := DefaultTheme
 	hint := "y/N"
 	if cfg.Default {
 		hint = "Y/n"
@@ -64,24 +63,24 @@ func confirmTerminal(cfg ConfirmConfig) (bool, error) {
 
 	scanner := getTerminalScanner()
 	for {
-		fmt.Printf("%s %s (%s): ", t.SymQuestion, cfg.Message, hint)
+		fmt.Printf("%s %s: ", renderQuestion(cfg.Message), styleMuted.Render("("+hint+")"))
 		if !scanner.Scan() {
 			return false, ErrAborted
 		}
 		input := strings.TrimSpace(strings.ToLower(scanner.Text()))
 		if input == "" {
-			fmt.Printf("%s %s %v\n", t.SymSuccess, cfg.Message, boolDisplay(cfg.Default))
+			fmt.Println(renderSuccess(cfg.Message, boolDisplay(cfg.Default)))
 			return cfg.Default, nil
 		}
 		if input == "y" || input == "yes" {
-			fmt.Printf("%s %s Yes\n", t.SymSuccess, cfg.Message)
+			fmt.Println(renderSuccess(cfg.Message, "Yes"))
 			return true, nil
 		}
 		if input == "n" || input == "no" {
-			fmt.Printf("%s %s No\n", t.SymSuccess, cfg.Message)
+			fmt.Println(renderSuccess(cfg.Message, "No"))
 			return false, nil
 		}
-		fmt.Println("  Invalid input. Please enter y or n.")
+		fmt.Println(renderError("Invalid input. Please enter y or n."))
 	}
 }
 

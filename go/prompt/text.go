@@ -41,14 +41,13 @@ func textAgent(cfg TextConfig) (string, error) {
 }
 
 func textTerminal(cfg TextConfig) (string, error) {
-	t := DefaultTheme
 	scanner := getTerminalScanner()
 	for {
 		suffix := ""
 		if cfg.Default != "" {
-			suffix = fmt.Sprintf(" (%s)", cfg.Default)
+			suffix = styleMuted.Render(fmt.Sprintf(" (%s)", cfg.Default))
 		}
-		fmt.Printf("%s %s%s: ", t.SymQuestion, cfg.Message, suffix)
+		fmt.Printf("%s%s: ", renderQuestion(cfg.Message), suffix)
 
 		if !scanner.Scan() {
 			return "", ErrAborted
@@ -60,10 +59,10 @@ func textTerminal(cfg TextConfig) (string, error) {
 
 		final, err := applyTextCallbacks(result, cfg)
 		if err != nil {
-			fmt.Printf("  %s\n", err)
+			fmt.Println(renderError(err.Error()))
 			continue
 		}
-		fmt.Printf("%s %s %s\n", t.SymSuccess, cfg.Message, final)
+		fmt.Println(renderSuccess(cfg.Message, final))
 		return final, nil
 	}
 }
