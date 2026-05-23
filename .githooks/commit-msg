@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+set -e
+
+echo "commit-msg: validating commit message format..."
+cz check --commit-msg-file "$1" --allow-abort

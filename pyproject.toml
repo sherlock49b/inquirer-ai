@@ -3,3 +3,11 @@ members = ["python"]
 
 [tool.commitizen]
 name = "teamcz"
+version = "0.1.0"
+version_files = [
+    "python/pyproject.toml:version",
+    "go/prompt/agent.go:version",
+]
+tag_format = "v$version"
+update_changelog_on_bump = true
+changelog_file = "CHANGELOG.md"
