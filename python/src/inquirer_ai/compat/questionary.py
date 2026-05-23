@@ -40,31 +40,43 @@ class Choice:
         checked: bool = False,
         disabled: str | None = None,
         shortcut_key: str | None = None,
+        description: str | None = None,
     ) -> None:
         self.title = title
         self.value = value if value is not None else title
         self.checked = checked
         self.disabled = disabled
         self.shortcut_key = shortcut_key
+        self.description = description
 
     def to_inquirer(self) -> InquirerChoice[Any]:
         return InquirerChoice(
             name=self.title,
             value=self.value,
             disabled=self.disabled or False,
+            description=self.description,
         )
 
 
 class _LazyPrompt:
-    """Wraps a prompt to provide .ask() / .ask_async() interface."""
+    """Wraps a prompt to provide .ask() / .unsafe_ask() / .ask_async() interface."""
 
     def __init__(self, prompt_fn: Callable[[], Any]) -> None:
         self._fn = prompt_fn
 
     def ask(self) -> Any:
+        try:
+            return self._fn()
+        except KeyboardInterrupt:
+            return None
+
+    def unsafe_ask(self) -> Any:
         return self._fn()
 
     async def ask_async(self) -> Any:
+        return self._fn()
+
+    async def unsafe_ask_async(self) -> Any:
         return self._fn()
 
 

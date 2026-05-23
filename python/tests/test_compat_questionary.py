@@ -99,3 +99,23 @@ def test_style_ignored(monkeypatch):
     _agent(monkeypatch, "x")
     result = questionary.select("Q", choices=["x"], style="whatever").ask()
     assert result == "x"
+
+
+def test_unsafe_ask(monkeypatch):
+    _agent(monkeypatch, "hello")
+    result = questionary.text("Q").unsafe_ask()
+    assert result == "hello"
+
+
+def test_choice_with_description(monkeypatch):
+    _agent(monkeypatch, "pg")
+    c = questionary.Choice(title="PostgreSQL", value="pg", description="Relational DB")
+    assert c.description == "Relational DB"
+    result = questionary.select("DB?", choices=[c]).unsafe_ask()
+    assert result == "pg"
+
+
+def test_confirm_auto_enter_ignored(monkeypatch):
+    _agent(monkeypatch, True)
+    result = questionary.confirm("Ok?", auto_enter=True).unsafe_ask()
+    assert result is True
