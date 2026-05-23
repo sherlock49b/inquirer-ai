@@ -1,8 +1,8 @@
-import { type Choice, type ChoiceItem, type RawChoice, parseChoice, isSeparator, choiceToDict } from "../choice.js";
+import { type Choice, type ChoiceItem, choiceToDict, isSeparator, parseChoice, type RawChoice } from "../choice.js";
 import { InvalidChoiceError, PromptAbortedError, ValidationError } from "../errors.js";
-import { ansi, getTheme, RESET } from "../theme.js";
 import { type ListItem, runListPrompt } from "../terminal.js";
-import { BasePrompt, type BaseConfig } from "./base.js";
+import { ansi, getTheme, RESET } from "../theme.js";
+import { type BaseConfig, BasePrompt } from "./base.js";
 
 export interface SelectConfig<V = unknown> extends BaseConfig<V> {
   choices: RawChoice<V>[];

@@ -1,5 +1,5 @@
-import { describe, it, expect } from "vitest";
-import { parseChoice, isSeparator, createSeparator, choiceToDict } from "../src/choice.js";
+import { describe, expect, it } from "vitest";
+import { choiceToDict, createSeparator, isSeparator, parseChoice } from "../src/choice.js";
 
 describe("Choice", () => {
   it("parseChoice from string", () => {

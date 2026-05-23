@@ -1,8 +1,8 @@
-import { type Choice, type ChoiceItem, type RawChoice, parseChoice, isSeparator, choiceToDict } from "../choice.js";
+import { type Choice, type ChoiceItem, choiceToDict, isSeparator, parseChoice, type RawChoice } from "../choice.js";
 import { InvalidChoiceError, PromptAbortedError, ValidationError } from "../errors.js";
-import { ansi, getTheme, RESET } from "../theme.js";
 import { type ListItem, runListPrompt } from "../terminal.js";
-import { BasePrompt, type BaseConfig } from "./base.js";
+import { ansi, getTheme, RESET } from "../theme.js";
+import { type BaseConfig, BasePrompt } from "./base.js";
 
 export interface CheckboxConfig<V = unknown> extends BaseConfig<V[]> {
   choices: RawChoice<V>[];
@@ -145,7 +145,7 @@ export class CheckboxPrompt<V = unknown> extends BasePrompt<V[]> {
         }
         if (key === "a") {
           if (checked.size === indices.length) checked.clear();
-          else indices.forEach((i) => checked.add(i));
+          else for (const i of indices) checked.add(i);
           return { done: false };
         }
         if (key === "enter") {

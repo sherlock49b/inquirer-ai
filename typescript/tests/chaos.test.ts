@@ -1,17 +1,17 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
-import { TextPrompt } from "../src/prompts/text.js";
-import { SelectPrompt } from "../src/prompts/select.js";
-import { NumberPrompt } from "../src/prompts/number.js";
-import { CheckboxPrompt } from "../src/prompts/checkbox.js";
-import { resetAgent } from "../src/agent.js";
 import { Readable, Writable } from "node:stream";
+import { describe, expect, it, vi } from "vitest";
+import { resetAgent } from "../src/agent.js";
+import { CheckboxPrompt } from "../src/prompts/checkbox.js";
+import { NumberPrompt } from "../src/prompts/number.js";
+import { SelectPrompt } from "../src/prompts/select.js";
+import { TextPrompt } from "../src/prompts/text.js";
 
 const ACK = '{"kind":"handshake_ack"}';
 
 function setup(answers: string[]) {
   resetAgent();
   vi.stubEnv("INQUIRER_AI_MODE", "agent");
-  const stdin = Readable.from(answers.map((a) => a + "\n").join(""));
+  const stdin = Readable.from(answers.map((a) => `${a}\n`).join(""));
   const writable = new Writable({
     write(_c: Buffer, _e: string, cb: () => void) { cb(); },
   });

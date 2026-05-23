@@ -1,7 +1,7 @@
-import { type Choice, type RawChoice, parseChoice, isSeparator, choiceToDict } from "../choice.js";
+import { type Choice, choiceToDict, isSeparator, parseChoice, type RawChoice } from "../choice.js";
 import { InvalidChoiceError, ValidationError } from "../errors.js";
-import { formatQuestion, formatError, readLine } from "../terminal.js";
-import { BasePrompt, type BaseConfig } from "./base.js";
+import { formatError, formatQuestion, readLine } from "../terminal.js";
+import { type BaseConfig, BasePrompt } from "./base.js";
 
 export interface RawlistConfig extends BaseConfig<unknown> {
   choices: RawChoice[];
@@ -25,7 +25,7 @@ export class RawlistPrompt extends BasePrompt<unknown> {
 
   protected validateAnswer(value: unknown): unknown {
     if (typeof value === "number" && value >= 1 && value <= this.choices.length) {
-      return this.choices[value - 1]!.value;
+      return this.choices[value - 1]?.value;
     }
     for (const c of this.choices) {
       if (value === c.value || value === c.name) return c.value;
@@ -46,17 +46,17 @@ export class RawlistPrompt extends BasePrompt<unknown> {
 
   protected async executeTerminal(): Promise<unknown> {
     for (let i = 0; i < this.choices.length; i++) {
-      process.stderr.write(`  ${i + 1}) ${this.choices[i]!.name}\n`);
+      process.stderr.write(`  ${i + 1}) ${this.choices[i]?.name}\n`);
     }
     const prompt = formatQuestion(this.message);
     while (true) {
       const raw = await readLine(prompt);
       const idx = parseInt(raw, 10);
-      if (!isNaN(idx) && idx >= 1 && idx <= this.choices.length) {
-        return this.choices[idx - 1]!.value;
+      if (!Number.isNaN(idx) && idx >= 1 && idx <= this.choices.length) {
+        return this.choices[idx - 1]?.value;
       }
       process.stderr.write(
-        formatError(`Please enter a number between 1 and ${this.choices.length}`) + "\n",
+        `${formatError(`Please enter a number between 1 and ${this.choices.length}`)}\n`,
       );
     }
   }

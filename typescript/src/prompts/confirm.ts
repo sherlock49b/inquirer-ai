@@ -1,5 +1,5 @@
-import { BasePrompt, type BaseConfig } from "./base.js";
-import { formatQuestion, formatError, readLine } from "../terminal.js";
+import { formatError, formatQuestion, readLine } from "../terminal.js";
+import { type BaseConfig, BasePrompt } from "./base.js";
 
 export interface ConfirmConfig extends BaseConfig<boolean> {
   default?: boolean | null;
@@ -35,7 +35,7 @@ export class ConfirmPrompt extends BasePrompt<boolean> {
       const lower = result.trim().toLowerCase();
       if (lower === "y" || lower === "yes") return true;
       if (lower === "n" || lower === "no") return false;
-      process.stderr.write(formatError("Invalid input. Please enter y or n.") + "\n");
+      process.stderr.write(`${formatError("Invalid input. Please enter y or n.")}\n`);
     }
   }
 }

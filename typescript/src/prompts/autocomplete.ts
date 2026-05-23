@@ -1,5 +1,5 @@
-import { BasePrompt, type BaseConfig } from "./base.js";
 import { formatQuestion, readLine } from "../terminal.js";
+import { type BaseConfig, BasePrompt } from "./base.js";
 
 export interface AutocompleteConfig extends BaseConfig<string> {
   choices: string[];

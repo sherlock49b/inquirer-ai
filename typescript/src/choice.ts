@@ -37,8 +37,8 @@ export function choiceToDict(item: ChoiceItem): Record<string, unknown> {
     return { type: "separator", text: item.text };
   }
   const d: Record<string, unknown> = { name: item.name, value: item.value };
-  if (item.disabled) d["disabled"] = item.disabled;
-  if (item.short != null) d["short"] = item.short;
-  if (item.description != null) d["description"] = item.description;
+  if (item.disabled) d.disabled = item.disabled;
+  if (item.short != null) d.short = item.short;
+  if (item.description != null) d.description = item.description;
   return d;
 }

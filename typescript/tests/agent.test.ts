@@ -1,23 +1,23 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
-import { TextPrompt } from "../src/prompts/text.js";
-import { ConfirmPrompt } from "../src/prompts/confirm.js";
-import { SelectPrompt } from "../src/prompts/select.js";
-import { CheckboxPrompt } from "../src/prompts/checkbox.js";
-import { PasswordPrompt } from "../src/prompts/password.js";
-import { NumberPrompt } from "../src/prompts/number.js";
-import { EditorPrompt } from "../src/prompts/editor.js";
-import { RawlistPrompt } from "../src/prompts/rawlist.js";
-import { ExpandPrompt } from "../src/prompts/expand.js";
-import { PathPrompt } from "../src/prompts/path.js";
-import { AutocompletePrompt } from "../src/prompts/autocomplete.js";
-import { SearchPrompt } from "../src/prompts/search.js";
-import { resetAgent } from "../src/agent.js";
 import { Readable, Writable } from "node:stream";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { resetAgent } from "../src/agent.js";
+import { AutocompletePrompt } from "../src/prompts/autocomplete.js";
+import { CheckboxPrompt } from "../src/prompts/checkbox.js";
+import { ConfirmPrompt } from "../src/prompts/confirm.js";
+import { EditorPrompt } from "../src/prompts/editor.js";
+import { ExpandPrompt } from "../src/prompts/expand.js";
+import { NumberPrompt } from "../src/prompts/number.js";
+import { PasswordPrompt } from "../src/prompts/password.js";
+import { PathPrompt } from "../src/prompts/path.js";
+import { RawlistPrompt } from "../src/prompts/rawlist.js";
+import { SearchPrompt } from "../src/prompts/search.js";
+import { SelectPrompt } from "../src/prompts/select.js";
+import { TextPrompt } from "../src/prompts/text.js";
 
 const ACK = '{"kind":"handshake_ack"}';
 
 function makeStdinFromLines(lines: string[]): Readable {
-  const data = lines.map((l) => l + "\n").join("");
+  const data = lines.map((l) => `${l}\n`).join("");
   return Readable.from(data);
 }
 
@@ -417,7 +417,7 @@ describe("Agent mode prompts (mocked stdin/stdout)", () => {
   });
 
   it("handshake buffers answer line when no ack is sent", async () => {
-    const { chunks, writable } = captureStdout();
+    const { writable } = captureStdout();
     // No ACK line - first line is the answer itself
     const stdin = makeStdinFromLines(['{"answer": "Alice"}']);
 

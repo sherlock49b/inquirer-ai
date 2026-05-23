@@ -1,6 +1,6 @@
 import { InvalidChoiceError, ValidationError } from "../errors.js";
-import { formatQuestion, formatError, readLine } from "../terminal.js";
-import { BasePrompt, type BaseConfig } from "./base.js";
+import { formatError, formatQuestion, readLine } from "../terminal.js";
+import { type BaseConfig, BasePrompt } from "./base.js";
 
 export interface ExpandChoice {
   key: string;
@@ -78,7 +78,7 @@ export class ExpandPrompt extends BasePrompt<unknown> {
       for (const c of this.expandChoices) {
         if (lower === c.key) return c.value;
       }
-      process.stderr.write(formatError("Invalid key. Press h for help.") + "\n");
+      process.stderr.write(`${formatError("Invalid key. Press h for help.")}\n`);
     }
   }
 }

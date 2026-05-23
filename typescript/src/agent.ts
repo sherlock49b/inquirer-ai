@@ -1,5 +1,5 @@
-import * as readline from "node:readline";
 import * as fs from "node:fs";
+import * as readline from "node:readline";
 
 const VERSION = "0.2.0";
 
@@ -27,7 +27,7 @@ export function resetAgent(): void {
 }
 
 function getOutputStream(): NodeJS.WritableStream {
-  const fdOut = process.env["INQUIRER_AI_FD_OUT"];
+  const fdOut = process.env.INQUIRER_AI_FD_OUT;
   if (fdOut) {
     return fs.createWriteStream("", { fd: parseInt(fdOut, 10) });
   }
@@ -35,7 +35,7 @@ function getOutputStream(): NodeJS.WritableStream {
 }
 
 function getInputStream(): NodeJS.ReadableStream {
-  const fdIn = process.env["INQUIRER_AI_FD_IN"];
+  const fdIn = process.env.INQUIRER_AI_FD_IN;
   if (fdIn) {
     return fs.createReadStream("", { fd: parseInt(fdIn, 10) });
   }
@@ -68,15 +68,14 @@ function ensureRL(): void {
   });
   rl.on("close", () => {
     closed = true;
-    let waiter: ((v: string | null) => void) | undefined;
-    while ((waiter = waiters.shift())) {
+    for (let waiter = waiters.shift(); waiter; waiter = waiters.shift()) {
       waiter(null);
     }
   });
 }
 
 function writeLine(data: Record<string, unknown>): void {
-  getOutput().write(JSON.stringify(data) + "\n");
+  getOutput().write(`${JSON.stringify(data)}\n`);
 }
 
 function sendHandshake(): void {
@@ -147,7 +146,7 @@ export async function agentReceive(): Promise<unknown> {
         `Invalid JSON response: ${line.trim()}. Expected JSON like: {"answer": "<value>"}`,
       );
     }
-    if (resp["kind"] === "handshake_ack") {
+    if (resp.kind === "handshake_ack") {
       handshakeAck = resp;
       continue;
     }
@@ -157,6 +156,6 @@ export async function agentReceive(): Promise<unknown> {
           `e.g. {"answer": "<value>"}. Got: ${line.trim()}`,
       );
     }
-    return resp["answer"];
+    return resp.answer;
   }
 }

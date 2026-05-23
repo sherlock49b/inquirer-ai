@@ -1,9 +1,9 @@
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, writeFileSync, readFileSync, unlinkSync } from "node:fs";
+import { mkdtempSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { EditorError } from "../errors.js";
-import { BasePrompt, type BaseConfig } from "./base.js";
+import { type BaseConfig, BasePrompt } from "./base.js";
 
 export interface EditorConfig extends BaseConfig<string> {
   postfix?: string;
@@ -31,7 +31,7 @@ export class EditorPrompt extends BasePrompt<string> {
   }
 
   protected async executeTerminal(): Promise<string> {
-    const editor = process.env["VISUAL"] || process.env["EDITOR"] || "vi";
+    const editor = process.env.VISUAL || process.env.EDITOR || "vi";
     const dir = mkdtempSync(join(tmpdir(), "inquirer-"));
     const tmpPath = join(dir, `edit${this.postfix}`);
 

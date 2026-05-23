@@ -1,14 +1,11 @@
-import { BasePrompt, type BaseConfig } from "./base.js";
 import { formatQuestion, readLine } from "../terminal.js";
+import { type BaseConfig, BasePrompt } from "./base.js";
 
 export interface TextConfig extends BaseConfig<string> {
   default?: string | null;
 }
 
 export class TextPrompt extends BasePrompt<string> {
-  constructor(config: TextConfig) {
-    super(config);
-  }
 
   get promptType(): string {
     return "input";

@@ -1,3 +1,5 @@
+#![deny(warnings)]
+
 pub mod agent;
 pub mod choice;
 pub mod errors;

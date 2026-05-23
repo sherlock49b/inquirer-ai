@@ -1,9 +1,9 @@
-import { describe, it, expect } from "vitest";
 import * as fc from "fast-check";
-import { parseChoice, isSeparator, choiceToDict, createSeparator } from "../src/choice.js";
-import { NumberPrompt } from "../src/prompts/number.js";
-import { ConfirmPrompt } from "../src/prompts/confirm.js";
+import { describe, expect, it } from "vitest";
+import { choiceToDict, createSeparator, isSeparator, parseChoice } from "../src/choice.js";
 import { ValidationError } from "../src/errors.js";
+import { ConfirmPrompt } from "../src/prompts/confirm.js";
+import { NumberPrompt } from "../src/prompts/number.js";
 
 describe("Property-based tests", () => {
   it("Choice roundtrip: parseChoice(string) preserves name=value", () => {
@@ -30,8 +30,8 @@ describe("Property-based tests", () => {
         }),
         (choice) => {
           const d = choiceToDict(choice);
-          expect(d["name"]).toBe(choice.name);
-          expect(d["value"]).toBe(choice.value);
+          expect(d.name).toBe(choice.name);
+          expect(d.value).toBe(choice.value);
         },
       ),
     );
@@ -42,8 +42,8 @@ describe("Property-based tests", () => {
       fc.property(fc.string(), (text) => {
         const sep = createSeparator(text);
         const d = choiceToDict(sep);
-        expect(d["type"]).toBe("separator");
-        expect(d["text"]).toBe(text);
+        expect(d.type).toBe("separator");
+        expect(d.text).toBe(text);
       }),
     );
   });

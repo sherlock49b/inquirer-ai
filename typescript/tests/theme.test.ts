@@ -1,5 +1,5 @@
-import { describe, it, expect, beforeEach } from "vitest";
-import { getTheme, setTheme, defaultTheme, ansi, RESET, BOLD } from "../src/theme.js";
+import { beforeEach, describe, expect, it } from "vitest";
+import { ansi, BOLD, defaultTheme, getTheme, RESET, setTheme } from "../src/theme.js";
 
 describe("Theme", () => {
   beforeEach(() => {

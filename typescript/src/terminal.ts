@@ -1,6 +1,6 @@
 import * as readline from "node:readline";
 import { Writable } from "node:stream";
-import { getTheme, ansi, RESET, BOLD } from "./theme.js";
+import { ansi, BOLD, getTheme, RESET } from "./theme.js";
 
 export async function readLine(prompt: string): Promise<string> {
   const rl = readline.createInterface({

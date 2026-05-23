@@ -40,6 +40,9 @@ cd "$ROOT/typescript"
 echo "pre-commit: [typescript] tsc..."
 npx tsc --noEmit
 
+echo "pre-commit: [typescript] biome..."
+npx biome check src/ tests/
+
 echo "pre-commit: [typescript] test..."
 npx vitest run
 

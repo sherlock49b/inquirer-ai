@@ -1,10 +1,10 @@
-import { describe, it, expect } from "vitest";
+import { describe, expect, it } from "vitest";
 import {
+  EditorError,
   InquirerAIError,
-  ValidationError,
   InvalidChoiceError,
   PromptAbortedError,
-  EditorError,
+  ValidationError,
 } from "../src/errors.js";
 
 describe("Error hierarchy", () => {

@@ -1,7 +1,7 @@
-import { isAgentMode } from "../mode.js";
-import { agentSend, agentReceive, agentSendValidationError } from "../agent.js";
+import { agentReceive, agentSend, agentSendValidationError } from "../agent.js";
 import { PromptAbortedError, ValidationError } from "../errors.js";
-import { formatSuccess, formatError } from "../terminal.js";
+import { isAgentMode } from "../mode.js";
+import { formatError, formatSuccess } from "../terminal.js";
 
 const MAX_AGENT_RETRIES = 3;
 
@@ -109,7 +109,7 @@ export abstract class BasePrompt<T> {
           agentSendValidationError(error);
           continue;
         }
-        process.stderr.write(formatError(error) + "\n");
+        process.stderr.write(`${formatError(error)}\n`);
         continue;
       }
 
@@ -117,7 +117,7 @@ export abstract class BasePrompt<T> {
         const display = this.transformerFn
           ? this.transformerFn(result)
           : this.formatAnswer(result);
-        process.stderr.write(formatSuccess(this.message, display) + "\n");
+        process.stderr.write(`${formatSuccess(this.message, display)}\n`);
       }
 
       return result;

@@ -1,8 +1,8 @@
-import { type Choice, type RawChoice, parseChoice, isSeparator, choiceToDict } from "../choice.js";
+import { type Choice, choiceToDict, isSeparator, parseChoice, type RawChoice } from "../choice.js";
 import { PromptAbortedError } from "../errors.js";
-import { ansi, getTheme, RESET } from "../theme.js";
 import { type ListItem, runListPrompt } from "../terminal.js";
-import { BasePrompt, type BaseConfig } from "./base.js";
+import { ansi, getTheme, RESET } from "../theme.js";
+import { type BaseConfig, BasePrompt } from "./base.js";
 
 export interface SearchConfig extends BaseConfig<unknown> {
   source: (term: string) => RawChoice[];
@@ -40,7 +40,7 @@ export class SearchPrompt extends BasePrompt<unknown> {
 
   protected async executeTerminal(): Promise<unknown> {
     const t = getTheme();
-    let filtered = this.getFiltered("");
+    const filtered = this.getFiltered("");
     let cursor = 0;
 
     const getItems = (): ListItem[] => {
@@ -73,7 +73,7 @@ export class SearchPrompt extends BasePrompt<unknown> {
           return { done: false };
         }
         if (key === "enter") {
-          if (filtered.length) return { done: true, result: filtered[cursor]!.value };
+          if (filtered.length) return { done: true, result: filtered[cursor]?.value };
           return { done: true, result: null };
         }
         if (key === "ctrl-c") return { done: true, result: null };

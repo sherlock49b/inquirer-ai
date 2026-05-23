@@ -1,6 +1,6 @@
 import { ValidationError } from "../errors.js";
-import { BasePrompt, type BaseConfig } from "./base.js";
-import { formatQuestion, formatError, readLine } from "../terminal.js";
+import { formatError, formatQuestion, readLine } from "../terminal.js";
+import { type BaseConfig, BasePrompt } from "./base.js";
 
 export interface NumberConfig extends BaseConfig<number> {
   min?: number | null;
@@ -31,11 +31,11 @@ export class NumberPrompt extends BasePrompt<number> {
       num = value;
     } else if (typeof value === "string") {
       num = value.includes(".") ? parseFloat(value) : parseInt(value, 10);
-      if (isNaN(num)) throw new ValidationError(`Not a valid number: ${JSON.stringify(value)}`);
+      if (Number.isNaN(num)) throw new ValidationError(`Not a valid number: ${JSON.stringify(value)}`);
     } else {
       throw new ValidationError(`Expected a number, got ${typeof value}`);
     }
-    if (!isFinite(num)) throw new ValidationError(`Not a valid number: ${JSON.stringify(value)}`);
+    if (!Number.isFinite(num)) throw new ValidationError(`Not a valid number: ${JSON.stringify(value)}`);
     if (!this.floatAllowed && num !== Math.trunc(num)) {
       throw new ValidationError("Decimal numbers are not allowed");
     }
@@ -64,7 +64,7 @@ export class NumberPrompt extends BasePrompt<number> {
         return this.validateAnswer(raw);
       } catch (e) {
         if (e instanceof ValidationError) {
-          process.stderr.write(formatError(e.message) + "\n");
+          process.stderr.write(`${formatError(e.message)}\n`);
           continue;
         }
         throw e;

@@ -1,5 +1,5 @@
-import { BasePrompt, type BaseConfig } from "./base.js";
 import { formatQuestion, readPassword } from "../terminal.js";
+import { type BaseConfig, BasePrompt } from "./base.js";
 
 export interface PasswordConfig extends BaseConfig<string> {
   mask?: string | null;

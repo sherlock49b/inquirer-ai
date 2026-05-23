@@ -40,6 +40,9 @@ cd "$ROOT/typescript"
 echo "pre-push: [typescript] tsc..."
 npx tsc --noEmit
 
+echo "pre-push: [typescript] biome..."
+npx biome check src/ tests/
+
 echo "pre-push: [typescript] full test suite..."
 npx vitest run
 
