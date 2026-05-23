@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import shlex
 import subprocess
 import tempfile
 from typing import Any
@@ -37,7 +38,7 @@ class EditorPrompt(BasePrompt[str]):
             tmp_path = f.name
 
         try:
-            subprocess.run([editor, tmp_path], check=True)
+            subprocess.run([*shlex.split(editor), tmp_path], check=True)
             with open(tmp_path) as f:
                 return f.read()
         except FileNotFoundError:

@@ -132,8 +132,7 @@ class BasePrompt(ABC, Generic[T]):
         payload = self._to_agent_dict()
         sys.stdout.write(json.dumps(payload, ensure_ascii=False) + "\n")
         sys.stdout.flush()
-        loop = asyncio.get_event_loop()
-        line = await loop.run_in_executor(None, sys.stdin.readline)
+        line = await asyncio.get_running_loop().run_in_executor(None, sys.stdin.readline)
         if not line:
             raise PromptAbortedError('No response received (stdin closed). Expected JSON like: {"answer": "<value>"}')
         try:
