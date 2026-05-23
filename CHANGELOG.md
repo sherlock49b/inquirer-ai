@@ -18,6 +18,14 @@ All notable changes to this project will be documented in this file.
 
 ### Features
 
+- Add rawlist and expand prompt types
+- Add editor prompt type for multi-line text input
+- Add search prompt type with dynamic filtering
+- Add transformer callback and when conditional for prompts
+- Add Separator, disabled choices, short, description, and loop option
+- Add password and number prompt types
+- Add agent protocol handshake and improve error messages
+- Export __version__ via importlib.metadata
 - Add pagination for long choice lists in select and checkbox
 - Add validate and filter callback support to all prompt types
 - Add theme system, confirm validation, and display improvements
@@ -25,6 +33,8 @@ All notable changes to this project will be documented in this file.
 
 ### Miscellaneous
 
+- Add GitHub issue and PR templates
+- Add git-cliff for automated CHANGELOG generation
 - Add 80% coverage threshold to pytest config
 - Track uv.lock for reproducible builds
 - Add pyright strict, ruff linting, and shared git hooks
