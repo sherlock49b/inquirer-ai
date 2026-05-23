@@ -8,6 +8,7 @@ from inquirer_ai.exceptions import InquirerAIError, PromptAbortedError, Validati
 from inquirer_ai.mode import is_agent_mode
 from inquirer_ai.prompts.checkbox import CheckboxPrompt
 from inquirer_ai.prompts.confirm import ConfirmPrompt
+from inquirer_ai.prompts.editor import EditorPrompt
 from inquirer_ai.prompts.number import NumberPrompt
 from inquirer_ai.prompts.password import PasswordPrompt
 from inquirer_ai.prompts.search import SearchPrompt
@@ -130,6 +131,17 @@ def checkbox(
     ).execute()
 
 
+def editor(
+    message: str,
+    *,
+    default: str | None = None,
+    postfix: str = ".txt",
+    validate: Callable[[str], bool | str | None] | None = None,
+    filter: Callable[[str], str] | None = None,
+) -> str:
+    return EditorPrompt(message, default=default, postfix=postfix, validate=validate, filter=filter).execute()
+
+
 def search(
     message: str,
     *,
@@ -170,6 +182,7 @@ __all__ = [
     "CheckboxPrompt",
     "Choice",
     "ConfirmPrompt",
+    "EditorPrompt",
     "InquirerAIError",
     "NumberPrompt",
     "PasswordPrompt",
@@ -184,6 +197,7 @@ __all__ = [
     "__version__",
     "checkbox",
     "confirm",
+    "editor",
     "get_theme",
     "is_agent_mode",
     "number",
