@@ -141,3 +141,75 @@ class ChoiceBasePrompt(BasePrompt[T]):
         if result is None:
             raise PromptAbortedError("Prompt aborted by user")
         return result
+
+    async def _execute_terminal_async(self) -> T:  # pragma: no cover
+        t = get_theme()
+        items = self.items
+        state: dict[str, Any] = {"cursor": self._init_cursor()}
+
+        kb = KeyBindings()
+
+        @kb.add("up")
+        @kb.add("k")
+        def _up(event: KeyPressEvent) -> None:
+            state["cursor"] = self._move_cursor(state["cursor"], -1)
+
+        @kb.add("down")
+        @kb.add("j")
+        def _down(event: KeyPressEvent) -> None:
+            state["cursor"] = self._move_cursor(state["cursor"], 1)
+
+        @kb.add("enter")
+        def _enter(event: KeyPressEvent) -> None:
+            event.app.exit(result=self._get_result(state))
+
+        @kb.add("c-c")
+        def _abort(event: KeyPressEvent) -> None:
+            event.app.exit(result=None)
+
+        self._build_keybindings(kb, self.choices, state)
+
+        def get_message() -> FormattedText:
+            return FormattedText(
+                [
+                    (t.pt(t.question), f"{t.sym_question} "),
+                    ("bold", self.message),
+                ]
+            )
+
+        def _visible_range() -> tuple[int, int]:
+            cursor = state["cursor"]
+            total = len(items)
+            ps = min(self.page_size, total)
+            start = max(0, min(cursor - ps // 2, total - ps))
+            return start, start + ps
+
+        def get_formatted_choices() -> FormattedText:
+            lines: list[tuple[str, str]] = []
+            start, end = _visible_range()
+            if start > 0:
+                lines.append((t.pt(t.muted), "  (more above)"))
+                lines.append(("", "\n"))
+            for i in range(start, end):
+                lines.append(self._format_choice_line(i, items[i], state))
+                if i < end - 1:
+                    lines.append(("", "\n"))
+            if end < len(items):
+                lines.append(("", "\n"))
+                lines.append((t.pt(t.muted), "  (more below)"))
+            return FormattedText(lines)
+
+        layout = Layout(
+            HSplit(
+                [
+                    Window(FormattedTextControl(get_message), height=1),
+                    Window(FormattedTextControl(get_formatted_choices)),
+                ]
+            )
+        )
+
+        app: Application[Any] = Application(layout=layout, key_bindings=kb, full_screen=False, erase_when_done=True)
+        result = await app.run_async()
+        if result is None:
+            raise PromptAbortedError("Prompt aborted by user")
+        return result

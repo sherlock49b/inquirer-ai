@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import sys
 from abc import ABC, abstractmethod
@@ -105,6 +106,58 @@ class BasePrompt(ABC, Generic[T]):
         while True:
             try:
                 result = self._execute_agent() if agent else self._execute_terminal()
+            except EOFError:
+                raise PromptAbortedError("Prompt aborted (stdin closed)") from None
+
+            if self.filter_fn:
+                result = self.filter_fn(result)
+
+            error = self._run_user_validation(result)
+            if error:
+                if agent:
+                    raise ValidationError(error)
+                t = get_theme()
+                print(f"{t.ansi(t.error)}  {error}{RESET}")
+                continue
+
+            if not agent:
+                t = get_theme()
+                display = self.transformer(result) if self.transformer else self._format_answer(result)
+                print(f"{t.ansi(t.success)}{t.sym_success}{RESET} {self.message} {t.ansi(t.answer)}{display}{RESET}")
+
+            return result
+
+    async def _execute_agent_async(self) -> T:
+        _send_agent_handshake()
+        payload = self._to_agent_dict()
+        sys.stdout.write(json.dumps(payload, ensure_ascii=False) + "\n")
+        sys.stdout.flush()
+        loop = asyncio.get_event_loop()
+        line = await loop.run_in_executor(None, sys.stdin.readline)
+        if not line:
+            raise PromptAbortedError('No response received (stdin closed). Expected JSON like: {"answer": "<value>"}')
+        try:
+            response = json.loads(line)
+        except json.JSONDecodeError as e:
+            raise ValidationError(f'Invalid JSON response: {e}. Expected JSON like: {{"answer": "<value>"}}') from e
+        if not isinstance(response, dict) or "answer" not in response:
+            raise ValidationError(
+                f'Response must be a JSON object with an "answer" key, '
+                f'e.g. {{"answer": "<value>"}}. Got: {line.strip()}'
+            )
+        return self._validate_answer(response["answer"])  # pyright: ignore[reportUnknownArgumentType]
+
+    async def _execute_terminal_async(self) -> T:
+        return self._execute_terminal()
+
+    async def execute_async(self) -> T:
+        from inquirer_ai.theme import RESET, get_theme
+
+        agent = is_agent_mode()
+
+        while True:
+            try:
+                result = await self._execute_agent_async() if agent else await self._execute_terminal_async()
             except EOFError:
                 raise PromptAbortedError("Prompt aborted (stdin closed)") from None
 

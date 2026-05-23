@@ -4,6 +4,7 @@ from collections.abc import Callable
 from typing import Any, TypedDict
 
 from inquirer_ai.choice import Choice
+from inquirer_ai.prompts.autocomplete import AutocompletePrompt
 from inquirer_ai.prompts.base import BasePrompt
 from inquirer_ai.prompts.checkbox import CheckboxPrompt
 from inquirer_ai.prompts.confirm import ConfirmPrompt
@@ -33,6 +34,7 @@ class Question(_QuestionRequired, total=False):
 
 
 _PROMPT_MAP: dict[str, type[BasePrompt[Any]]] = {
+    "autocomplete": AutocompletePrompt,
     "input": TextPrompt,
     "confirm": ConfirmPrompt,
     "select": SelectPrompt,

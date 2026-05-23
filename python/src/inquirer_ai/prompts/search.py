@@ -114,6 +114,78 @@ class SearchPrompt(BasePrompt[Any]):
             raise PromptAbortedError("Prompt aborted by user")
         return result
 
+    async def _execute_terminal_async(self) -> Any:  # pragma: no cover
+        t = get_theme()
+        self._cursor = 0
+        self._filtered: list[Choice[Any]] = []
+        self._refresh_filtered("")
+
+        search_buffer = Buffer(
+            on_text_changed=lambda buf: self._refresh_filtered(buf.text),
+        )
+
+        kb = KeyBindings()
+
+        @kb.add("up")
+        def _up(event: KeyPressEvent) -> None:
+            if self._filtered:
+                self._cursor = (self._cursor - 1) % len(self._filtered)
+
+        @kb.add("down")
+        def _down(event: KeyPressEvent) -> None:
+            if self._filtered:
+                self._cursor = (self._cursor + 1) % len(self._filtered)
+
+        @kb.add("enter")
+        def _enter(event: KeyPressEvent) -> None:
+            if self._filtered:
+                event.app.exit(result=self._filtered[self._cursor].value)
+            else:
+                event.app.exit(result=None)
+
+        @kb.add("c-c")
+        def _abort(event: KeyPressEvent) -> None:
+            event.app.exit(result=None)
+
+        def get_message() -> FormattedText:
+            return FormattedText(
+                [
+                    (t.pt(t.question), f"{t.sym_question} "),
+                    ("bold", f"{self.message}: "),
+                ]
+            )
+
+        def get_choices() -> FormattedText:
+            lines: list[tuple[str, str]] = []
+            end = min(len(self._filtered), self.page_size)
+            for i in range(end):
+                choice = self._filtered[i]
+                if i == self._cursor:
+                    lines.append((t.pt_bold(t.highlight), f"{t.sym_pointer} {choice.name}"))
+                else:
+                    lines.append(("", f"  {choice.name}"))
+                if i < end - 1:
+                    lines.append(("", "\n"))
+            if not self._filtered:
+                lines.append((t.pt(t.muted), "  No matches"))
+            return FormattedText(lines)
+
+        layout = Layout(
+            HSplit(
+                [
+                    Window(FormattedTextControl(get_message), height=1),
+                    Window(BufferControl(buffer=search_buffer), height=1),
+                    Window(FormattedTextControl(get_choices)),
+                ]
+            )
+        )
+
+        app: Application[Any] = Application(layout=layout, key_bindings=kb, full_screen=False, erase_when_done=True)
+        result = await app.run_async()
+        if result is None:
+            raise PromptAbortedError("Prompt aborted by user")
+        return result
+
     def _refresh_filtered(self, term: str) -> None:
         raw_choices = self.source(term)
         self._filtered = [c for raw in raw_choices if isinstance((c := parse_choice(raw)), Choice) and not c.disabled]
