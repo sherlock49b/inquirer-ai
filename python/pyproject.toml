@@ -40,6 +40,7 @@ reportUnusedFunction = false
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+addopts = "--cov=inquirer_ai --cov-fail-under=80"
 
 [tool.ruff]
 target-version = "py310"
