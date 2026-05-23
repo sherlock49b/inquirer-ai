@@ -10,8 +10,8 @@ from inquirer_ai.theme import RESET, get_theme
 
 
 class ConfirmPrompt(BasePrompt[bool]):
-    def __init__(self, message: str, *, default: bool = False) -> None:
-        super().__init__(message, default=default)
+    def __init__(self, message: str, *, default: bool = False, **kwargs: Any) -> None:
+        super().__init__(message, default=default, **kwargs)
 
     @property
     def prompt_type(self) -> str:
@@ -24,6 +24,9 @@ class ConfirmPrompt(BasePrompt[bool]):
             return value.lower() in ("y", "yes", "true", "1")
         return bool(value)
 
+    def _format_answer(self, value: bool) -> str:
+        return "Yes" if value else "No"
+
     def _execute_terminal(self) -> bool:
         t = get_theme()
         hint = "Y/n" if self.default else "y/N"
@@ -34,16 +37,10 @@ class ConfirmPrompt(BasePrompt[bool]):
         while True:
             result = pt_prompt(message)
             if not result:
-                answer: bool = self.default
-                break
+                return self.default
             lower = result.strip().lower()
             if lower in ("y", "yes"):
-                answer = True
-                break
+                return True
             if lower in ("n", "no"):
-                answer = False
-                break
+                return False
             print(f"{t.ansi(t.error)}  Invalid input. Please enter y or n.{RESET}")
-        label = "Yes" if answer else "No"
-        print(f"{t.ansi(t.success)}✓{RESET} {self.message} {t.ansi(t.answer)}{label}{RESET}")
-        return answer

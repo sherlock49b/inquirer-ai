@@ -64,6 +64,22 @@ def test_empty_choices_raises():
         CheckboxPrompt("Select features", choices=[])
 
 
+def test_agent_mode_validate_minimum_selection(monkeypatch):
+    monkeypatch.setenv("INQUIRER_AI_MODE", "agent")
+    stdin = io.StringIO(json.dumps({"answer": ["Auth"]}) + "\n")
+    stdout = io.StringIO()
+    monkeypatch.setattr("sys.stdin", stdin)
+    monkeypatch.setattr("sys.stdout", stdout)
+
+    p = CheckboxPrompt(
+        "Select features",
+        choices=["Auth", "DB", "Cache"],
+        validate=lambda v: True if len(v) >= 2 else "Select at least 2",
+    )
+    with pytest.raises(ValidationError, match="Select at least 2"):
+        p.execute()
+
+
 def test_agent_mode_with_dict_choices(monkeypatch):
     monkeypatch.setenv("INQUIRER_AI_MODE", "agent")
     stdin = io.StringIO(json.dumps({"answer": ["auth"]}) + "\n")

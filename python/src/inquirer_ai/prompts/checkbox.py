@@ -10,7 +10,7 @@ from prompt_toolkit.layout import FormattedTextControl, HSplit, Layout, Window
 from inquirer_ai.choice import Choice
 from inquirer_ai.exceptions import PromptAbortedError, ValidationError
 from inquirer_ai.prompts.base import BasePrompt
-from inquirer_ai.theme import RESET, get_theme
+from inquirer_ai.theme import get_theme
 
 
 class CheckboxPrompt(BasePrompt[list[Any]]):
@@ -20,8 +20,9 @@ class CheckboxPrompt(BasePrompt[list[Any]]):
         *,
         choices: list[str | dict[str, Any] | Choice],
         default: list[Any] | None = None,
+        **kwargs: Any,
     ) -> None:
-        super().__init__(message, default=default or [])
+        super().__init__(message, default=default or [], **kwargs)
         if not choices:
             raise ValueError("choices cannot be empty")
         self.choices = [Choice.from_raw(c) for c in choices]
@@ -54,6 +55,10 @@ class CheckboxPrompt(BasePrompt[list[Any]]):
                     f"Invalid choice: {v!r}. Valid: {list(valid_values)}"
                 )
         return result
+
+    def _format_answer(self, value: list[Any]) -> str:
+        names = [c.name for c in self.choices if c.value in value]
+        return ", ".join(names) if names else "none"
 
     def _execute_terminal(self) -> list[Any]:
         t = get_theme()
@@ -137,7 +142,4 @@ class CheckboxPrompt(BasePrompt[list[Any]]):
         result = app.run()
         if result is None:
             raise PromptAbortedError("Prompt aborted by user")
-        names = [c.name for c in choices if c.value in result]
-        summary = ", ".join(names) if names else "none"
-        print(f"{t.ansi(t.success)}✓{RESET} {self.message} {t.ansi(t.answer)}{summary}{RESET}")
         return result

@@ -1,6 +1,9 @@
 import io
 import json
 
+import pytest
+
+from inquirer_ai.exceptions import ValidationError
 from inquirer_ai.prompts.text import TextPrompt
 
 
@@ -33,3 +36,37 @@ def test_agent_mode_with_default(monkeypatch):
     assert result == "world"
     prompt_data = json.loads(stdout.getvalue().strip())
     assert prompt_data["default"] == "world"
+
+
+def test_agent_mode_validate_pass(monkeypatch):
+    monkeypatch.setenv("INQUIRER_AI_MODE", "agent")
+    stdin = io.StringIO(json.dumps({"answer": "alice@example.com"}) + "\n")
+    stdout = io.StringIO()
+    monkeypatch.setattr("sys.stdin", stdin)
+    monkeypatch.setattr("sys.stdout", stdout)
+
+    p = TextPrompt("Email", validate=lambda v: True if "@" in v else "Must contain @")
+    assert p.execute() == "alice@example.com"
+
+
+def test_agent_mode_validate_fail(monkeypatch):
+    monkeypatch.setenv("INQUIRER_AI_MODE", "agent")
+    stdin = io.StringIO(json.dumps({"answer": "not-an-email"}) + "\n")
+    stdout = io.StringIO()
+    monkeypatch.setattr("sys.stdin", stdin)
+    monkeypatch.setattr("sys.stdout", stdout)
+
+    p = TextPrompt("Email", validate=lambda v: True if "@" in v else "Must contain @")
+    with pytest.raises(ValidationError, match="Must contain @"):
+        p.execute()
+
+
+def test_agent_mode_filter(monkeypatch):
+    monkeypatch.setenv("INQUIRER_AI_MODE", "agent")
+    stdin = io.StringIO(json.dumps({"answer": "  Hello  "}) + "\n")
+    stdout = io.StringIO()
+    monkeypatch.setattr("sys.stdin", stdin)
+    monkeypatch.setattr("sys.stdout", stdout)
+
+    p = TextPrompt("Name", filter=lambda v: v.strip().lower())
+    assert p.execute() == "hello"

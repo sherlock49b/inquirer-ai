@@ -6,7 +6,7 @@ from prompt_toolkit import prompt as pt_prompt
 from prompt_toolkit.formatted_text import FormattedText
 
 from inquirer_ai.prompts.base import BasePrompt
-from inquirer_ai.theme import RESET, get_theme
+from inquirer_ai.theme import get_theme
 
 
 class TextPrompt(BasePrompt[str]):
@@ -29,5 +29,4 @@ class TextPrompt(BasePrompt[str]):
         result = pt_prompt(message)
         if not result and self.default:
             result = self.default
-        print(f"{t.ansi(t.success)}✓{RESET} {self.message} {t.ansi(t.answer)}{result}{RESET}")
         return result

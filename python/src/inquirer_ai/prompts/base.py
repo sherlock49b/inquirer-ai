@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import sys
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 from typing import Any, Generic, TypeVar
 
 from inquirer_ai.exceptions import PromptAbortedError, ValidationError
@@ -12,9 +13,18 @@ T = TypeVar("T")
 
 
 class BasePrompt(ABC, Generic[T]):
-    def __init__(self, message: str, *, default: Any = None) -> None:
+    def __init__(
+        self,
+        message: str,
+        *,
+        default: Any = None,
+        validate: Callable[[Any], bool | str | None] | None = None,
+        filter: Callable[[Any], Any] | None = None,
+    ) -> None:
         self.message = message
         self.default = default
+        self.validate_fn = validate
+        self.filter_fn = filter
 
     @property
     @abstractmethod
@@ -25,6 +35,9 @@ class BasePrompt(ABC, Generic[T]):
 
     @abstractmethod
     def _validate_answer(self, value: Any) -> T: ...
+
+    def _format_answer(self, value: T) -> str:
+        return str(value)
 
     def _to_agent_dict(self) -> dict[str, Any]:
         return {
@@ -46,7 +59,38 @@ class BasePrompt(ABC, Generic[T]):
             raise ValidationError(f"Invalid JSON response: {e}") from e
         return self._validate_answer(response.get("answer"))
 
+    def _run_user_validation(self, value: T) -> str | None:
+        if not self.validate_fn:
+            return None
+        result = self.validate_fn(value)
+        if result is True or result is None:
+            return None
+        if isinstance(result, str):
+            return result
+        return "Validation failed"
+
     def execute(self) -> T:
-        if is_agent_mode():
-            return self._execute_agent()
-        return self._execute_terminal()
+        from inquirer_ai.theme import RESET, get_theme
+
+        agent = is_agent_mode()
+
+        while True:
+            result = self._execute_agent() if agent else self._execute_terminal()
+
+            if self.filter_fn:
+                result = self.filter_fn(result)  # type: ignore[assignment]
+
+            error = self._run_user_validation(result)
+            if error:
+                if agent:
+                    raise ValidationError(error)
+                t = get_theme()
+                print(f"{t.ansi(t.error)}  {error}{RESET}")
+                continue
+
+            if not agent:
+                t = get_theme()
+                display = self._format_answer(result)
+                print(f"{t.ansi(t.success)}✓{RESET} {self.message} {t.ansi(t.answer)}{display}{RESET}")
+
+            return result

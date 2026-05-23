@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Any, TypedDict
 
 from inquirer_ai.choice import Choice
@@ -19,6 +20,8 @@ class _QuestionRequired(TypedDict):
 class Question(_QuestionRequired, total=False):
     default: Any
     choices: list[str | dict[str, Any] | Choice]
+    validate: Callable[[Any], bool | str | None]
+    filter: Callable[[Any], Any]
 
 
 _PROMPT_MAP: dict[str, type[BasePrompt[Any]]] = {
