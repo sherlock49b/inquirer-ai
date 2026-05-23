@@ -10,7 +10,7 @@ type SelectConfig struct {
 	Choices  []ChoiceItem
 	Default  string
 	PageSize int
-	Loop     bool
+	Loop     *bool
 	Validate func(any) error
 	Filter   func(any) any
 }
@@ -19,6 +19,10 @@ type SelectConfig struct {
 func Select(cfg SelectConfig) (any, error) {
 	if cfg.PageSize == 0 {
 		cfg.PageSize = 10
+	}
+	if cfg.Loop == nil {
+		t := true
+		cfg.Loop = &t
 	}
 	choices := parseChoices(cfg.Choices)
 	if len(choices) == 0 {
@@ -116,9 +120,9 @@ func selectTerminal(cfg SelectConfig, choices []resolvedChoice) (any, error) {
 		}
 		switch key {
 		case keyUp:
-			cursor = moveCursor(cursor, -1, selectable, true)
+			cursor = moveCursor(cursor, -1, selectable, *cfg.Loop)
 		case keyDown:
-			cursor = moveCursor(cursor, 1, selectable, true)
+			cursor = moveCursor(cursor, 1, selectable, *cfg.Loop)
 		case keyEnter:
 			c := choices[cursor]
 			fmt.Printf("\033[2J\033[H%s %s %s\n", t.SymSuccess, cfg.Message, c.name)

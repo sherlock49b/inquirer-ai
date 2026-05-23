@@ -8,6 +8,7 @@ type CheckboxConfig struct {
 	Choices  []ChoiceItem
 	Default  []string
 	PageSize int
+	Loop     *bool
 	Validate func(any) error
 	Filter   func(any) any
 }
@@ -16,6 +17,10 @@ type CheckboxConfig struct {
 func Checkbox(cfg CheckboxConfig) ([]any, error) {
 	if cfg.PageSize == 0 {
 		cfg.PageSize = 10
+	}
+	if cfg.Loop == nil {
+		t := true
+		cfg.Loop = &t
 	}
 	choices := parseChoices(cfg.Choices)
 	if len(choices) == 0 {
@@ -131,9 +136,9 @@ func checkboxTerminal(cfg CheckboxConfig, choices []resolvedChoice) ([]any, erro
 		}
 		switch key {
 		case keyUp:
-			cursor = moveCursor(cursor, -1, selectable, true)
+			cursor = moveCursor(cursor, -1, selectable, *cfg.Loop)
 		case keyDown:
-			cursor = moveCursor(cursor, 1, selectable, true)
+			cursor = moveCursor(cursor, 1, selectable, *cfg.Loop)
 		case keySpace:
 			checked[cursor] = !checked[cursor]
 		case keyEnter:
