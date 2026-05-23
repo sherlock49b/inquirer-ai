@@ -73,9 +73,9 @@ jobs:
       - uses: astral-sh/setup-uv@v6
 
       - name: Build
-        run: uv build
+        run: uv build --out-dir dist/
 
       - name: Publish to PyPI
-        run: uv publish
+        run: uv publish dist/*
         env:
           UV_PUBLISH_TOKEN: ${{ secrets.PYPI_TOKEN }}
