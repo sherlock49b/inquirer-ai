@@ -151,7 +151,11 @@ func TestRawlistNegativeIndex(t *testing.T) {
 // ── Expand: invalid key ──
 
 func TestExpandInvalidKey(t *testing.T) {
-	r, w, cleanup := agentSetup(t, `{"answer":"z"}`+"\n")
+	// Provide 3 answers for retry loop.
+	input := `{"answer":"z"}` + "\n" +
+		`{"answer":"z"}` + "\n" +
+		`{"answer":"z"}` + "\n"
+	r, w, cleanup := agentSetup(t, input)
 	defer cleanup()
 	_, err := Expand(ExpandConfig{
 		Message: "Q",

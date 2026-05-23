@@ -58,7 +58,9 @@ def test_agent_mode_default(monkeypatch):
 
 def test_agent_mode_min_violation(monkeypatch):
     monkeypatch.setenv("INQUIRER_AI_MODE", "agent")
-    stdin = io.StringIO(json.dumps({"answer": 3}) + "\n")
+    # Provide 3 bad answers to exhaust retries
+    lines = "".join(json.dumps({"answer": 3}) + "\n" for _ in range(3))
+    stdin = io.StringIO(lines)
     stdout = io.StringIO()
     monkeypatch.setattr("sys.stdin", stdin)
     monkeypatch.setattr("sys.stdout", stdout)
@@ -70,7 +72,9 @@ def test_agent_mode_min_violation(monkeypatch):
 
 def test_agent_mode_max_violation(monkeypatch):
     monkeypatch.setenv("INQUIRER_AI_MODE", "agent")
-    stdin = io.StringIO(json.dumps({"answer": 100}) + "\n")
+    # Provide 3 bad answers to exhaust retries
+    lines = "".join(json.dumps({"answer": 100}) + "\n" for _ in range(3))
+    stdin = io.StringIO(lines)
     stdout = io.StringIO()
     monkeypatch.setattr("sys.stdin", stdin)
     monkeypatch.setattr("sys.stdout", stdout)
@@ -82,7 +86,9 @@ def test_agent_mode_max_violation(monkeypatch):
 
 def test_agent_mode_float_not_allowed(monkeypatch):
     monkeypatch.setenv("INQUIRER_AI_MODE", "agent")
-    stdin = io.StringIO(json.dumps({"answer": 3.5}) + "\n")
+    # Provide 3 bad answers to exhaust retries
+    lines = "".join(json.dumps({"answer": 3.5}) + "\n" for _ in range(3))
+    stdin = io.StringIO(lines)
     stdout = io.StringIO()
     monkeypatch.setattr("sys.stdin", stdin)
     monkeypatch.setattr("sys.stdout", stdout)
@@ -107,7 +113,9 @@ def test_agent_mode_float_whole_number_ok(monkeypatch):
 
 def test_agent_mode_invalid_string(monkeypatch):
     monkeypatch.setenv("INQUIRER_AI_MODE", "agent")
-    stdin = io.StringIO(json.dumps({"answer": "abc"}) + "\n")
+    # Provide 3 bad answers to exhaust retries
+    lines = "".join(json.dumps({"answer": "abc"}) + "\n" for _ in range(3))
+    stdin = io.StringIO(lines)
     stdout = io.StringIO()
     monkeypatch.setattr("sys.stdin", stdin)
     monkeypatch.setattr("sys.stdout", stdout)

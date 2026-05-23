@@ -37,7 +37,9 @@ def test_agent_mode_by_value(monkeypatch):
 
 def test_agent_mode_invalid(monkeypatch):
     monkeypatch.setenv("INQUIRER_AI_MODE", "agent")
-    stdin = io.StringIO(json.dumps({"answer": 99}) + "\n")
+    # Provide 3 bad answers to exhaust retries
+    lines = "".join(json.dumps({"answer": 99}) + "\n" for _ in range(3))
+    stdin = io.StringIO(lines)
     stdout = io.StringIO()
     monkeypatch.setattr("sys.stdin", stdin)
     monkeypatch.setattr("sys.stdout", stdout)

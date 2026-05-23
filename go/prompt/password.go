@@ -27,25 +27,34 @@ func Password(cfg PasswordConfig) (string, error) {
 }
 
 func passwordAgent(cfg PasswordConfig) (string, error) {
-	payload := map[string]any{
-		"type":    "password",
-		"message": cfg.Message,
-		"mask":    cfg.Mask,
-	}
-	if err := AgentSend(payload); err != nil {
-		return "", err
-	}
-	answer, err := AgentReceive()
-	if err != nil {
-		return "", err
-	}
-	result := toString(answer)
-	if cfg.Validate != nil {
-		if err := cfg.Validate(result); err != nil {
-			return "", fmt.Errorf("%w: %v", ErrValidation, err)
+	const maxRetries = 3
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		payload := map[string]any{
+			"type":    "password",
+			"message": cfg.Message,
+			"mask":    cfg.Mask,
 		}
+		if err := AgentSend(payload); err != nil {
+			return "", err
+		}
+		answer, err := AgentReceive()
+		if err != nil {
+			return "", err
+		}
+		result := toString(answer)
+		if cfg.Validate != nil {
+			if err := cfg.Validate(result); err != nil {
+				valErr := fmt.Errorf("%w: %v", ErrValidation, err)
+				if attempt < maxRetries-1 {
+					AgentSendValidationError(valErr.Error())
+					continue
+				}
+				return "", valErr
+			}
+		}
+		return result, nil
 	}
-	return result, nil
+	return "", fmt.Errorf("%w: max retries exceeded", ErrValidation)
 }
 
 func passwordTerminal(cfg PasswordConfig) (string, error) {

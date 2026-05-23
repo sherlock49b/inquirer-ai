@@ -15,13 +15,11 @@ type ConfirmConfig struct {
 
 // Confirm prompts for a yes/no answer.
 func Confirm(cfg ConfirmConfig) (bool, error) {
-	var result bool
-	var err error
 	if IsAgentMode() {
-		result, err = confirmAgent(cfg)
-	} else {
-		result, err = confirmTerminal(cfg)
+		// confirmAgent handles filter, validate, and retry internally
+		return confirmAgent(cfg)
 	}
+	result, err := confirmTerminal(cfg)
 	if err != nil {
 		return false, err
 	}
@@ -39,20 +37,41 @@ func Confirm(cfg ConfirmConfig) (bool, error) {
 }
 
 func confirmAgent(cfg ConfirmConfig) (bool, error) {
-	payload := map[string]any{
-		"type":    "confirm",
-		"message": cfg.Message,
-		"default": cfg.Default,
-	}
-	if err := AgentSend(payload); err != nil {
-		return false, err
-	}
+	const maxRetries = 3
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		payload := map[string]any{
+			"type":    "confirm",
+			"message": cfg.Message,
+			"default": cfg.Default,
+		}
+		if err := AgentSend(payload); err != nil {
+			return false, err
+		}
 
-	answer, err := AgentReceive()
-	if err != nil {
-		return false, err
+		answer, err := AgentReceive()
+		if err != nil {
+			return false, err
+		}
+		result := toBool(answer)
+
+		if cfg.Filter != nil {
+			if v, ok := cfg.Filter(result).(bool); ok {
+				result = v
+			}
+		}
+		if cfg.Validate != nil {
+			if err := cfg.Validate(result); err != nil {
+				valErr := fmt.Errorf("%w: %v", ErrValidation, err)
+				if attempt < maxRetries-1 {
+					AgentSendValidationError(valErr.Error())
+					continue
+				}
+				return false, valErr
+			}
+		}
+		return result, nil
 	}
-	return toBool(answer), nil
+	return false, fmt.Errorf("%w: max retries exceeded", ErrValidation)
 }
 
 func confirmTerminal(cfg ConfirmConfig) (bool, error) {

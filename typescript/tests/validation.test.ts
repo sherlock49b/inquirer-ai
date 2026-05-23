@@ -14,6 +14,8 @@ import { InvalidChoiceError, ValidationError } from "../src/errors.js";
 import { resetAgent } from "../src/agent.js";
 import { Readable, Writable } from "node:stream";
 
+const ACK = '{"kind":"handshake_ack"}';
+
 function setup(answers: string[]) {
   resetAgent();
   vi.stubEnv("INQUIRER_AI_MODE", "agent");
@@ -33,7 +35,7 @@ function setup(answers: string[]) {
 
 describe("Prompt validation", () => {
   it("TextPrompt returns empty string without default", async () => {
-    const restore = setup(['{"answer": null}']);
+    const restore = setup([ACK, '{"answer": null}']);
     try {
       expect(await new TextPrompt({ message: "x" }).execute()).toBe("");
     } finally {
@@ -44,7 +46,7 @@ describe("Prompt validation", () => {
   it("ConfirmPrompt coerces truthy strings", async () => {
     for (const val of ["y", "yes", "true", "1", "YES", "True"]) {
       resetAgent();
-      const restore = setup([`{"answer": "${val}"}`]);
+      const restore = setup([ACK, `{"answer": "${val}"}`]);
       try {
         expect(await new ConfirmPrompt({ message: "x" }).execute()).toBe(true);
       } finally {
@@ -56,7 +58,7 @@ describe("Prompt validation", () => {
   it("ConfirmPrompt coerces falsy strings", async () => {
     for (const val of ["n", "no", "false", "0", "anything"]) {
       resetAgent();
-      const restore = setup([`{"answer": "${val}"}`]);
+      const restore = setup([ACK, `{"answer": "${val}"}`]);
       try {
         const result = await new ConfirmPrompt({ message: "x" }).execute();
         if (["n", "no", "false", "0"].includes(val)) {
@@ -69,7 +71,7 @@ describe("Prompt validation", () => {
   });
 
   it("ConfirmPrompt default", async () => {
-    const restore = setup(['{"answer": null}']);
+    const restore = setup([ACK, '{"answer": null}']);
     try {
       expect(await new ConfirmPrompt({ message: "x", default: true }).execute()).toBe(false);
     } finally {
@@ -78,7 +80,7 @@ describe("Prompt validation", () => {
   });
 
   it("SelectPrompt matches by name", async () => {
-    const restore = setup(['{"answer": "Go"}']);
+    const restore = setup([ACK, '{"answer": "Go"}']);
     try {
       const result = await new SelectPrompt({
         message: "x",
@@ -91,7 +93,14 @@ describe("Prompt validation", () => {
   });
 
   it("SelectPrompt rejects disabled choice", async () => {
-    const restore = setup(['{"answer": "go"}']);
+    // 4 attempts total (1 initial + 3 retries) to exhaust retries
+    const restore = setup([
+      ACK,
+      '{"answer": "go"}',
+      '{"answer": "go"}',
+      '{"answer": "go"}',
+      '{"answer": "go"}',
+    ]);
     try {
       await expect(
         new SelectPrompt({
@@ -122,7 +131,13 @@ describe("Prompt validation", () => {
   });
 
   it("CheckboxPrompt rejects non-array", async () => {
-    const restore = setup(['{"answer": "not-array"}']);
+    const restore = setup([
+      ACK,
+      '{"answer": "not-array"}',
+      '{"answer": "not-array"}',
+      '{"answer": "not-array"}',
+      '{"answer": "not-array"}',
+    ]);
     try {
       await expect(
         new CheckboxPrompt({ message: "x", choices: ["a", "b"] }).execute(),
@@ -133,7 +148,7 @@ describe("Prompt validation", () => {
   });
 
   it("CheckboxPrompt matches by name", async () => {
-    const restore = setup(['{"answer": ["Go"]}']);
+    const restore = setup([ACK, '{"answer": ["Go"]}']);
     try {
       const result = await new CheckboxPrompt({
         message: "x",
@@ -146,7 +161,13 @@ describe("Prompt validation", () => {
   });
 
   it("NumberPrompt rejects NaN", async () => {
-    const restore = setup(['{"answer": "abc"}']);
+    const restore = setup([
+      ACK,
+      '{"answer": "abc"}',
+      '{"answer": "abc"}',
+      '{"answer": "abc"}',
+      '{"answer": "abc"}',
+    ]);
     try {
       await expect(
         new NumberPrompt({ message: "x" }).execute(),
@@ -157,7 +178,13 @@ describe("Prompt validation", () => {
   });
 
   it("NumberPrompt rejects Infinity", async () => {
-    const restore = setup(['{"answer": "Infinity"}']);
+    const restore = setup([
+      ACK,
+      '{"answer": "Infinity"}',
+      '{"answer": "Infinity"}',
+      '{"answer": "Infinity"}',
+      '{"answer": "Infinity"}',
+    ]);
     try {
       await expect(
         new NumberPrompt({ message: "x" }).execute(),
@@ -168,7 +195,13 @@ describe("Prompt validation", () => {
   });
 
   it("NumberPrompt rejects float when not allowed", async () => {
-    const restore = setup(['{"answer": 3.14}']);
+    const restore = setup([
+      ACK,
+      '{"answer": 3.14}',
+      '{"answer": 3.14}',
+      '{"answer": 3.14}',
+      '{"answer": 3.14}',
+    ]);
     try {
       await expect(
         new NumberPrompt({ message: "x", floatAllowed: false }).execute(),
@@ -179,7 +212,7 @@ describe("Prompt validation", () => {
   });
 
   it("NumberPrompt truncates integer float when not allowed", async () => {
-    const restore = setup(['{"answer": 5.0}']);
+    const restore = setup([ACK, '{"answer": 5.0}']);
     try {
       const result = await new NumberPrompt({ message: "x", floatAllowed: false }).execute();
       expect(result).toBe(5);
@@ -190,7 +223,7 @@ describe("Prompt validation", () => {
   });
 
   it("NumberPrompt uses default on null", async () => {
-    const restore = setup(['{"answer": null}']);
+    const restore = setup([ACK, '{"answer": null}']);
     try {
       expect(await new NumberPrompt({ message: "x", default: 42 }).execute()).toBe(42);
     } finally {
@@ -199,7 +232,7 @@ describe("Prompt validation", () => {
   });
 
   it("RawlistPrompt accepts by value", async () => {
-    const restore = setup(['{"answer": "3.12"}']);
+    const restore = setup([ACK, '{"answer": "3.12"}']);
     try {
       const result = await new RawlistPrompt({
         message: "x",
@@ -212,7 +245,13 @@ describe("Prompt validation", () => {
   });
 
   it("RawlistPrompt rejects invalid index", async () => {
-    const restore = setup(['{"answer": 99}']);
+    const restore = setup([
+      ACK,
+      '{"answer": 99}',
+      '{"answer": 99}',
+      '{"answer": 99}',
+      '{"answer": 99}',
+    ]);
     try {
       await expect(
         new RawlistPrompt({ message: "x", choices: ["a"] }).execute(),
@@ -223,7 +262,13 @@ describe("Prompt validation", () => {
   });
 
   it("ExpandPrompt rejects invalid key", async () => {
-    const restore = setup(['{"answer": "z"}']);
+    const restore = setup([
+      ACK,
+      '{"answer": "z"}',
+      '{"answer": "z"}',
+      '{"answer": "z"}',
+      '{"answer": "z"}',
+    ]);
     try {
       await expect(
         new ExpandPrompt({
@@ -250,7 +295,7 @@ describe("Prompt validation", () => {
   });
 
   it("PathPrompt returns default on null", async () => {
-    const restore = setup(['{"answer": null}']);
+    const restore = setup([ACK, '{"answer": null}']);
     try {
       expect(
         await new PathPrompt({ message: "x", default: "/tmp" }).execute(),
@@ -261,7 +306,7 @@ describe("Prompt validation", () => {
   });
 
   it("AutocompletePrompt returns default on null", async () => {
-    const restore = setup(['{"answer": null}']);
+    const restore = setup([ACK, '{"answer": null}']);
     try {
       expect(
         await new AutocompletePrompt({
@@ -276,7 +321,7 @@ describe("Prompt validation", () => {
   });
 
   it("PasswordPrompt returns default on null", async () => {
-    const restore = setup(['{"answer": null}']);
+    const restore = setup([ACK, '{"answer": null}']);
     try {
       expect(await new PasswordPrompt({ message: "x" }).execute()).toBe("");
     } finally {
@@ -285,7 +330,7 @@ describe("Prompt validation", () => {
   });
 
   it("EditorPrompt returns default on null", async () => {
-    const restore = setup(['{"answer": null}']);
+    const restore = setup([ACK, '{"answer": null}']);
     try {
       expect(
         await new EditorPrompt({ message: "x", default: "template" }).execute(),
@@ -296,7 +341,7 @@ describe("Prompt validation", () => {
   });
 
   it("filter function is applied", async () => {
-    const restore = setup(['{"answer": "  hello  "}']);
+    const restore = setup([ACK, '{"answer": "  hello  "}']);
     try {
       const result = await new TextPrompt({
         message: "x",
@@ -308,8 +353,16 @@ describe("Prompt validation", () => {
     }
   });
 
-  it("validate function rejects", async () => {
-    const restore = setup(['{"answer": "ab"}']);
+  it("validate function rejects after retries", async () => {
+    // User validation retries: 3 retries in execute() loop, so 4 answers needed
+    // But executeAgent also re-sends the prompt each time, so we need 4 answers
+    const restore = setup([
+      ACK,
+      '{"answer": "ab"}',
+      '{"answer": "ab"}',
+      '{"answer": "ab"}',
+      '{"answer": "ab"}',
+    ]);
     try {
       await expect(
         new TextPrompt({
@@ -317,6 +370,24 @@ describe("Prompt validation", () => {
           validate: (s) => (s.length >= 3 ? true : "Too short"),
         }).execute(),
       ).rejects.toThrow(ValidationError);
+    } finally {
+      restore();
+    }
+  });
+
+  it("validate function succeeds on retry", async () => {
+    // First answer fails validation, second succeeds
+    const restore = setup([
+      ACK,
+      '{"answer": "ab"}',
+      '{"answer": "abc"}',
+    ]);
+    try {
+      const result = await new TextPrompt({
+        message: "x",
+        validate: (s) => (s.length >= 3 ? true : "Too short"),
+      }).execute();
+      expect(result).toBe("abc");
     } finally {
       restore();
     }

@@ -19,25 +19,37 @@ func Text(cfg TextConfig) (string, error) {
 }
 
 func textAgent(cfg TextConfig) (string, error) {
-	payload := map[string]any{
-		"type":    "input",
-		"message": cfg.Message,
-		"default": nilIfEmpty(cfg.Default),
-	}
-	if err := AgentSend(payload); err != nil {
-		return "", err
-	}
+	const maxRetries = 3
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		payload := map[string]any{
+			"type":    "input",
+			"message": cfg.Message,
+			"default": nilIfEmpty(cfg.Default),
+		}
+		if err := AgentSend(payload); err != nil {
+			return "", err
+		}
 
-	answer, err := AgentReceive()
-	if err != nil {
-		return "", err
-	}
+		answer, err := AgentReceive()
+		if err != nil {
+			return "", err
+		}
 
-	result := toString(answer)
-	if result == "" && cfg.Default != "" {
-		result = cfg.Default
+		result := toString(answer)
+		if result == "" && cfg.Default != "" {
+			result = cfg.Default
+		}
+		final, err := applyTextCallbacks(result, cfg)
+		if err != nil {
+			if attempt < maxRetries-1 {
+				AgentSendValidationError(err.Error())
+				continue
+			}
+			return "", err
+		}
+		return final, nil
 	}
-	return applyTextCallbacks(result, cfg)
+	return "", fmt.Errorf("%w: max retries exceeded", ErrValidation)
 }
 
 func textTerminal(cfg TextConfig) (string, error) {

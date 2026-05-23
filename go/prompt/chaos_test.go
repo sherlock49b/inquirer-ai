@@ -10,19 +10,21 @@ import (
 // ── Malformed JSON ──
 
 func TestChaosGarbageJSON(t *testing.T) {
+	// Two lines of garbage: one consumed by handshake (ignored), one by AgentReceive.
+	garbageInput := "not json\nnot json\n"
 	types := []struct {
 		name string
 		run  func() error
 	}{
 		{"Text", func() error {
-			r, w, cleanup := agentSetup(t, "not json\n")
+			r, w, cleanup := agentSetup(t, garbageInput)
 			defer cleanup()
 			_, err := Text(TextConfig{Message: "Q"})
 			readOutput(r, w)
 			return err
 		}},
 		{"Select", func() error {
-			r, w, cleanup := agentSetup(t, "not json\n")
+			r, w, cleanup := agentSetup(t, garbageInput)
 			defer cleanup()
 			_, err := Select(SelectConfig{
 				Message: "Q",
@@ -32,14 +34,14 @@ func TestChaosGarbageJSON(t *testing.T) {
 			return err
 		}},
 		{"Confirm", func() error {
-			r, w, cleanup := agentSetup(t, "not json\n")
+			r, w, cleanup := agentSetup(t, garbageInput)
 			defer cleanup()
 			_, err := Confirm(ConfirmConfig{Message: "Q"})
 			readOutput(r, w)
 			return err
 		}},
 		{"Number", func() error {
-			r, w, cleanup := agentSetup(t, "not json\n")
+			r, w, cleanup := agentSetup(t, garbageInput)
 			defer cleanup()
 			_, err := Number(NumberConfig{Message: "Q"})
 			readOutput(r, w)
@@ -195,8 +197,11 @@ func TestChaosNullAnswers(t *testing.T) {
 // ── Wrong type for checkbox ──
 
 func TestChaosWrongTypeForCheckbox(t *testing.T) {
-	// Send a string instead of an array.
-	r, w, cleanup := agentSetup(t, `{"answer":"not-a-list"}`+"\n")
+	// Send a string instead of an array (3 times for retry loop).
+	input := `{"answer":"not-a-list"}` + "\n" +
+		`{"answer":"not-a-list"}` + "\n" +
+		`{"answer":"not-a-list"}` + "\n"
+	r, w, cleanup := agentSetup(t, input)
 	defer cleanup()
 
 	_, err := Checkbox(CheckboxConfig{
@@ -220,7 +225,11 @@ func TestChaosWrongTypeForCheckbox(t *testing.T) {
 
 func TestChaosEmptyAnswer(t *testing.T) {
 	// Send empty string to a Select with choices — should fail validation.
-	r, w, cleanup := agentSetup(t, `{"answer":""}`+"\n")
+	// Provide 3 copies for retry loop.
+	input := `{"answer":""}` + "\n" +
+		`{"answer":""}` + "\n" +
+		`{"answer":""}` + "\n"
+	r, w, cleanup := agentSetup(t, input)
 	defer cleanup()
 
 	_, err := Select(SelectConfig{

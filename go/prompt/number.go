@@ -19,13 +19,11 @@ type NumberConfig struct {
 
 // Number prompts for a numeric value, validating against optional min/max bounds.
 func Number(cfg NumberConfig) (float64, error) {
-	var result float64
-	var err error
 	if IsAgentMode() {
-		result, err = numberAgent(cfg)
-	} else {
-		result, err = numberTerminal(cfg)
+		// numberAgent handles validation, filter, and retry internally
+		return numberAgent(cfg)
 	}
+	result, err := numberTerminal(cfg)
 	if err != nil {
 		return 0, err
 	}
@@ -41,22 +39,47 @@ func Number(cfg NumberConfig) (float64, error) {
 }
 
 func numberAgent(cfg NumberConfig) (float64, error) {
-	payload := map[string]any{
-		"type":          "number",
-		"message":       cfg.Message,
-		"default":       cfg.Default,
-		"min":           cfg.Min,
-		"max":           cfg.Max,
-		"float_allowed": cfg.FloatAllowed,
+	const maxRetries = 3
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		payload := map[string]any{
+			"type":          "number",
+			"message":       cfg.Message,
+			"default":       cfg.Default,
+			"min":           cfg.Min,
+			"max":           cfg.Max,
+			"float_allowed": cfg.FloatAllowed,
+		}
+		if err := AgentSend(payload); err != nil {
+			return 0, err
+		}
+		answer, err := AgentReceive()
+		if err != nil {
+			return 0, err
+		}
+		result, err := validateNumber(answer, cfg)
+		if err != nil {
+			if attempt < maxRetries-1 {
+				AgentSendValidationError(err.Error())
+				continue
+			}
+			return 0, err
+		}
+		if cfg.Filter != nil {
+			result = cfg.Filter(result)
+		}
+		if cfg.Validate != nil {
+			if err := cfg.Validate(result); err != nil {
+				valErr := fmt.Errorf("%w: %v", ErrValidation, err)
+				if attempt < maxRetries-1 {
+					AgentSendValidationError(valErr.Error())
+					continue
+				}
+				return 0, valErr
+			}
+		}
+		return result, nil
 	}
-	if err := AgentSend(payload); err != nil {
-		return 0, err
-	}
-	answer, err := AgentReceive()
-	if err != nil {
-		return 0, err
-	}
-	return validateNumber(answer, cfg)
+	return 0, fmt.Errorf("%w: max retries exceeded", ErrValidation)
 }
 
 func numberTerminal(cfg NumberConfig) (float64, error) {

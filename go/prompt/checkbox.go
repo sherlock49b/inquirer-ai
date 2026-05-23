@@ -26,13 +26,11 @@ func Checkbox(cfg CheckboxConfig) ([]any, error) {
 	if len(choices) == 0 {
 		return nil, fmt.Errorf("%w: choices cannot be empty", ErrInvalidChoice)
 	}
-	var result []any
-	var err error
 	if IsAgentMode() {
-		result, err = checkboxAgent(cfg, choices)
-	} else {
-		result, err = checkboxTerminal(cfg, choices)
+		// checkboxAgent handles validation, filter, and retry internally
+		return checkboxAgent(cfg, choices)
 	}
+	result, err := checkboxTerminal(cfg, choices)
 	if err != nil {
 		return nil, err
 	}
@@ -40,45 +38,73 @@ func Checkbox(cfg CheckboxConfig) ([]any, error) {
 }
 
 func checkboxAgent(cfg CheckboxConfig, choices []resolvedChoice) ([]any, error) {
-	payload := map[string]any{
-		"type":    "checkbox",
-		"message": cfg.Message,
-		"default": cfg.Default,
-		"choices": marshalItems(cfg.Choices),
-	}
-	if err := AgentSend(payload); err != nil {
-		return nil, err
-	}
+	const maxRetries = 3
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		payload := map[string]any{
+			"type":    "checkbox",
+			"message": cfg.Message,
+			"default": cfg.Default,
+			"choices": marshalItems(cfg.Choices),
+		}
+		if err := AgentSend(payload); err != nil {
+			return nil, err
+		}
 
-	answer, err := AgentReceive()
-	if err != nil {
-		return nil, err
-	}
+		answer, err := AgentReceive()
+		if err != nil {
+			return nil, err
+		}
 
-	list, ok := answer.([]any)
-	if !ok {
-		return nil, fmt.Errorf("%w: expected a list", ErrValidation)
-	}
-
-	var result []any
-	for _, v := range list {
-		s := toString(v)
-		found := false
-		for _, c := range choices {
-			if !c.selectable {
+		list, ok := answer.([]any)
+		if !ok {
+			valErr := fmt.Errorf("%w: expected a list", ErrValidation)
+			if attempt < maxRetries-1 {
+				AgentSendValidationError(valErr.Error())
 				continue
 			}
-			if s == toString(c.value) || s == c.name {
-				result = append(result, c.value)
-				found = true
-				break
+			return nil, valErr
+		}
+
+		var result []any
+		validChoices := true
+		for _, v := range list {
+			s := toString(v)
+			found := false
+			for _, c := range choices {
+				if !c.selectable {
+					continue
+				}
+				if s == toString(c.value) || s == c.name {
+					result = append(result, c.value)
+					found = true
+					break
+				}
+			}
+			if !found {
+				choiceErr := fmt.Errorf("%w: %q", ErrInvalidChoice, s)
+				if attempt < maxRetries-1 {
+					AgentSendValidationError(choiceErr.Error())
+					validChoices = false
+					break
+				}
+				return nil, choiceErr
 			}
 		}
-		if !found {
-			return nil, fmt.Errorf("%w: %q", ErrInvalidChoice, s)
+		if !validChoices {
+			continue
 		}
+
+		final, err := applyCallbacksList(result, cfg.Validate, cfg.Filter)
+		if err != nil {
+			if attempt < maxRetries-1 {
+				AgentSendValidationError(err.Error())
+				continue
+			}
+			return nil, err
+		}
+		return final, nil
 	}
-	return result, nil
+	return nil, fmt.Errorf("%w: max retries exceeded", ErrValidation)
 }
 
 func checkboxTerminal(cfg CheckboxConfig, choices []resolvedChoice) ([]any, error) {

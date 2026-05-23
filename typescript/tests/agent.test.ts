@@ -14,6 +14,8 @@ import { SearchPrompt } from "../src/prompts/search.js";
 import { resetAgent } from "../src/agent.js";
 import { Readable, Writable } from "node:stream";
 
+const ACK = '{"kind":"handshake_ack"}';
+
 function makeStdinFromLines(lines: string[]): Readable {
   const data = lines.map((l) => l + "\n").join("");
   return Readable.from(data);
@@ -38,7 +40,7 @@ describe("Agent mode prompts (mocked stdin/stdout)", () => {
 
   it("TextPrompt agent sends correct JSON and reads answer", async () => {
     const { chunks, writable } = captureStdout();
-    const stdin = makeStdinFromLines(['{"answer": "Alice"}']);
+    const stdin = makeStdinFromLines([ACK, '{"answer": "Alice"}']);
 
     const origStdin = process.stdin;
     const origStdout = process.stdout;
@@ -54,10 +56,16 @@ describe("Agent mode prompts (mocked stdin/stdout)", () => {
       expect(lines.length).toBe(2);
 
       const handshake = JSON.parse(lines[0]!);
+      expect(handshake.kind).toBe("handshake");
       expect(handshake.protocol).toBe("inquirer-ai");
+      expect(handshake.version).toBe("0.2.0");
       expect(handshake.interaction).toBe("sequential");
+      expect(handshake.total).toBeNull();
 
       const prompt = JSON.parse(lines[1]!);
+      expect(prompt.kind).toBe("prompt");
+      expect(prompt.step).toBe(1);
+      expect(prompt.total).toBeNull();
       expect(prompt.type).toBe("input");
       expect(prompt.message).toBe("Name?");
     } finally {
@@ -68,7 +76,7 @@ describe("Agent mode prompts (mocked stdin/stdout)", () => {
 
   it("ConfirmPrompt coerces string answers", async () => {
     const { writable } = captureStdout();
-    const stdin = makeStdinFromLines(['{"answer": "yes"}']);
+    const stdin = makeStdinFromLines([ACK, '{"answer": "yes"}']);
 
     const origStdin = process.stdin;
     const origStdout = process.stdout;
@@ -86,7 +94,7 @@ describe("Agent mode prompts (mocked stdin/stdout)", () => {
 
   it("SelectPrompt validates choice", async () => {
     const { writable } = captureStdout();
-    const stdin = makeStdinFromLines(['{"answer": "go"}']);
+    const stdin = makeStdinFromLines([ACK, '{"answer": "go"}']);
 
     const origStdin = process.stdin;
     const origStdout = process.stdout;
@@ -105,9 +113,16 @@ describe("Agent mode prompts (mocked stdin/stdout)", () => {
     }
   });
 
-  it("SelectPrompt rejects invalid choice", async () => {
+  it("SelectPrompt rejects invalid choice after retries", async () => {
     const { writable } = captureStdout();
-    const stdin = makeStdinFromLines(['{"answer": "java"}']);
+    // Provide enough invalid answers for the retries in executeAgent (3 retries + 1 initial = 4 attempts)
+    const stdin = makeStdinFromLines([
+      ACK,
+      '{"answer": "java"}',
+      '{"answer": "java"}',
+      '{"answer": "java"}',
+      '{"answer": "java"}',
+    ]);
 
     const origStdin = process.stdin;
     const origStdout = process.stdout;
@@ -129,7 +144,7 @@ describe("Agent mode prompts (mocked stdin/stdout)", () => {
 
   it("CheckboxPrompt returns array", async () => {
     const { writable } = captureStdout();
-    const stdin = makeStdinFromLines(['{"answer": ["go", "rust"]}']);
+    const stdin = makeStdinFromLines([ACK, '{"answer": ["go", "rust"]}']);
 
     const origStdin = process.stdin;
     const origStdout = process.stdout;
@@ -150,7 +165,7 @@ describe("Agent mode prompts (mocked stdin/stdout)", () => {
 
   it("NumberPrompt validates bounds", async () => {
     const { writable } = captureStdout();
-    const stdin = makeStdinFromLines(['{"answer": 3000}']);
+    const stdin = makeStdinFromLines([ACK, '{"answer": 3000}']);
 
     const origStdin = process.stdin;
     const origStdout = process.stdout;
@@ -170,9 +185,15 @@ describe("Agent mode prompts (mocked stdin/stdout)", () => {
     }
   });
 
-  it("NumberPrompt rejects out of range", async () => {
+  it("NumberPrompt rejects out of range after retries", async () => {
     const { writable } = captureStdout();
-    const stdin = makeStdinFromLines(['{"answer": 100}']);
+    const stdin = makeStdinFromLines([
+      ACK,
+      '{"answer": 100}',
+      '{"answer": 100}',
+      '{"answer": 100}',
+      '{"answer": 100}',
+    ]);
 
     const origStdin = process.stdin;
     const origStdout = process.stdout;
@@ -194,7 +215,7 @@ describe("Agent mode prompts (mocked stdin/stdout)", () => {
 
   it("PasswordPrompt returns plain text", async () => {
     const { writable } = captureStdout();
-    const stdin = makeStdinFromLines(['{"answer": "s3cret"}']);
+    const stdin = makeStdinFromLines([ACK, '{"answer": "s3cret"}']);
 
     const origStdin = process.stdin;
     const origStdout = process.stdout;
@@ -212,7 +233,7 @@ describe("Agent mode prompts (mocked stdin/stdout)", () => {
 
   it("EditorPrompt returns text", async () => {
     const { writable } = captureStdout();
-    const stdin = makeStdinFromLines(['{"answer": "Hello\\nWorld"}']);
+    const stdin = makeStdinFromLines([ACK, '{"answer": "Hello\\nWorld"}']);
 
     const origStdin = process.stdin;
     const origStdout = process.stdout;
@@ -230,7 +251,7 @@ describe("Agent mode prompts (mocked stdin/stdout)", () => {
 
   it("RawlistPrompt accepts index", async () => {
     const { writable } = captureStdout();
-    const stdin = makeStdinFromLines(['{"answer": 2}']);
+    const stdin = makeStdinFromLines([ACK, '{"answer": 2}']);
 
     const origStdin = process.stdin;
     const origStdout = process.stdout;
@@ -251,7 +272,7 @@ describe("Agent mode prompts (mocked stdin/stdout)", () => {
 
   it("ExpandPrompt accepts key", async () => {
     const { writable } = captureStdout();
-    const stdin = makeStdinFromLines(['{"answer": "y"}']);
+    const stdin = makeStdinFromLines([ACK, '{"answer": "y"}']);
 
     const origStdin = process.stdin;
     const origStdout = process.stdout;
@@ -275,7 +296,7 @@ describe("Agent mode prompts (mocked stdin/stdout)", () => {
 
   it("PathPrompt returns path", async () => {
     const { writable } = captureStdout();
-    const stdin = makeStdinFromLines(['{"answer": "/home/user"}']);
+    const stdin = makeStdinFromLines([ACK, '{"answer": "/home/user"}']);
 
     const origStdin = process.stdin;
     const origStdout = process.stdout;
@@ -293,7 +314,7 @@ describe("Agent mode prompts (mocked stdin/stdout)", () => {
 
   it("AutocompletePrompt returns text", async () => {
     const { writable } = captureStdout();
-    const stdin = makeStdinFromLines(['{"answer": "TypeScript"}']);
+    const stdin = makeStdinFromLines([ACK, '{"answer": "TypeScript"}']);
 
     const origStdin = process.stdin;
     const origStdout = process.stdout;
@@ -314,7 +335,7 @@ describe("Agent mode prompts (mocked stdin/stdout)", () => {
 
   it("SearchPrompt returns value", async () => {
     const { writable } = captureStdout();
-    const stdin = makeStdinFromLines(['{"answer": "httpx"}']);
+    const stdin = makeStdinFromLines([ACK, '{"answer": "httpx"}']);
 
     const origStdin = process.stdin;
     const origStdout = process.stdout;
@@ -338,7 +359,7 @@ describe("Agent mode prompts (mocked stdin/stdout)", () => {
 
   it("TextPrompt uses default when answer is null", async () => {
     const { writable } = captureStdout();
-    const stdin = makeStdinFromLines(['{"answer": null}']);
+    const stdin = makeStdinFromLines([ACK, '{"answer": null}']);
 
     const origStdin = process.stdin;
     const origStdout = process.stdout;
@@ -359,7 +380,7 @@ describe("Agent mode prompts (mocked stdin/stdout)", () => {
 
   it("handshake is sent only once across multiple prompts", async () => {
     const { chunks, writable } = captureStdout();
-    const stdin = makeStdinFromLines(['{"answer": "A"}', '{"answer": "B"}']);
+    const stdin = makeStdinFromLines([ACK, '{"answer": "A"}', '{"answer": "B"}']);
 
     const origStdin = process.stdin;
     const origStdout = process.stdout;
@@ -375,15 +396,39 @@ describe("Agent mode prompts (mocked stdin/stdout)", () => {
       expect(lines.length).toBe(3);
 
       const handshake = JSON.parse(lines[0]!);
+      expect(handshake.kind).toBe("handshake");
       expect(handshake.protocol).toBe("inquirer-ai");
 
       const p1 = JSON.parse(lines[1]!);
+      expect(p1.kind).toBe("prompt");
+      expect(p1.step).toBe(1);
       expect(p1.type).toBe("input");
       expect(p1.message).toBe("Q1?");
 
       const p2 = JSON.parse(lines[2]!);
+      expect(p2.kind).toBe("prompt");
+      expect(p2.step).toBe(2);
       expect(p2.type).toBe("input");
       expect(p2.message).toBe("Q2?");
+    } finally {
+      Object.defineProperty(process, "stdin", { value: origStdin, configurable: true });
+      Object.defineProperty(process, "stdout", { value: origStdout, configurable: true });
+    }
+  });
+
+  it("handshake buffers answer line when no ack is sent", async () => {
+    const { chunks, writable } = captureStdout();
+    // No ACK line - first line is the answer itself
+    const stdin = makeStdinFromLines(['{"answer": "Alice"}']);
+
+    const origStdin = process.stdin;
+    const origStdout = process.stdout;
+    Object.defineProperty(process, "stdin", { value: stdin, configurable: true });
+    Object.defineProperty(process, "stdout", { value: writable, configurable: true });
+
+    try {
+      const result = await new TextPrompt({ message: "Name?" }).execute();
+      expect(result).toBe("Alice");
     } finally {
       Object.defineProperty(process, "stdin", { value: origStdin, configurable: true });
       Object.defineProperty(process, "stdout", { value: origStdout, configurable: true });

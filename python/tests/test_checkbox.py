@@ -39,7 +39,9 @@ def test_agent_mode_empty_selection(monkeypatch):
 
 def test_agent_mode_invalid_choice(monkeypatch):
     monkeypatch.setenv("INQUIRER_AI_MODE", "agent")
-    stdin = io.StringIO(json.dumps({"answer": ["InvalidFeature"]}) + "\n")
+    # Provide 3 bad answers to exhaust retries
+    lines = "".join(json.dumps({"answer": ["InvalidFeature"]}) + "\n" for _ in range(3))
+    stdin = io.StringIO(lines)
     stdout = io.StringIO()
     monkeypatch.setattr("sys.stdin", stdin)
     monkeypatch.setattr("sys.stdout", stdout)
@@ -51,7 +53,9 @@ def test_agent_mode_invalid_choice(monkeypatch):
 
 def test_agent_mode_not_a_list(monkeypatch):
     monkeypatch.setenv("INQUIRER_AI_MODE", "agent")
-    stdin = io.StringIO(json.dumps({"answer": "Auth"}) + "\n")
+    # Provide 3 bad answers to exhaust retries
+    lines = "".join(json.dumps({"answer": "Auth"}) + "\n" for _ in range(3))
+    stdin = io.StringIO(lines)
     stdout = io.StringIO()
     monkeypatch.setattr("sys.stdin", stdin)
     monkeypatch.setattr("sys.stdout", stdout)
@@ -68,7 +72,9 @@ def test_empty_choices_raises():
 
 def test_agent_mode_validate_minimum_selection(monkeypatch):
     monkeypatch.setenv("INQUIRER_AI_MODE", "agent")
-    stdin = io.StringIO(json.dumps({"answer": ["Auth"]}) + "\n")
+    # Provide 3 bad answers to exhaust retries
+    lines = "".join(json.dumps({"answer": ["Auth"]}) + "\n" for _ in range(3))
+    stdin = io.StringIO(lines)
     stdout = io.StringIO()
     monkeypatch.setattr("sys.stdin", stdin)
     monkeypatch.setattr("sys.stdout", stdout)

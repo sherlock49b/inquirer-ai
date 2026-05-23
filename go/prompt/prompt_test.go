@@ -16,7 +16,12 @@ func agentSetup(t *testing.T, input string) (*os.File, *os.File, func()) {
 
 	handshakeOnce = sync.Once{}
 	scannerOnce = sync.Once{}
+	agentIOOnce = sync.Once{}
 	stdinScanner = nil
+	agentStep = 0
+	agentWriter = nil
+	agentReader = nil
+	bufferedAnswer = nil
 
 	oldStdin := os.Stdin
 	oldStdout := os.Stdout

@@ -21,6 +21,7 @@ def test_agent_mode_basic(monkeypatch):
     assert result == "hello"
     prompt_data = parse_prompt_from_stdout(stdout)
     assert prompt_data["type"] == "input"
+    assert prompt_data["kind"] == "prompt"
     assert prompt_data["message"] == "Enter name"
 
 
@@ -52,7 +53,9 @@ def test_agent_mode_validate_pass(monkeypatch):
 
 def test_agent_mode_validate_fail(monkeypatch):
     monkeypatch.setenv("INQUIRER_AI_MODE", "agent")
-    stdin = io.StringIO(json.dumps({"answer": "not-an-email"}) + "\n")
+    # Provide 3 bad answers to exhaust retries
+    lines = "".join(json.dumps({"answer": "not-an-email"}) + "\n" for _ in range(3))
+    stdin = io.StringIO(lines)
     stdout = io.StringIO()
     monkeypatch.setattr("sys.stdin", stdin)
     monkeypatch.setattr("sys.stdout", stdout)
@@ -60,6 +63,23 @@ def test_agent_mode_validate_fail(monkeypatch):
     p = TextPrompt("Email", validate=lambda v: True if "@" in v else "Must contain @")
     with pytest.raises(ValidationError, match="Must contain @"):
         p.execute()
+
+    # Check that validation_error messages were sent
+    output_lines = stdout.getvalue().strip().split("\n")
+    validation_errors = [json.loads(line) for line in output_lines if '"validation_error"' in line]
+    assert len(validation_errors) >= 1
+
+
+def test_agent_mode_validate_retry_then_succeed(monkeypatch):
+    monkeypatch.setenv("INQUIRER_AI_MODE", "agent")
+    lines = json.dumps({"answer": "bad"}) + "\n" + json.dumps({"answer": "good@email.com"}) + "\n"
+    stdin = io.StringIO(lines)
+    stdout = io.StringIO()
+    monkeypatch.setattr("sys.stdin", stdin)
+    monkeypatch.setattr("sys.stdout", stdout)
+
+    p = TextPrompt("Email", validate=lambda v: True if "@" in v else "Must contain @")
+    assert p.execute() == "good@email.com"
 
 
 def test_agent_mode_filter(monkeypatch):

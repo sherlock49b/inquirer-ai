@@ -21,13 +21,11 @@ func Rawlist(cfg RawlistConfig) (any, error) {
 		return nil, fmt.Errorf("%w: choices cannot be empty", ErrInvalidChoice)
 	}
 
-	var result any
-	var err error
 	if IsAgentMode() {
-		result, err = rawlistAgent(cfg, choices, selectable)
-	} else {
-		result, err = rawlistTerminal(cfg, choices, selectable)
+		// rawlistAgent handles validation, filter, and retry internally
+		return rawlistAgent(cfg, choices, selectable)
 	}
+	result, err := rawlistTerminal(cfg, choices, selectable)
 	if err != nil {
 		return nil, err
 	}
@@ -35,34 +33,64 @@ func Rawlist(cfg RawlistConfig) (any, error) {
 }
 
 func rawlistAgent(cfg RawlistConfig, choices []resolvedChoice, selectable []int) (any, error) {
-	payload := map[string]any{
-		"type":    "rawlist",
-		"message": cfg.Message,
-		"choices": marshalItems(cfg.Choices),
-	}
-	if err := AgentSend(payload); err != nil {
-		return nil, err
-	}
-	answer, err := AgentReceive()
-	if err != nil {
-		return nil, err
-	}
-
-	if num, ok := answer.(float64); ok {
-		idx := int(num)
-		if idx >= 1 && idx <= len(selectable) {
-			return choices[selectable[idx-1]].value, nil
+	const maxRetries = 3
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		payload := map[string]any{
+			"type":    "rawlist",
+			"message": cfg.Message,
+			"choices": marshalItems(cfg.Choices),
 		}
-	}
-
-	s := toString(answer)
-	for _, idx := range selectable {
-		c := choices[idx]
-		if s == toString(c.value) || s == c.name {
-			return c.value, nil
+		if err := AgentSend(payload); err != nil {
+			return nil, err
 		}
+		answer, err := AgentReceive()
+		if err != nil {
+			return nil, err
+		}
+
+		var matched any
+		found := false
+
+		if num, ok := answer.(float64); ok {
+			idx := int(num)
+			if idx >= 1 && idx <= len(selectable) {
+				matched = choices[selectable[idx-1]].value
+				found = true
+			}
+		}
+
+		if !found {
+			s := toString(answer)
+			for _, idx := range selectable {
+				c := choices[idx]
+				if s == toString(c.value) || s == c.name {
+					matched = c.value
+					found = true
+					break
+				}
+			}
+		}
+
+		if !found {
+			choiceErr := fmt.Errorf("%w: %q", ErrInvalidChoice, toString(answer))
+			if attempt < maxRetries-1 {
+				AgentSendValidationError(choiceErr.Error())
+				continue
+			}
+			return nil, choiceErr
+		}
+
+		result, err := applyCallbacks(matched, cfg.Validate, cfg.Filter)
+		if err != nil {
+			if attempt < maxRetries-1 {
+				AgentSendValidationError(err.Error())
+				continue
+			}
+			return nil, err
+		}
+		return result, nil
 	}
-	return nil, fmt.Errorf("%w: %q", ErrInvalidChoice, toString(answer))
+	return nil, fmt.Errorf("%w: max retries exceeded", ErrValidation)
 }
 
 func rawlistTerminal(cfg RawlistConfig, choices []resolvedChoice, selectable []int) (any, error) {

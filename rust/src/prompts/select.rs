@@ -1,4 +1,4 @@
-use crate::agent::{agent_receive, agent_send};
+use crate::agent::{agent_receive, agent_send, agent_send_validation_error};
 use crate::choice::{Choice, ChoiceItem};
 use crate::errors::{InquirerError, Result};
 use crate::mode::is_agent_mode;
@@ -50,6 +50,7 @@ pub fn select(config: SelectConfig) -> Result<Value> {
 }
 
 fn select_agent(config: &SelectConfig, enabled: &[&Choice]) -> Result<Value> {
+    const MAX_RETRIES: usize = 3;
     let choices_json: Vec<Value> = config.choices.iter().map(|c| c.to_json()).collect();
     let payload = json!({
         "type": "select",
@@ -57,19 +58,26 @@ fn select_agent(config: &SelectConfig, enabled: &[&Choice]) -> Result<Value> {
         "default": config.default,
         "choices": choices_json,
     });
-    agent_send(&payload)?;
-    let answer = agent_receive()?;
 
-    for c in enabled {
-        if answer == c.value || answer.as_str() == Some(&c.name) {
-            return Ok(c.value.clone());
+    for attempt in 0..MAX_RETRIES {
+        agent_send(&payload)?;
+        let answer = agent_receive()?;
+
+        for c in enabled {
+            if answer == c.value || answer.as_str() == Some(&c.name) {
+                return Ok(c.value.clone());
+            }
         }
-    }
 
-    let valid: Vec<&Value> = enabled.iter().map(|c| &c.value).collect();
-    Err(InquirerError::Validation(format!(
-        "Invalid choice: {answer}. Valid: {valid:?}"
-    )))
+        let valid: Vec<&Value> = enabled.iter().map(|c| &c.value).collect();
+        let msg = format!("Invalid choice: {answer}. Valid: {valid:?}");
+        if attempt + 1 < MAX_RETRIES {
+            agent_send_validation_error(&msg)?;
+            continue;
+        }
+        return Err(InquirerError::Validation(msg));
+    }
+    unreachable!()
 }
 
 fn select_terminal(config: &SelectConfig) -> Result<Value> {

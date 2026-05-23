@@ -1,11 +1,11 @@
-# inquirer-ai Agent Protocol Specification v1
+# inquirer-ai Agent Protocol Specification v2
 
 ## Overview
 
-The inquirer-ai agent protocol enables AI agents to drive interactive CLI tools programmatically via a JSON Lines (JSONL) protocol on stdin/stdout. Programs built with inquirer-ai automatically support two modes:
+The inquirer-ai agent protocol enables AI agents to drive interactive CLI tools programmatically via a JSON Lines (JSONL) protocol. Programs built with inquirer-ai automatically support two modes:
 
 - **Terminal mode**: Interactive UI with cursor navigation, key bindings, and styled output (default when stdin is a TTY)
-- **Agent mode**: JSON line protocol on stdout/stdin (default when stdin is not a TTY, or `INQUIRER_AI_MODE=agent`)
+- **Agent mode**: JSON line protocol for structured communication (default when stdin is not a TTY, or `INQUIRER_AI_MODE=agent`)
 
 ## Mode Detection
 
@@ -16,66 +16,124 @@ Agent mode is activated when any of the following is true:
 
 Terminal mode is forced when `INQUIRER_AI_MODE` is set to `human`.
 
+## I/O Channels
+
+By default, protocol messages use stdout (tool → agent) and stdin (agent → tool). Programs MUST NOT write non-protocol output to stdout in agent mode — use stderr for logs, progress, and user-facing text.
+
+### Optional: fd-based communication
+
+When `INQUIRER_AI_FD` is set, the tool uses dedicated file descriptors instead of stdin/stdout:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `INQUIRER_AI_FD_OUT` | `1` (stdout) | fd the tool writes prompts to |
+| `INQUIRER_AI_FD_IN` | `0` (stdin) | fd the tool reads answers from |
+
+Example: `INQUIRER_AI_FD_OUT=3 INQUIRER_AI_FD_IN=4 ./my-cli` frees stdout/stdin for normal program I/O.
+
+## Message Types
+
+Every protocol message is a JSON object with a `kind` field:
+
+| kind | Direction | Description |
+|------|-----------|-------------|
+| `handshake` | tool → agent | Protocol metadata (first line) |
+| `handshake_ack` | agent → tool | Agent capabilities (optional) |
+| `prompt` | tool → agent | A question for the agent |
+| `validation_error` | tool → agent | Previous answer was invalid, prompt will be re-sent |
+| `error` | tool → agent | Fatal error, program will exit |
+
 ## Protocol Flow
 
 ```
-Program                              Agent
-  │                                    │
-  ├──── handshake (1st line) ─────────►│
-  │                                    │
-  ├──── prompt (JSON line) ───────────►│
-  │◄─── response (JSON line) ──────────┤
-  │                                    │
-  ├──── prompt (JSON line) ───────────►│
-  │◄─── response (JSON line) ──────────┤
-  │                                    │
-  ├──── final output ─────────────────►│
-  │                                    │
+Program                                 Agent
+  │                                       │
+  ├── {"kind":"handshake",...} ──────────►│
+  │◄── {"kind":"handshake_ack",...} ──────┤  (optional)
+  │                                       │
+  ├── {"kind":"prompt", step:1,...} ─────►│
+  │◄── {"answer": ...} ──────────────────┤
+  │                                       │
+  ├── {"kind":"prompt", step:2,...} ─────►│
+  │◄── {"answer": "invalid!"} ───────────┤
+  ├── {"kind":"validation_error",...} ───►│
+  ├── {"kind":"prompt", step:2,...} ─────►│  (re-sent)
+  │◄── {"answer": "valid"} ──────────────┤
+  │                                       │
+  ├── {"kind":"prompt", step:3,...} ─────►│
+  │◄── {"answer": ...} ──────────────────┤
+  │                                       │
 ```
 
 ## Handshake
 
-The first line emitted by the program is a handshake metadata object. It is sent exactly once, before the first prompt.
+The first line emitted by the program is a handshake. It is sent exactly once, before the first prompt.
 
 ```json
 {
+  "kind": "handshake",
   "protocol": "inquirer-ai",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "format": "jsonl",
   "interaction": "sequential",
-  "description": "Interactive prompt protocol. Prompts are sent one at a time — read one JSON line from stdout, respond with one JSON line on stdin, then wait for the next prompt. Do NOT send all answers at once. Use a named pipe (mkfifo) or line-buffered I/O for bidirectional communication.",
+  "total": 5,
+  "description": "Interactive prompt protocol. Prompts are sent one at a time — read one JSON line, respond with one JSON line, then wait for the next prompt.",
   "example_response": {"answer": "<value>"}
 }
 ```
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `protocol` | string | Always `"inquirer-ai"` |
-| `version` | string | Semantic version of the library |
-| `format` | string | Always `"jsonl"` |
-| `interaction` | string | Always `"sequential"` — prompts are one-at-a-time |
-| `description` | string | Human-readable protocol description |
-| `example_response` | object | Example of the expected response format |
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `kind` | string | yes | Always `"handshake"` |
+| `protocol` | string | yes | Always `"inquirer-ai"` |
+| `version` | string | yes | Semantic version of the library |
+| `format` | string | yes | Always `"jsonl"` |
+| `interaction` | string | yes | Always `"sequential"` |
+| `total` | number \| null | no | Total number of prompts, `null` if unknown |
+| `description` | string | yes | Human-readable protocol description |
+| `example_response` | object | yes | Example response format |
 
-Agents SHOULD check for `"protocol": "inquirer-ai"` in the first line to confirm the protocol is supported.
+### Handshake Acknowledgment (optional)
 
-**Important:** The protocol is strictly sequential. The program sends one prompt, then blocks waiting for one response before sending the next prompt. Agents MUST NOT send all answers at once — each answer must be sent only after reading its corresponding prompt. For bidirectional communication, use a named pipe (`mkfifo`) or line-buffered I/O.
+The agent MAY reply with a `handshake_ack` before its first answer. If the tool receives an `answer` instead, it assumes a basic agent with no special capabilities.
+
+```json
+{
+  "kind": "handshake_ack",
+  "agent": "claude",
+  "capabilities": []
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `kind` | string | yes | Always `"handshake_ack"` |
+| `agent` | string | no | Agent identifier |
+| `capabilities` | string[] | no | Reserved for future capability negotiation |
 
 ## Prompt Objects
 
-Each prompt is a single JSON line with at minimum `type` and `message` fields:
-
 ```json
-{"type": "<prompt_type>", "message": "<question text>", ...}
+{
+  "kind": "prompt",
+  "type": "input",
+  "message": "What is your name?",
+  "default": null,
+  "step": 1,
+  "total": 5
+}
 ```
 
 ### Common Fields
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
+| `kind` | string | yes | Always `"prompt"` |
 | `type` | string | yes | Prompt type identifier |
 | `message` | string | yes | The question to display |
 | `default` | any | no | Default value if answer is null |
+| `step` | number | yes | 1-based step number |
+| `total` | number \| null | no | Total prompts, `null` if unknown (dynamic flows) |
 
 ## Response Format
 
@@ -87,12 +145,37 @@ Every response MUST be a JSON object with an `answer` key:
 
 The value type depends on the prompt type. Sending `null` as the answer uses the prompt's default value.
 
+## Validation Error and Retry
+
+When the agent sends an invalid answer, the tool sends a `validation_error` message followed by the same prompt again. The agent SHOULD retry with a corrected answer.
+
+```json
+{"kind": "validation_error", "message": "Invalid choice: 'java'. Valid: [\"python\", \"go\"]"}
+```
+
+The tool retries up to 3 times. After 3 failed attempts, the tool exits with a non-zero status.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `kind` | string | yes | Always `"validation_error"` |
+| `message` | string | yes | Human-readable error description |
+
+## Fatal Error
+
+For unrecoverable errors (e.g., stdin closed mid-prompt):
+
+```json
+{"kind": "error", "message": "stdin closed unexpectedly"}
+```
+
+The program exits with a non-zero status after emitting this message.
+
 ## Prompt Types
 
 ### `input` — Text Input
 
 ```json
-{"type": "input", "message": "What is your name?", "default": null}
+{"kind": "prompt", "type": "input", "message": "What is your name?", "default": null, "step": 1, "total": 3}
 ```
 
 **Response**: `{"answer": "Alice"}` → returns `"Alice"`
@@ -103,7 +186,7 @@ The value type depends on the prompt type. Sending `null` as the answer uses the
 ### `confirm` — Yes/No
 
 ```json
-{"type": "confirm", "message": "Continue?", "default": false}
+{"kind": "prompt", "type": "confirm", "message": "Continue?", "default": false, "step": 2, "total": 3}
 ```
 
 **Response**: `{"answer": true}` or `{"answer": false}`
@@ -118,9 +201,12 @@ Accepted falsy strings: `n`, `no`, `false`, `0`
 
 ```json
 {
+  "kind": "prompt",
   "type": "select",
   "message": "Pick a language",
   "default": null,
+  "step": 1,
+  "total": null,
   "choices": [
     {"name": "Python", "value": "python"},
     {"name": "Go", "value": "go", "description": "Systems language"},
@@ -140,9 +226,12 @@ Disabled choices are rejected. Separators are non-selectable display elements.
 
 ```json
 {
+  "kind": "prompt",
   "type": "checkbox",
   "message": "Select features",
   "default": ["docker"],
+  "step": 3,
+  "total": 5,
   "choices": [
     {"name": "Docker", "value": "docker"},
     {"name": "CI/CD", "value": "ci"},
@@ -160,7 +249,7 @@ Disabled choices are rejected. Separators are non-selectable display elements.
 ### `password` — Masked Input
 
 ```json
-{"type": "password", "message": "Enter token", "default": null, "mask": "*"}
+{"kind": "prompt", "type": "password", "message": "Enter token", "default": null, "mask": "*", "step": 1, "total": 1}
 ```
 
 **Response**: `{"answer": "s3cret"}` → returns plain text
@@ -173,12 +262,15 @@ Disabled choices are rejected. Separators are non-selectable display elements.
 
 ```json
 {
+  "kind": "prompt",
   "type": "number",
   "message": "Port",
   "default": 8080,
   "min": 1024,
   "max": 65535,
-  "float_allowed": false
+  "float_allowed": false,
+  "step": 2,
+  "total": 4
 }
 ```
 
@@ -192,7 +284,7 @@ Validation enforces min/max bounds and float_allowed constraint.
 ### `editor` — External Editor
 
 ```json
-{"type": "editor", "message": "Enter description", "default": null, "postfix": ".txt"}
+{"kind": "prompt", "type": "editor", "message": "Enter description", "default": null, "postfix": ".txt", "step": 1, "total": 1}
 ```
 
 **Response**: `{"answer": "Multi-line\ntext content"}` → returns text string
@@ -205,9 +297,12 @@ In terminal mode, opens `$VISUAL` or `$EDITOR`. In agent mode, the agent provide
 
 ```json
 {
+  "kind": "prompt",
   "type": "search",
   "message": "Find a package",
   "searchable": true,
+  "step": 1,
+  "total": 2,
   "choices": [
     {"name": "requests — HTTP client", "value": "requests"},
     {"name": "httpx — Async HTTP", "value": "httpx"}
@@ -217,7 +312,7 @@ In terminal mode, opens `$VISUAL` or `$EDITOR`. In agent mode, the agent provide
 
 **Response**: `{"answer": "httpx"}` — by value or name
 
-The `choices` array contains the initial (unfiltered) results. The `searchable: true` field signals that this is a search prompt.
+The `choices` array contains the initial (unfiltered) results.
 
 ---
 
@@ -225,8 +320,11 @@ The `choices` array contains the initial (unfiltered) results. The `searchable: 
 
 ```json
 {
+  "kind": "prompt",
   "type": "rawlist",
   "message": "Pick a version",
+  "step": 1,
+  "total": 1,
   "choices": [
     {"name": "3.13", "value": "3.13"},
     {"name": "3.12", "value": "3.12"}
@@ -243,8 +341,11 @@ The `choices` array contains the initial (unfiltered) results. The `searchable: 
 
 ```json
 {
+  "kind": "prompt",
   "type": "expand",
   "message": "Conflict resolution",
+  "step": 1,
+  "total": 1,
   "choices": [
     {"key": "y", "name": "Overwrite", "value": "overwrite"},
     {"key": "n", "name": "Skip", "value": "skip"},
@@ -260,7 +361,7 @@ The `choices` array contains the initial (unfiltered) results. The `searchable: 
 ### `path` — File/Directory Path
 
 ```json
-{"type": "path", "message": "Output directory", "default": null, "only_directories": false}
+{"kind": "prompt", "type": "path", "message": "Output directory", "default": null, "only_directories": false, "step": 1, "total": 1}
 ```
 
 **Response**: `{"answer": "/home/user/project"}` → returns path string
@@ -271,16 +372,17 @@ The `choices` array contains the initial (unfiltered) results. The `searchable: 
 
 ```json
 {
+  "kind": "prompt",
   "type": "autocomplete",
   "message": "Language",
   "default": null,
+  "step": 1,
+  "total": 1,
   "choices": ["Python", "Go", "Rust", "TypeScript"]
 }
 ```
 
 **Response**: `{"answer": "Python"}` — any string accepted, not constrained to choices
-
-The `choices` array provides suggestion hints. Agents MAY return values not in the list.
 
 ## Choice Object Schema
 
@@ -310,25 +412,6 @@ The `choices` array provides suggestion hints. Agents MAY return values not in t
 
 Separators are non-selectable visual dividers in choice lists.
 
-## Error Handling
-
-### Malformed Input
-
-| Condition | Error |
-|-----------|-------|
-| stdin closed (EOF) | `PromptAbortedError` — no response received |
-| Invalid JSON | `ValidationError` — parse error with expected format hint |
-| Missing `answer` key | `ValidationError` — must have `"answer"` key |
-| Invalid choice value | `ValidationError` — value not in valid choices |
-| Disabled choice selected | `ValidationError` — choice is disabled |
-| Type mismatch | `ValidationError` — e.g., string instead of list for checkbox |
-
-All error messages include the expected format to help agents self-correct:
-
-```
-Invalid JSON response: ... Expected JSON like: {"answer": "<value>"}
-```
-
 ## Implementations
 
 | Language | Package | Status |
@@ -340,4 +423,4 @@ Invalid JSON response: ... Expected JSON like: {"answer": "<value>"}
 
 ## Versioning
 
-The protocol version follows semantic versioning. The `version` field in the handshake reflects the library version, not the protocol version. Protocol-breaking changes will be communicated via the `protocol` field format (e.g., `"inquirer-ai-v2"`).
+The protocol version follows semantic versioning. The `version` field in the handshake reflects the library version. Protocol-breaking changes increment the major version.

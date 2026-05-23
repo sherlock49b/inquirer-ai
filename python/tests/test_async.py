@@ -65,7 +65,8 @@ async def test_execute_async_with_filter(monkeypatch: pytest.MonkeyPatch) -> Non
 
 @pytest.mark.asyncio
 async def test_execute_async_validation_error(monkeypatch: pytest.MonkeyPatch) -> None:
-    stdin = _make_stdin("ab")
+    # Provide 3 bad answers to exhaust retries
+    stdin = _make_stdin("ab", "x", "no")
     stdout = io.StringIO()
     monkeypatch.setattr("sys.stdin", stdin)
     monkeypatch.setattr("sys.stdout", stdout)

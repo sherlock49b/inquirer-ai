@@ -6,6 +6,8 @@ import { CheckboxPrompt } from "../src/prompts/checkbox.js";
 import { resetAgent } from "../src/agent.js";
 import { Readable, Writable } from "node:stream";
 
+const ACK = '{"kind":"handshake_ack"}';
+
 function setup(answers: string[]) {
   resetAgent();
   vi.stubEnv("INQUIRER_AI_MODE", "agent");
@@ -25,7 +27,7 @@ function setup(answers: string[]) {
 
 describe("Chaos tests", () => {
   it("garbage JSON", async () => {
-    const restore = setup(["not json at all"]);
+    const restore = setup([ACK, "not json at all"]);
     try {
       await expect(new TextPrompt({ message: "x" }).execute()).rejects.toThrow();
     } finally {
@@ -34,7 +36,7 @@ describe("Chaos tests", () => {
   });
 
   it("empty JSON object (no answer key)", async () => {
-    const restore = setup(["{}"]);
+    const restore = setup([ACK, "{}"]);
     try {
       await expect(new TextPrompt({ message: "x" }).execute()).rejects.toThrow("answer");
     } finally {
@@ -43,7 +45,7 @@ describe("Chaos tests", () => {
   });
 
   it("JSON array instead of object", async () => {
-    const restore = setup(["[1,2,3]"]);
+    const restore = setup([ACK, "[1,2,3]"]);
     try {
       await expect(new TextPrompt({ message: "x" }).execute()).rejects.toThrow();
     } finally {
@@ -53,7 +55,7 @@ describe("Chaos tests", () => {
 
   it("very long string answer (100K chars)", async () => {
     const longStr = "a".repeat(100_000);
-    const restore = setup([`{"answer": "${longStr}"}`]);
+    const restore = setup([ACK, `{"answer": "${longStr}"}`]);
     try {
       const result = await new TextPrompt({ message: "x" }).execute();
       expect(result.length).toBe(100_000);
@@ -63,8 +65,8 @@ describe("Chaos tests", () => {
   });
 
   it("unicode bomb answer", async () => {
-    const unicode = "🎉".repeat(1000);
-    const restore = setup([JSON.stringify({ answer: unicode })]);
+    const unicode = "\u{1f389}".repeat(1000);
+    const restore = setup([ACK, JSON.stringify({ answer: unicode })]);
     try {
       const result = await new TextPrompt({ message: "x" }).execute();
       expect(result).toBe(unicode);
@@ -74,7 +76,14 @@ describe("Chaos tests", () => {
   });
 
   it("null answer to number without default", async () => {
-    const restore = setup(['{"answer": null}']);
+    // With retries, need 4 null answers to exhaust retries
+    const restore = setup([
+      ACK,
+      '{"answer": null}',
+      '{"answer": null}',
+      '{"answer": null}',
+      '{"answer": null}',
+    ]);
     try {
       await expect(
         new NumberPrompt({ message: "x" }).execute(),
@@ -85,7 +94,13 @@ describe("Chaos tests", () => {
   });
 
   it("boolean answer to number", async () => {
-    const restore = setup(['{"answer": true}']);
+    const restore = setup([
+      ACK,
+      '{"answer": true}',
+      '{"answer": true}',
+      '{"answer": true}',
+      '{"answer": true}',
+    ]);
     try {
       await expect(
         new NumberPrompt({ message: "x" }).execute(),
@@ -96,7 +111,7 @@ describe("Chaos tests", () => {
   });
 
   it("nested JSON in answer", async () => {
-    const restore = setup(['{"answer": {"nested": "object"}}']);
+    const restore = setup([ACK, '{"answer": {"nested": "object"}}']);
     try {
       const result = await new TextPrompt({ message: "x" }).execute();
       expect(result).toBe("[object Object]");
@@ -115,7 +130,7 @@ describe("Chaos tests", () => {
   });
 
   it("select with unicode choice names", async () => {
-    const restore = setup(['{"answer": "日本語"}']);
+    const restore = setup([ACK, '{"answer": "日本語"}']);
     try {
       const result = await new SelectPrompt({
         message: "x",
@@ -128,7 +143,7 @@ describe("Chaos tests", () => {
   });
 
   it("checkbox with empty array", async () => {
-    const restore = setup(['{"answer": []}']);
+    const restore = setup([ACK, '{"answer": []}']);
     try {
       const result = await new CheckboxPrompt({
         message: "x",
@@ -141,7 +156,7 @@ describe("Chaos tests", () => {
   });
 
   it("number with string representation", async () => {
-    const restore = setup(['{"answer": "42"}']);
+    const restore = setup([ACK, '{"answer": "42"}']);
     try {
       const result = await new NumberPrompt({ message: "x" }).execute();
       expect(result).toBe(42);
@@ -151,7 +166,7 @@ describe("Chaos tests", () => {
   });
 
   it("number with float string", async () => {
-    const restore = setup(['{"answer": "3.14"}']);
+    const restore = setup([ACK, '{"answer": "3.14"}']);
     try {
       const result = await new NumberPrompt({ message: "x" }).execute();
       expect(result).toBeCloseTo(3.14);
@@ -161,7 +176,7 @@ describe("Chaos tests", () => {
   });
 
   it("extra fields in response are ignored", async () => {
-    const restore = setup(['{"answer": "hello", "extra": "ignored", "meta": 42}']);
+    const restore = setup([ACK, '{"answer": "hello", "extra": "ignored", "meta": 42}']);
     try {
       const result = await new TextPrompt({ message: "x" }).execute();
       expect(result).toBe("hello");

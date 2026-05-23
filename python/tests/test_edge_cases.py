@@ -75,11 +75,12 @@ class TestHandshakeDefense:
         lines = stdout.getvalue().strip().split("\n")
         first = json.loads(lines[0])
         assert first["protocol"] == "inquirer-ai"
+        assert first["kind"] == "handshake"
         assert first["interaction"] == "sequential"
 
     def test_agent_answering_handshake_as_prompt(self, monkeypatch):
         """If agent treats handshake as a prompt and sends {"answer": ...},
-        that response will be consumed by the actual first prompt."""
+        that response will be pushed back and consumed by the actual first prompt."""
         monkeypatch.setenv("INQUIRER_AI_MODE", "agent")
         lines = json.dumps({"answer": "handshake_response"}) + "\n" + json.dumps({"answer": "real_answer"}) + "\n"
         monkeypatch.setattr("sys.stdin", io.StringIO(lines))
@@ -105,7 +106,7 @@ class TestConcurrentHandshake:
 
     def test_handshake_sent_exactly_once_under_threads(self, monkeypatch):
         monkeypatch.setenv("INQUIRER_AI_MODE", "agent")
-        _base._agent_handshake_sent = False
+        _base._reset_agent_handshake()
 
         handshake_count = 0
         lock = threading.Lock()

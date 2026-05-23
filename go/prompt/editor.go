@@ -42,6 +42,7 @@ func editorAgent(cfg EditorConfig) (string, error) {
 	if result == "" && cfg.Default != "" {
 		result = cfg.Default
 	}
+	// Editor has no validate callback, so no retry loop needed
 	return result, nil
 }
 

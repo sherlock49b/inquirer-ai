@@ -1,4 +1,4 @@
-use crate::agent::{agent_receive, agent_send};
+use crate::agent::{agent_receive, agent_send, agent_send_validation_error};
 use crate::errors::{InquirerError, Result};
 use crate::mode::is_agent_mode;
 use crate::terminal::{format_error, format_question, format_success, read_line};
@@ -64,6 +64,7 @@ pub fn validate_expand(value: &Value, choices: &[ExpandChoice]) -> Result<Value>
 }
 
 fn expand_agent(config: &ExpandConfig) -> Result<Value> {
+    const MAX_RETRIES: usize = 3;
     let choices_json: Vec<Value> = config
         .choices
         .iter()
@@ -81,9 +82,23 @@ fn expand_agent(config: &ExpandConfig) -> Result<Value> {
         "default": null,
         "choices": choices_json,
     });
-    agent_send(&payload)?;
-    let answer = agent_receive()?;
-    validate_expand(&answer, &config.choices)
+
+    for attempt in 0..MAX_RETRIES {
+        agent_send(&payload)?;
+        let answer = agent_receive()?;
+        match validate_expand(&answer, &config.choices) {
+            Ok(v) => return Ok(v),
+            Err(InquirerError::Validation(msg)) => {
+                if attempt + 1 < MAX_RETRIES {
+                    agent_send_validation_error(&msg)?;
+                    continue;
+                }
+                return Err(InquirerError::Validation(msg));
+            }
+            Err(e) => return Err(e),
+        }
+    }
+    unreachable!()
 }
 
 fn expand_terminal(config: &ExpandConfig) -> Result<Value> {

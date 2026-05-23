@@ -1,17 +1,98 @@
 use crate::errors::{InquirerError, Result};
 use serde_json::Value;
 use std::io::{self, BufRead, Write};
-use std::sync::Once;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Mutex, Once};
 
 static HANDSHAKE: Once = Once::new();
-const VERSION: &str = "0.1.0";
+static STEP: AtomicUsize = AtomicUsize::new(0);
+const VERSION: &str = "0.2.0";
+
+/// A buffered answer received during the handshake phase.
+/// If the host responds with `{"answer": ...}` instead of a handshake_ack,
+/// we store it here so the next `agent_receive()` can return it.
+static BUFFERED_ANSWER: Mutex<Option<Value>> = Mutex::new(None);
+
+/// Capabilities advertised by the host in the handshake_ack.
+#[allow(dead_code)]
+static HOST_CAPABILITIES: Mutex<Option<Value>> = Mutex::new(None);
+
+// ---------------------------------------------------------------------------
+// fd-based I/O helpers
+// ---------------------------------------------------------------------------
+
+#[cfg(unix)]
+fn fd_out_file() -> Option<std::fs::File> {
+    use std::os::unix::io::FromRawFd;
+    std::env::var("INQUIRER_AI_FD_OUT")
+        .ok()
+        .and_then(|s| s.parse::<i32>().ok())
+        .map(|fd| unsafe { std::fs::File::from_raw_fd(fd) })
+}
+
+#[cfg(not(unix))]
+fn fd_out_file() -> Option<std::fs::File> {
+    None
+}
+
+#[cfg(unix)]
+fn fd_in_file() -> Option<std::fs::File> {
+    use std::os::unix::io::FromRawFd;
+    std::env::var("INQUIRER_AI_FD_IN")
+        .ok()
+        .and_then(|s| s.parse::<i32>().ok())
+        .map(|fd| unsafe { std::fs::File::from_raw_fd(fd) })
+}
+
+#[cfg(not(unix))]
+fn fd_in_file() -> Option<std::fs::File> {
+    None
+}
+
+/// Write a single JSON line to the agent output channel.
+fn write_line(line: &str) -> Result<()> {
+    if let Some(mut f) = fd_out_file() {
+        writeln!(f, "{line}")?;
+        f.flush()?;
+    } else {
+        let mut stdout = io::stdout().lock();
+        writeln!(stdout, "{line}")?;
+        stdout.flush()?;
+    }
+    Ok(())
+}
+
+/// Read a single line from the agent input channel.
+fn read_input_line() -> Result<String> {
+    let mut line = String::new();
+    let bytes = if let Some(f) = fd_in_file() {
+        let mut reader = io::BufReader::new(f);
+        reader.read_line(&mut line)?
+    } else {
+        let stdin = io::stdin();
+        stdin.lock().read_line(&mut line)?
+    };
+    if bytes == 0 {
+        return Err(InquirerError::PromptAborted(
+            "No response received (input closed). Expected JSON like: {\"answer\": \"<value>\"}"
+                .to_string(),
+        ));
+    }
+    Ok(line)
+}
+
+// ---------------------------------------------------------------------------
+// Handshake
+// ---------------------------------------------------------------------------
 
 fn send_handshake() {
     HANDSHAKE.call_once(|| {
         let meta = serde_json::json!({
+            "kind": "handshake",
             "protocol": "inquirer-ai",
             "version": VERSION,
             "format": "jsonl",
+            "total": null,
             "interaction": "sequential",
             "description": concat!(
                 "Interactive prompt protocol. Prompts are sent one at a time — ",
@@ -21,30 +102,58 @@ fn send_handshake() {
             ),
             "example_response": {"answer": "<value>"}
         });
-        let mut stdout = io::stdout().lock();
-        let _ = writeln!(stdout, "{}", meta);
-        let _ = stdout.flush();
+        let _ = write_line(&meta.to_string());
+
+        // Try to read a handshake_ack or an early answer
+        if let Ok(line) = read_input_line() {
+            if let Ok(obj) = serde_json::from_str::<Value>(line.trim()) {
+                if obj.get("kind").and_then(|v| v.as_str()) == Some("handshake_ack") {
+                    // Store capabilities from the ack
+                    if let Ok(mut caps) = HOST_CAPABILITIES.lock() {
+                        *caps = obj.get("capabilities").cloned();
+                    }
+                } else if obj.get("answer").is_some() {
+                    // Buffer this answer for the next agent_receive()
+                    if let Ok(mut buf) = BUFFERED_ANSWER.lock() {
+                        *buf = Some(obj);
+                    }
+                }
+                // Otherwise: unknown kind, ignore
+            }
+        }
     });
 }
 
+// ---------------------------------------------------------------------------
+// Public API
+// ---------------------------------------------------------------------------
+
 pub fn agent_send(payload: &Value) -> Result<()> {
     send_handshake();
-    let mut stdout = io::stdout().lock();
-    writeln!(stdout, "{payload}")?;
-    stdout.flush()?;
-    Ok(())
+    let step = STEP.fetch_add(1, Ordering::SeqCst) + 1;
+
+    // Merge kind, step, total into the payload
+    let mut obj = match payload {
+        Value::Object(map) => map.clone(),
+        _ => serde_json::Map::new(),
+    };
+    obj.insert("kind".to_string(), Value::String("prompt".to_string()));
+    obj.insert("step".to_string(), Value::Number(step.into()));
+    obj.insert("total".to_string(), Value::Null);
+
+    let out = Value::Object(obj);
+    write_line(&out.to_string())
 }
 
 pub fn agent_receive() -> Result<Value> {
-    let stdin = io::stdin();
-    let mut line = String::new();
-    let bytes = stdin.lock().read_line(&mut line)?;
-    if bytes == 0 {
-        return Err(InquirerError::PromptAborted(
-            "No response received (stdin closed). Expected JSON like: {\"answer\": \"<value>\"}"
-                .to_string(),
-        ));
+    // Check for a buffered answer from the handshake phase
+    if let Ok(mut buf) = BUFFERED_ANSWER.lock() {
+        if let Some(obj) = buf.take() {
+            return extract_answer(&obj);
+        }
     }
+
+    let line = read_input_line()?;
 
     let resp: Value = serde_json::from_str(line.trim()).map_err(|e| {
         InquirerError::Validation(format!(
@@ -52,12 +161,32 @@ pub fn agent_receive() -> Result<Value> {
         ))
     })?;
 
+    extract_answer(&resp)
+}
+
+fn extract_answer(resp: &Value) -> Result<Value> {
     match resp.get("answer") {
         Some(answer) => Ok(answer.clone()),
         None => Err(InquirerError::Validation(
             "Response must be a JSON object with an \"answer\" key".to_string(),
         )),
     }
+}
+
+pub fn agent_send_validation_error(msg: &str) -> Result<()> {
+    let payload = serde_json::json!({
+        "kind": "validation_error",
+        "message": msg,
+    });
+    write_line(&payload.to_string())
+}
+
+pub fn agent_send_error(msg: &str) -> Result<()> {
+    let payload = serde_json::json!({
+        "kind": "error",
+        "message": msg,
+    });
+    write_line(&payload.to_string())
 }
 
 #[cfg(test)]

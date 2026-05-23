@@ -9,7 +9,7 @@ export {
 export { isAgentMode } from "./mode.js";
 export { type Theme, setTheme, getTheme } from "./theme.js";
 export { type Choice, type Separator, type ChoiceItem, type RawChoice, createSeparator } from "./choice.js";
-export { resetAgent } from "./agent.js";
+export { resetAgent, agentSendValidationError, agentSendError, getHandshakeAck } from "./agent.js";
 
 export { TextPrompt, type TextConfig } from "./prompts/text.js";
 export { ConfirmPrompt, type ConfirmConfig } from "./prompts/confirm.js";

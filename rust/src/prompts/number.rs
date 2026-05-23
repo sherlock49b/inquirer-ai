@@ -1,4 +1,4 @@
-use crate::agent::{agent_receive, agent_send};
+use crate::agent::{agent_receive, agent_send, agent_send_validation_error};
 use crate::errors::{InquirerError, Result};
 use crate::mode::is_agent_mode;
 use crate::terminal::{format_error, format_question, format_success, read_line};
@@ -90,6 +90,7 @@ pub fn validate_number(value: &Value, config: &NumberConfig) -> Result<f64> {
 }
 
 fn number_agent(config: &NumberConfig) -> Result<f64> {
+    const MAX_RETRIES: usize = 3;
     let payload = json!({
         "type": "number",
         "message": config.message,
@@ -98,9 +99,23 @@ fn number_agent(config: &NumberConfig) -> Result<f64> {
         "max": config.max,
         "float_allowed": config.float_allowed,
     });
-    agent_send(&payload)?;
-    let answer = agent_receive()?;
-    validate_number(&answer, config)
+
+    for attempt in 0..MAX_RETRIES {
+        agent_send(&payload)?;
+        let answer = agent_receive()?;
+        match validate_number(&answer, config) {
+            Ok(n) => return Ok(n),
+            Err(InquirerError::Validation(msg)) => {
+                if attempt + 1 < MAX_RETRIES {
+                    agent_send_validation_error(&msg)?;
+                    continue;
+                }
+                return Err(InquirerError::Validation(msg));
+            }
+            Err(e) => return Err(e),
+        }
+    }
+    unreachable!()
 }
 
 fn number_terminal(config: &NumberConfig) -> Result<f64> {

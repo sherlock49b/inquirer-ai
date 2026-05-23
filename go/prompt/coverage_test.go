@@ -37,7 +37,11 @@ func TestConfirmFilterApplied(t *testing.T) {
 }
 
 func TestConfirmValidateRejects(t *testing.T) {
-	r, w, cleanup := agentSetup(t, `{"answer":false}`+"\n")
+	// Provide 3 answers for retry loop.
+	input := `{"answer":false}` + "\n" +
+		`{"answer":false}` + "\n" +
+		`{"answer":false}` + "\n"
+	r, w, cleanup := agentSetup(t, input)
 	defer cleanup()
 
 	_, err := Confirm(ConfirmConfig{

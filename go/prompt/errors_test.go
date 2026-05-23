@@ -51,7 +51,11 @@ func TestWrappedErrorPreservesChain(t *testing.T) {
 }
 
 func TestInvalidChoiceFromSelectMatchesValidation(t *testing.T) {
-	r, w, cleanup := agentSetup(t, `{"answer":"nope"}`+"\n")
+	// Provide 3 answers for retry loop.
+	input := `{"answer":"nope"}` + "\n" +
+		`{"answer":"nope"}` + "\n" +
+		`{"answer":"nope"}` + "\n"
+	r, w, cleanup := agentSetup(t, input)
 	defer cleanup()
 
 	_, err := Select(SelectConfig{

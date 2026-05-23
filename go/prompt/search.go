@@ -21,13 +21,11 @@ func Search(cfg SearchConfig) (any, error) {
 	if cfg.Source == nil {
 		return nil, fmt.Errorf("%w: source function is required", ErrValidation)
 	}
-	var result any
-	var err error
 	if IsAgentMode() {
-		result, err = searchAgent(cfg)
-	} else {
-		result, err = searchTerminal(cfg)
+		// searchAgent handles validation, filter, and retry internally
+		return searchAgent(cfg)
 	}
+	result, err := searchTerminal(cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -37,26 +35,44 @@ func Search(cfg SearchConfig) (any, error) {
 func searchAgent(cfg SearchConfig) (any, error) {
 	items := cfg.Source("")
 	initial := parseChoices(items)
-	payload := map[string]any{
-		"type":       "search",
-		"message":    cfg.Message,
-		"searchable": true,
-		"choices":    marshalItems(items),
-	}
-	if err := AgentSend(payload); err != nil {
-		return nil, err
-	}
-	answer, err := AgentReceive()
-	if err != nil {
-		return nil, err
-	}
-	s := toString(answer)
-	for _, c := range initial {
-		if c.selectable && (s == toString(c.value) || s == c.name) {
-			return c.value, nil
+	const maxRetries = 3
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		payload := map[string]any{
+			"type":       "search",
+			"message":    cfg.Message,
+			"searchable": true,
+			"choices":    marshalItems(items),
 		}
+		if err := AgentSend(payload); err != nil {
+			return nil, err
+		}
+		answer, err := AgentReceive()
+		if err != nil {
+			return nil, err
+		}
+		s := toString(answer)
+		var matched any
+		for _, c := range initial {
+			if c.selectable && (s == toString(c.value) || s == c.name) {
+				matched = c.value
+				break
+			}
+		}
+		if matched == nil {
+			matched = s
+		}
+
+		result, err := applyCallbacks(matched, cfg.Validate, cfg.Filter)
+		if err != nil {
+			if attempt < maxRetries-1 {
+				AgentSendValidationError(err.Error())
+				continue
+			}
+			return nil, err
+		}
+		return result, nil
 	}
-	return s, nil
+	return nil, fmt.Errorf("%w: max retries exceeded", ErrValidation)
 }
 
 func searchTerminal(cfg SearchConfig) (any, error) {

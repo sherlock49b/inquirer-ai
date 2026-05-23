@@ -28,13 +28,11 @@ func Select(cfg SelectConfig) (any, error) {
 	if len(choices) == 0 {
 		return nil, fmt.Errorf("%w: choices cannot be empty", ErrInvalidChoice)
 	}
-	var result any
-	var err error
 	if IsAgentMode() {
-		result, err = selectAgent(cfg, choices)
-	} else {
-		result, err = selectTerminal(cfg, choices)
+		// selectAgent handles validation, filter, and retry internally
+		return selectAgent(cfg, choices)
 	}
+	result, err := selectTerminal(cfg, choices)
 	if err != nil {
 		return nil, err
 	}
@@ -42,31 +40,56 @@ func Select(cfg SelectConfig) (any, error) {
 }
 
 func selectAgent(cfg SelectConfig, choices []resolvedChoice) (any, error) {
-	payload := map[string]any{
-		"type":    "select",
-		"message": cfg.Message,
-		"default": nilIfEmpty(cfg.Default),
-		"choices": marshalItems(cfg.Choices),
-	}
-	if err := AgentSend(payload); err != nil {
-		return nil, err
-	}
-
-	answer, err := AgentReceive()
-	if err != nil {
-		return nil, err
-	}
-
-	answerStr := toString(answer)
-	for _, c := range choices {
-		if !c.selectable {
-			continue
+	const maxRetries = 3
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		payload := map[string]any{
+			"type":    "select",
+			"message": cfg.Message,
+			"default": nilIfEmpty(cfg.Default),
+			"choices": marshalItems(cfg.Choices),
 		}
-		if answerStr == toString(c.value) || answerStr == c.name {
-			return c.value, nil
+		if err := AgentSend(payload); err != nil {
+			return nil, err
 		}
+
+		answer, err := AgentReceive()
+		if err != nil {
+			return nil, err
+		}
+
+		answerStr := toString(answer)
+		var matched any
+		found := false
+		for _, c := range choices {
+			if !c.selectable {
+				continue
+			}
+			if answerStr == toString(c.value) || answerStr == c.name {
+				matched = c.value
+				found = true
+				break
+			}
+		}
+		if !found {
+			choiceErr := fmt.Errorf("%w: %q", ErrInvalidChoice, answerStr)
+			if attempt < maxRetries-1 {
+				AgentSendValidationError(choiceErr.Error())
+				continue
+			}
+			return nil, choiceErr
+		}
+
+		result, err := applyCallbacks(matched, cfg.Validate, cfg.Filter)
+		if err != nil {
+			if attempt < maxRetries-1 {
+				AgentSendValidationError(err.Error())
+				continue
+			}
+			return nil, err
+		}
+		return result, nil
 	}
-	return nil, fmt.Errorf("%w: %q", ErrInvalidChoice, answerStr)
+	return nil, fmt.Errorf("%w: max retries exceeded", ErrValidation)
 }
 
 func selectTerminal(cfg SelectConfig, choices []resolvedChoice) (any, error) {

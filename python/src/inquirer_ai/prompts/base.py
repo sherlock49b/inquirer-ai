@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import sys
 from abc import ABC, abstractmethod
 from collections.abc import Callable
@@ -13,20 +14,49 @@ from inquirer_ai.mode import is_agent_mode
 T = TypeVar("T")
 
 _agent_handshake_sent = False
+_agent_handshake_ack: dict[str, Any] | None = None
+_agent_step = 0
+_agent_pushback_line: str | None = None
+
+_MAX_VALIDATION_RETRIES = 3
+
+
+def _reset_agent_handshake() -> None:
+    global _agent_handshake_sent, _agent_handshake_ack, _agent_step, _agent_pushback_line
+    _agent_handshake_sent = False
+    _agent_handshake_ack = None
+    _agent_step = 0
+    _agent_pushback_line = None
+
+
+def _get_agent_out() -> Any:
+    fd_out = os.environ.get("INQUIRER_AI_FD_OUT")
+    if fd_out is not None:
+        return os.fdopen(int(fd_out), "w", closefd=False)
+    return sys.stdout
+
+
+def _get_agent_in() -> Any:
+    fd_in = os.environ.get("INQUIRER_AI_FD_IN")
+    if fd_in is not None:
+        return os.fdopen(int(fd_in), "r", closefd=False)
+    return sys.stdin
 
 
 def _send_agent_handshake() -> None:
-    global _agent_handshake_sent
+    global _agent_handshake_sent, _agent_handshake_ack, _agent_pushback_line
     if _agent_handshake_sent:
         return
     _agent_handshake_sent = True
     from importlib.metadata import version
 
     meta = {
+        "kind": "handshake",
         "protocol": "inquirer-ai",
         "version": version("inquirer-ai"),
         "format": "jsonl",
         "interaction": "sequential",
+        "total": None,
         "description": (
             "Interactive prompt protocol. Prompts are sent one at a time — "
             "read one JSON line from stdout, respond with one JSON line on stdin, "
@@ -35,8 +65,25 @@ def _send_agent_handshake() -> None:
         ),
         "example_response": {"answer": "<value>"},
     }
-    sys.stdout.write(json.dumps(meta, ensure_ascii=False) + "\n")
-    sys.stdout.flush()
+    out = _get_agent_out()
+    out.write(json.dumps(meta, ensure_ascii=False) + "\n")
+    out.flush()
+
+    # Read handshake ack or early answer
+    agent_in = _get_agent_in()
+    line = agent_in.readline()
+    if line:
+        try:
+            parsed: dict[str, Any] = json.loads(line)  # pyright: ignore[reportUnknownVariableType]
+            if isinstance(parsed, dict):  # pyright: ignore[reportUnnecessaryIsInstance]
+                if parsed.get("kind") == "handshake_ack":
+                    _agent_handshake_ack = parsed
+                elif "answer" in parsed:
+                    # Push back as first answer
+                    _agent_pushback_line = line
+                # else: ignore unrecognized JSON
+        except json.JSONDecodeError:
+            pass  # ignore invalid JSON during handshake
 
 
 class BasePrompt(ABC, Generic[T]):
@@ -70,29 +117,62 @@ class BasePrompt(ABC, Generic[T]):
 
     def _to_agent_dict(self) -> dict[str, Any]:
         return {
+            "kind": "prompt",
             "type": self.prompt_type,
             "message": self.message,
             "default": self.default,
+            "step": _agent_step,
+            "total": None,
         }
 
+    def _read_agent_line(self) -> str:
+        global _agent_pushback_line
+        if _agent_pushback_line is not None:
+            line = _agent_pushback_line
+            _agent_pushback_line = None
+            return line
+        agent_in = _get_agent_in()
+        return agent_in.readline()
+
     def _execute_agent(self) -> T:
+        global _agent_step
         _send_agent_handshake()
-        payload = self._to_agent_dict()
-        sys.stdout.write(json.dumps(payload, ensure_ascii=False) + "\n")
-        sys.stdout.flush()
-        line = sys.stdin.readline()
-        if not line:
-            raise PromptAbortedError('No response received (stdin closed). Expected JSON like: {"answer": "<value>"}')
-        try:
-            response = json.loads(line)
-        except json.JSONDecodeError as e:
-            raise ValidationError(f'Invalid JSON response: {e}. Expected JSON like: {{"answer": "<value>"}}') from e
-        if not isinstance(response, dict) or "answer" not in response:
-            raise ValidationError(
-                f'Response must be a JSON object with an "answer" key, '
-                f'e.g. {{"answer": "<value>"}}. Got: {line.strip()}'
-            )
-        return self._validate_answer(response["answer"])  # pyright: ignore[reportUnknownArgumentType]
+        _agent_step += 1
+
+        for attempt in range(_MAX_VALIDATION_RETRIES):
+            out = _get_agent_out()
+            payload = self._to_agent_dict()
+            out.write(json.dumps(payload, ensure_ascii=False) + "\n")
+            out.flush()
+
+            line = self._read_agent_line()
+            if not line:
+                msg = 'No response received (stdin closed). Expected JSON like: {"answer": "<value>"}'
+                out2 = _get_agent_out()
+                out2.write(json.dumps({"kind": "error", "message": msg}, ensure_ascii=False) + "\n")
+                out2.flush()
+                raise PromptAbortedError(msg)
+            try:
+                response = json.loads(line)
+            except json.JSONDecodeError as e:
+                raise ValidationError(f'Invalid JSON response: {e}. Expected JSON like: {{"answer": "<value>"}}') from e
+            if not isinstance(response, dict) or "answer" not in response:
+                raise ValidationError(
+                    f'Response must be a JSON object with an "answer" key, '
+                    f'e.g. {{"answer": "<value>"}}. Got: {line.strip()}'
+                )
+            try:
+                return self._validate_answer(response["answer"])  # pyright: ignore[reportUnknownArgumentType]
+            except ValidationError as e:
+                if attempt < _MAX_VALIDATION_RETRIES - 1:
+                    out3 = _get_agent_out()
+                    out3.write(json.dumps({"kind": "validation_error", "message": str(e)}, ensure_ascii=False) + "\n")
+                    out3.flush()
+                    continue
+                raise
+
+        # Should not reach here, but satisfy type checker
+        raise ValidationError("Maximum validation retries exceeded")  # pragma: no cover
 
     def _run_user_validation(self, value: T) -> str | None:
         if not self.validate_fn:
@@ -109,6 +189,7 @@ class BasePrompt(ABC, Generic[T]):
 
         agent = is_agent_mode()
 
+        retries = 0
         while True:
             try:
                 result = self._execute_agent() if agent else self._execute_terminal()
@@ -121,7 +202,13 @@ class BasePrompt(ABC, Generic[T]):
             error = self._run_user_validation(result)
             if error:
                 if agent:
-                    raise ValidationError(error)
+                    retries += 1
+                    if retries >= _MAX_VALIDATION_RETRIES:
+                        raise ValidationError(error)
+                    out = _get_agent_out()
+                    out.write(json.dumps({"kind": "validation_error", "message": error}, ensure_ascii=False) + "\n")
+                    out.flush()
+                    continue
                 t = get_theme()
                 print(f"{t.ansi(t.error)}  {error}{RESET}")
                 continue
@@ -133,24 +220,54 @@ class BasePrompt(ABC, Generic[T]):
 
             return result
 
+    async def _read_agent_line_async(self) -> str:
+        global _agent_pushback_line
+        if _agent_pushback_line is not None:
+            line = _agent_pushback_line
+            _agent_pushback_line = None
+            return line
+        agent_in = _get_agent_in()
+        return await asyncio.get_running_loop().run_in_executor(None, agent_in.readline)
+
     async def _execute_agent_async(self) -> T:
+        global _agent_step
         _send_agent_handshake()
-        payload = self._to_agent_dict()
-        sys.stdout.write(json.dumps(payload, ensure_ascii=False) + "\n")
-        sys.stdout.flush()
-        line = await asyncio.get_running_loop().run_in_executor(None, sys.stdin.readline)
-        if not line:
-            raise PromptAbortedError('No response received (stdin closed). Expected JSON like: {"answer": "<value>"}')
-        try:
-            response = json.loads(line)
-        except json.JSONDecodeError as e:
-            raise ValidationError(f'Invalid JSON response: {e}. Expected JSON like: {{"answer": "<value>"}}') from e
-        if not isinstance(response, dict) or "answer" not in response:
-            raise ValidationError(
-                f'Response must be a JSON object with an "answer" key, '
-                f'e.g. {{"answer": "<value>"}}. Got: {line.strip()}'
-            )
-        return self._validate_answer(response["answer"])  # pyright: ignore[reportUnknownArgumentType]
+        _agent_step += 1
+
+        for attempt in range(_MAX_VALIDATION_RETRIES):
+            out = _get_agent_out()
+            payload = self._to_agent_dict()
+            out.write(json.dumps(payload, ensure_ascii=False) + "\n")
+            out.flush()
+
+            line = await self._read_agent_line_async()
+            if not line:
+                msg = 'No response received (stdin closed). Expected JSON like: {"answer": "<value>"}'
+                out2 = _get_agent_out()
+                out2.write(json.dumps({"kind": "error", "message": msg}, ensure_ascii=False) + "\n")
+                out2.flush()
+                raise PromptAbortedError(msg)
+            try:
+                response = json.loads(line)
+            except json.JSONDecodeError as e:
+                raise ValidationError(f'Invalid JSON response: {e}. Expected JSON like: {{"answer": "<value>"}}') from e
+            if not isinstance(response, dict) or "answer" not in response:
+                raise ValidationError(
+                    f'Response must be a JSON object with an "answer" key, '
+                    f'e.g. {{"answer": "<value>"}}. Got: {line.strip()}'
+                )
+            try:
+                return self._validate_answer(response["answer"])  # pyright: ignore[reportUnknownArgumentType]
+            except ValidationError as e:
+                if attempt < _MAX_VALIDATION_RETRIES - 1:
+                    out3 = _get_agent_out()
+                    out3.write(json.dumps({"kind": "validation_error", "message": str(e)}, ensure_ascii=False) + "\n")
+                    out3.flush()
+                    continue
+                raise
+
+        # Should not reach here, but satisfy type checker
+        raise ValidationError("Maximum validation retries exceeded")  # pragma: no cover
 
     async def _execute_terminal_async(self) -> T:
         return self._execute_terminal()
@@ -160,6 +277,7 @@ class BasePrompt(ABC, Generic[T]):
 
         agent = is_agent_mode()
 
+        retries = 0
         while True:
             try:
                 result = await self._execute_agent_async() if agent else await self._execute_terminal_async()
@@ -172,7 +290,13 @@ class BasePrompt(ABC, Generic[T]):
             error = self._run_user_validation(result)
             if error:
                 if agent:
-                    raise ValidationError(error)
+                    retries += 1
+                    if retries >= _MAX_VALIDATION_RETRIES:
+                        raise ValidationError(error)
+                    out = _get_agent_out()
+                    out.write(json.dumps({"kind": "validation_error", "message": error}, ensure_ascii=False) + "\n")
+                    out.flush()
+                    continue
                 t = get_theme()
                 print(f"{t.ansi(t.error)}  {error}{RESET}")
                 continue

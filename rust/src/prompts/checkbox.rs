@@ -1,4 +1,4 @@
-use crate::agent::{agent_receive, agent_send};
+use crate::agent::{agent_receive, agent_send, agent_send_validation_error};
 use crate::choice::{Choice, ChoiceItem};
 use crate::errors::{InquirerError, Result};
 use crate::mode::is_agent_mode;
@@ -51,6 +51,7 @@ pub fn checkbox(config: CheckboxConfig) -> Result<Vec<Value>> {
 }
 
 fn checkbox_agent(config: &CheckboxConfig, enabled: &[&Choice]) -> Result<Vec<Value>> {
+    const MAX_RETRIES: usize = 3;
     let choices_json: Vec<Value> = config.choices.iter().map(|c| c.to_json()).collect();
     let payload = json!({
         "type": "checkbox",
@@ -58,37 +59,58 @@ fn checkbox_agent(config: &CheckboxConfig, enabled: &[&Choice]) -> Result<Vec<Va
         "default": config.default,
         "choices": choices_json,
     });
-    agent_send(&payload)?;
-    let answer = agent_receive()?;
 
-    let arr = answer
-        .as_array()
-        .ok_or_else(|| InquirerError::Validation(format!("Expected an array, got {answer}")))?;
+    for attempt in 0..MAX_RETRIES {
+        agent_send(&payload)?;
+        let answer = agent_receive()?;
 
-    let valid_values: std::collections::HashSet<&Value> =
-        enabled.iter().map(|c| &c.value).collect();
-    let valid_names: std::collections::HashSet<&str> =
-        enabled.iter().map(|c| c.name.as_str()).collect();
-
-    let mut result = Vec::new();
-    for v in arr {
-        if valid_values.contains(v) {
-            result.push(v.clone());
-        } else if let Some(name) = v.as_str() {
-            if valid_names.contains(name) {
-                let choice = enabled.iter().find(|c| c.name == name).unwrap();
-                result.push(choice.value.clone());
-            } else {
-                return Err(InquirerError::Validation(format!(
-                    "Invalid choice: {v}. Valid: {valid_values:?}"
-                )));
+        let arr = match answer.as_array() {
+            Some(a) => a,
+            None => {
+                let msg = format!("Expected an array, got {answer}");
+                if attempt + 1 < MAX_RETRIES {
+                    agent_send_validation_error(&msg)?;
+                    continue;
+                }
+                return Err(InquirerError::Validation(msg));
             }
-        } else {
-            return Err(InquirerError::Validation(format!("Invalid choice: {v}")));
-        }
-    }
+        };
 
-    Ok(result)
+        let valid_values: std::collections::HashSet<&Value> =
+            enabled.iter().map(|c| &c.value).collect();
+        let valid_names: std::collections::HashSet<&str> =
+            enabled.iter().map(|c| c.name.as_str()).collect();
+
+        let mut result = Vec::new();
+        let mut validation_err = None;
+        for v in arr {
+            if valid_values.contains(v) {
+                result.push(v.clone());
+            } else if let Some(name) = v.as_str() {
+                if valid_names.contains(name) {
+                    let choice = enabled.iter().find(|c| c.name == name).unwrap();
+                    result.push(choice.value.clone());
+                } else {
+                    validation_err = Some(format!("Invalid choice: {v}. Valid: {valid_values:?}"));
+                    break;
+                }
+            } else {
+                validation_err = Some(format!("Invalid choice: {v}"));
+                break;
+            }
+        }
+
+        if let Some(msg) = validation_err {
+            if attempt + 1 < MAX_RETRIES {
+                agent_send_validation_error(&msg)?;
+                continue;
+            }
+            return Err(InquirerError::Validation(msg));
+        }
+
+        return Ok(result);
+    }
+    unreachable!()
 }
 
 fn checkbox_terminal(config: &CheckboxConfig) -> Result<Vec<Value>> {

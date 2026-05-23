@@ -40,6 +40,7 @@ class TestTextAgentProtocol:
         """
         prompts = _run_agent_script(script, [{"answer": "Alice"}])
         assert prompts[0]["type"] == "input"
+        assert prompts[0]["kind"] == "prompt"
         assert prompts[0]["message"] == "What is your name?"
         assert prompts[1]["result"] == "Alice"
 
@@ -65,6 +66,7 @@ class TestConfirmAgentProtocol:
         """
         prompts = _run_agent_script(script, [{"answer": True}])
         assert prompts[0]["type"] == "confirm"
+        assert prompts[0]["kind"] == "prompt"
         assert prompts[0]["message"] == "Continue?"
         assert prompts[1]["result"] is True
 
@@ -99,6 +101,7 @@ class TestSelectAgentProtocol:
         """
         prompts = _run_agent_script(script, [{"answer": "b"}])
         assert prompts[0]["type"] == "select"
+        assert prompts[0]["kind"] == "prompt"
         assert prompts[0]["choices"] == [
             {"name": "a", "value": "a"},
             {"name": "b", "value": "b"},
@@ -128,6 +131,7 @@ class TestCheckboxAgentProtocol:
         """
         prompts = _run_agent_script(script, [{"answer": ["x", "z"]}])
         assert prompts[0]["type"] == "checkbox"
+        assert prompts[0]["kind"] == "prompt"
         assert prompts[1]["result"] == ["x", "z"]
 
     def test_checkbox_empty_selection(self):
@@ -153,6 +157,7 @@ class TestFilterAndValidate:
         assert prompts[1]["result"] == "ALICE"
 
     def test_validation_failure_raises(self):
+        """After 3 bad answers, ValidationError should be raised."""
         script = """\
         import inquirer_ai, sys
         try:
@@ -160,8 +165,23 @@ class TestFilterAndValidate:
         except inquirer_ai.ValidationError as e:
             sys.stdout.write('{"error": "' + str(e) + '"}\\n')
         """
-        prompts = _run_agent_script(script, [{"answer": "ab"}])
+        # Provide 3 bad answers to exhaust retries
+        prompts = _run_agent_script(script, [{"answer": "ab"}, {"answer": "x"}, {"answer": "no"}])
         assert "Too short" in prompts[-1].get("error", "")
+
+    def test_validation_retry_then_success(self):
+        """After a bad answer, a corrected answer should succeed."""
+        script = """\
+        import inquirer_ai, json, sys
+        answer = inquirer_ai.text("Name?", validate=lambda v: len(v) >= 3 or "Too short")
+        sys.stdout.write(json.dumps({"result": answer}) + "\\n")
+        """
+        # First answer bad, second answer good
+        prompts = _run_agent_script(script, [{"answer": "ab"}, {"answer": "Alice"}])
+        # Should have: prompt, validation_error, prompt, result
+        validation_errors = [p for p in prompts if p.get("kind") == "validation_error"]
+        assert len(validation_errors) >= 1
+        assert prompts[-1]["result"] == "Alice"
 
 
 class TestMultiPromptSequence:
@@ -174,7 +194,9 @@ class TestMultiPromptSequence:
         """
         prompts = _run_agent_script(script, [{"answer": "Eve"}, {"answer": True}])
         assert prompts[0]["type"] == "input"
+        assert prompts[0]["kind"] == "prompt"
         assert prompts[1]["type"] == "confirm"
+        assert prompts[1]["kind"] == "prompt"
         assert prompts[2] == {"name": "Eve", "ok": True}
 
 
@@ -186,9 +208,11 @@ class TestHandshake:
         """
         lines = _run_agent_script_raw(script, [{"answer": "x"}])
         handshake = lines[0]
+        assert handshake["kind"] == "handshake"
         assert handshake["protocol"] == "inquirer-ai"
-        assert handshake["version"] == "0.1.0"
+        assert handshake["version"] == "0.2.0"
         assert handshake["format"] == "jsonl"
+        assert handshake["total"] is None
         assert "answer" in str(handshake["example_response"])
 
     def test_handshake_sent_only_once(self):
@@ -200,3 +224,27 @@ class TestHandshake:
         lines = _run_agent_script_raw(script, [{"answer": "x"}, {"answer": "y"}])
         protocol_lines = [line for line in lines if line.get("protocol") == "inquirer-ai"]
         assert len(protocol_lines) == 1
+
+    def test_handshake_ack(self):
+        """If the agent sends a handshake_ack, it should be consumed, not treated as an answer."""
+        script = """\
+        import inquirer_ai, json, sys
+        answer = inquirer_ai.text("Hi?")
+        sys.stdout.write(json.dumps({"result": answer}) + "\\n")
+        """
+        lines = _run_agent_script_raw(script, [{"kind": "handshake_ack"}, {"answer": "hello"}])
+        # handshake_ack should be consumed, "hello" should be the actual answer
+        result_lines = [line for line in lines if "result" in line]
+        assert result_lines[0]["result"] == "hello"
+
+    def test_step_counter(self):
+        """Prompts should have incrementing step counters."""
+        script = """\
+        import inquirer_ai, json, sys
+        inquirer_ai.text("A?")
+        inquirer_ai.text("B?")
+        """
+        lines = _run_agent_script_raw(script, [{"answer": "x"}, {"answer": "y"}])
+        prompts = [line for line in lines if line.get("kind") == "prompt"]
+        assert prompts[0]["step"] == 1
+        assert prompts[1]["step"] == 2

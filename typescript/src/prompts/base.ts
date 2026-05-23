@@ -1,7 +1,9 @@
 import { isAgentMode } from "../mode.js";
-import { agentSend, agentReceive } from "../agent.js";
+import { agentSend, agentReceive, agentSendValidationError } from "../agent.js";
 import { PromptAbortedError, ValidationError } from "../errors.js";
 import { formatSuccess } from "../terminal.js";
+
+const MAX_AGENT_RETRIES = 3;
 
 export type ValidateFn<T> = (value: T) => boolean | string | null | undefined;
 export type FilterFn<T> = (value: T) => T;
@@ -47,16 +49,28 @@ export abstract class BasePrompt<T> {
   }
 
   protected async executeAgent(): Promise<T> {
-    agentSend(this.toAgentDict());
-    let answer: unknown;
-    try {
-      answer = await agentReceive();
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      if (msg.includes("stdin closed")) throw new PromptAbortedError(msg);
-      throw new ValidationError(msg);
+    for (let attempt = 0; attempt <= MAX_AGENT_RETRIES; attempt++) {
+      await agentSend(this.toAgentDict());
+      let answer: unknown;
+      try {
+        answer = await agentReceive();
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        if (msg.includes("stdin closed")) throw new PromptAbortedError(msg);
+        throw new ValidationError(msg);
+      }
+      try {
+        return this.validateAnswer(answer);
+      } catch (err) {
+        if (err instanceof ValidationError && attempt < MAX_AGENT_RETRIES) {
+          agentSendValidationError(err.message);
+          continue;
+        }
+        throw err;
+      }
     }
-    return this.validateAnswer(answer);
+    // Should not reach here, but satisfy TypeScript
+    throw new ValidationError("Maximum validation retries exceeded");
   }
 
   protected runUserValidation(value: T): string | null {
@@ -69,6 +83,7 @@ export abstract class BasePrompt<T> {
 
   async execute(): Promise<T> {
     const agent = isAgentMode();
+    let userValidationRetries = 0;
 
     while (true) {
       let result: T;
@@ -86,7 +101,14 @@ export abstract class BasePrompt<T> {
 
       const error = this.runUserValidation(result);
       if (error) {
-        if (agent) throw new ValidationError(error);
+        if (agent) {
+          userValidationRetries++;
+          if (userValidationRetries > MAX_AGENT_RETRIES) {
+            throw new ValidationError(error);
+          }
+          agentSendValidationError(error);
+          continue;
+        }
         process.stderr.write(
           `\x1b[38;2;215;119;128m  ${error}\x1b[0m\n`,
         );

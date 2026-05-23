@@ -45,7 +45,9 @@ def test_agent_mode_by_name(monkeypatch):
 
 def test_agent_mode_invalid_choice(monkeypatch):
     monkeypatch.setenv("INQUIRER_AI_MODE", "agent")
-    stdin = io.StringIO(json.dumps({"answer": "Oracle"}) + "\n")
+    # Provide 3 bad answers to exhaust retries
+    lines = "".join(json.dumps({"answer": "Oracle"}) + "\n" for _ in range(3))
+    stdin = io.StringIO(lines)
     stdout = io.StringIO()
     monkeypatch.setattr("sys.stdin", stdin)
     monkeypatch.setattr("sys.stdout", stdout)

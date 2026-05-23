@@ -1,4 +1,4 @@
-use crate::agent::{agent_receive, agent_send};
+use crate::agent::{agent_receive, agent_send, agent_send_validation_error};
 use crate::errors::{InquirerError, Result};
 use crate::mode::is_agent_mode;
 use crate::terminal::{format_question, format_success, read_line};
@@ -41,23 +41,32 @@ fn validate_answer(value: &Value, default: &Option<String>) -> String {
 }
 
 fn text_agent(config: &TextConfig) -> Result<String> {
+    const MAX_RETRIES: usize = 3;
     let payload = json!({
         "type": "input",
         "message": config.message,
         "default": config.default,
     });
-    agent_send(&payload)?;
-    let answer = agent_receive()?;
-    let mut result = validate_answer(&answer, &config.default);
-    if let Some(f) = &config.filter {
-        result = f(result);
-    }
-    if let Some(v) = &config.validate {
-        if let Err(msg) = v(&result) {
-            return Err(InquirerError::Validation(msg));
+
+    for attempt in 0..MAX_RETRIES {
+        agent_send(&payload)?;
+        let answer = agent_receive()?;
+        let mut result = validate_answer(&answer, &config.default);
+        if let Some(f) = &config.filter {
+            result = f(result);
         }
+        if let Some(v) = &config.validate {
+            if let Err(msg) = v(&result) {
+                if attempt + 1 < MAX_RETRIES {
+                    agent_send_validation_error(&msg)?;
+                    continue;
+                }
+                return Err(InquirerError::Validation(msg));
+            }
+        }
+        return Ok(result);
     }
-    Ok(result)
+    unreachable!()
 }
 
 fn text_terminal(config: &TextConfig) -> Result<String> {

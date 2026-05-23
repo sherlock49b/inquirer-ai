@@ -34,13 +34,11 @@ func Expand(cfg ExpandConfig) (any, error) {
 		seen[k] = true
 	}
 
-	var result any
-	var err error
 	if IsAgentMode() {
-		result, err = expandAgent(cfg)
-	} else {
-		result, err = expandTerminal(cfg)
+		// expandAgent handles validation, filter, and retry internally
+		return expandAgent(cfg)
 	}
+	result, err := expandTerminal(cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -48,30 +46,55 @@ func Expand(cfg ExpandConfig) (any, error) {
 }
 
 func expandAgent(cfg ExpandConfig) (any, error) {
-	items := make([]map[string]any, len(cfg.Choices))
-	for i, c := range cfg.Choices {
-		items[i] = map[string]any{"key": strings.ToLower(c.Key), "name": c.Name, "value": c.Value}
-	}
-	payload := map[string]any{
-		"type":    "expand",
-		"message": cfg.Message,
-		"choices": items,
-	}
-	if err := AgentSend(payload); err != nil {
-		return nil, err
-	}
-	answer, err := AgentReceive()
-	if err != nil {
-		return nil, err
-	}
-	s := toString(answer)
-	lower := strings.ToLower(s)
-	for _, c := range cfg.Choices {
-		if lower == strings.ToLower(c.Key) || s == toString(c.Value) || s == c.Name {
-			return c.Value, nil
+	const maxRetries = 3
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		items := make([]map[string]any, len(cfg.Choices))
+		for i, c := range cfg.Choices {
+			items[i] = map[string]any{"key": strings.ToLower(c.Key), "name": c.Name, "value": c.Value}
 		}
+		payload := map[string]any{
+			"type":    "expand",
+			"message": cfg.Message,
+			"choices": items,
+		}
+		if err := AgentSend(payload); err != nil {
+			return nil, err
+		}
+		answer, err := AgentReceive()
+		if err != nil {
+			return nil, err
+		}
+		s := toString(answer)
+		lower := strings.ToLower(s)
+		var matched any
+		found := false
+		for _, c := range cfg.Choices {
+			if lower == strings.ToLower(c.Key) || s == toString(c.Value) || s == c.Name {
+				matched = c.Value
+				found = true
+				break
+			}
+		}
+		if !found {
+			choiceErr := fmt.Errorf("%w: %q", ErrInvalidChoice, s)
+			if attempt < maxRetries-1 {
+				AgentSendValidationError(choiceErr.Error())
+				continue
+			}
+			return nil, choiceErr
+		}
+
+		result, err := applyCallbacks(matched, cfg.Validate, cfg.Filter)
+		if err != nil {
+			if attempt < maxRetries-1 {
+				AgentSendValidationError(err.Error())
+				continue
+			}
+			return nil, err
+		}
+		return result, nil
 	}
-	return nil, fmt.Errorf("%w: %q", ErrInvalidChoice, s)
+	return nil, fmt.Errorf("%w: max retries exceeded", ErrValidation)
 }
 
 func expandTerminal(cfg ExpandConfig) (any, error) {

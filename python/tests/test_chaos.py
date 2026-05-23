@@ -14,13 +14,16 @@ from inquirer_ai.prompts.password import PasswordPrompt
 from inquirer_ai.prompts.select import SelectPrompt
 from inquirer_ai.prompts.text import TextPrompt
 
+# Handshake ack line to prefix stdin so the handshake consumes it cleanly
+_HS_ACK = json.dumps({"kind": "handshake_ack"}) + "\n"
+
 # ── Malformed JSON in agent mode ──
 
 
 class TestMalformedAgentInput:
     def _run(self, monkeypatch, prompt, stdin_text):
         monkeypatch.setenv("INQUIRER_AI_MODE", "agent")
-        monkeypatch.setattr("sys.stdin", io.StringIO(stdin_text))
+        monkeypatch.setattr("sys.stdin", io.StringIO(_HS_ACK + stdin_text))
         monkeypatch.setattr("sys.stdout", io.StringIO())
         return prompt.execute()
 
@@ -149,7 +152,9 @@ class TestChoiceBoundaries:
 
     def test_select_agent_rejects_disabled_choice_value(self, monkeypatch):
         monkeypatch.setenv("INQUIRER_AI_MODE", "agent")
-        monkeypatch.setattr("sys.stdin", io.StringIO(json.dumps({"answer": "d"}) + "\n"))
+        # Provide 3 bad answers to exhaust retries
+        lines = "".join(json.dumps({"answer": "d"}) + "\n" for _ in range(3))
+        monkeypatch.setattr("sys.stdin", io.StringIO(lines))
         monkeypatch.setattr("sys.stdout", io.StringIO())
         p = SelectPrompt("q", choices=["a", Choice("Disabled", "d", disabled=True)])
         with pytest.raises(ValidationError):
@@ -157,7 +162,9 @@ class TestChoiceBoundaries:
 
     def test_checkbox_agent_rejects_disabled_choice_value(self, monkeypatch):
         monkeypatch.setenv("INQUIRER_AI_MODE", "agent")
-        monkeypatch.setattr("sys.stdin", io.StringIO(json.dumps({"answer": ["d"]}) + "\n"))
+        # Provide 3 bad answers to exhaust retries
+        lines = "".join(json.dumps({"answer": ["d"]}) + "\n" for _ in range(3))
+        monkeypatch.setattr("sys.stdin", io.StringIO(lines))
         monkeypatch.setattr("sys.stdout", io.StringIO())
         p = CheckboxPrompt("q", choices=["a", Choice("Disabled", "d", disabled=True)])
         with pytest.raises(ValidationError):
@@ -174,13 +181,21 @@ class TestNumberEdgeCases:
         monkeypatch.setattr("sys.stdout", io.StringIO())
         return prompt.execute()
 
+    def _agent_exec_retry(self, monkeypatch, prompt, answer, retries=3):
+        """Provide the same bad answer multiple times to exhaust retries."""
+        monkeypatch.setenv("INQUIRER_AI_MODE", "agent")
+        lines = "".join(json.dumps({"answer": answer}) + "\n" for _ in range(retries))
+        monkeypatch.setattr("sys.stdin", io.StringIO(lines))
+        monkeypatch.setattr("sys.stdout", io.StringIO())
+        return prompt.execute()
+
     def test_bool_true_rejected(self, monkeypatch):
         with pytest.raises(ValidationError, match="Expected a number"):
-            self._agent_exec(monkeypatch, NumberPrompt("q"), True)
+            self._agent_exec_retry(monkeypatch, NumberPrompt("q"), True)
 
     def test_bool_false_rejected(self, monkeypatch):
         with pytest.raises(ValidationError, match="Expected a number"):
-            self._agent_exec(monkeypatch, NumberPrompt("q"), False)
+            self._agent_exec_retry(monkeypatch, NumberPrompt("q"), False)
 
     def test_string_float(self, monkeypatch):
         result = self._agent_exec(monkeypatch, NumberPrompt("q"), "3.14")
@@ -200,7 +215,7 @@ class TestNumberEdgeCases:
 
     def test_min_equals_max_reject(self, monkeypatch):
         with pytest.raises(ValidationError):
-            self._agent_exec(monkeypatch, NumberPrompt("q", min=5, max=5), 4)
+            self._agent_exec_retry(monkeypatch, NumberPrompt("q", min=5, max=5), 4)
 
     def test_float_whole_number_converted_to_int(self, monkeypatch):
         result = self._agent_exec(monkeypatch, NumberPrompt("q", float_allowed=False), 7.0)
@@ -209,7 +224,7 @@ class TestNumberEdgeCases:
 
     def test_none_without_default_raises(self, monkeypatch):
         with pytest.raises(ValidationError, match="Expected a number"):
-            self._agent_exec(monkeypatch, NumberPrompt("q"), None)
+            self._agent_exec_retry(monkeypatch, NumberPrompt("q"), None)
 
 
 # ── Expand edge cases ──

@@ -124,8 +124,8 @@ func TestIntegrationHandshakeFirst(t *testing.T) {
 	if hs["protocol"] != "inquirer-ai" {
 		t.Fatalf("first line should be handshake, got %v", hs)
 	}
-	if hs["version"] != "0.1.0" {
-		t.Fatalf("expected version 0.1.0, got %v", hs["version"])
+	if hs["version"] != "0.2.0" {
+		t.Fatalf("expected version 0.2.0, got %v", hs["version"])
 	}
 	if hs["format"] != "jsonl" {
 		t.Fatalf("expected format jsonl, got %v", hs["format"])
