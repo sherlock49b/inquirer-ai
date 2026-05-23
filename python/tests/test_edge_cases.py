@@ -45,9 +45,12 @@ class TestMultiPromptErrorRecovery:
     def test_third_prompt_bad_input_after_two_good(self, monkeypatch):
         monkeypatch.setenv("INQUIRER_AI_MODE", "agent")
         lines = (
-            json.dumps({"answer": "Alice"}) + "\n"
-            + json.dumps({"answer": True}) + "\n"
-            + json.dumps({"answer": []}) + "\n"  # array for text prompt
+            json.dumps({"answer": "Alice"})
+            + "\n"
+            + json.dumps({"answer": True})
+            + "\n"
+            + json.dumps({"answer": []})
+            + "\n"  # array for text prompt
         )
         monkeypatch.setattr("sys.stdin", io.StringIO(lines))
         monkeypatch.setattr("sys.stdout", io.StringIO())
@@ -78,10 +81,7 @@ class TestHandshakeDefense:
         """If agent treats handshake as a prompt and sends {"answer": ...},
         that response will be consumed by the actual first prompt."""
         monkeypatch.setenv("INQUIRER_AI_MODE", "agent")
-        lines = (
-            json.dumps({"answer": "handshake_response"}) + "\n"
-            + json.dumps({"answer": "real_answer"}) + "\n"
-        )
+        lines = json.dumps({"answer": "handshake_response"}) + "\n" + json.dumps({"answer": "real_answer"}) + "\n"
         monkeypatch.setattr("sys.stdin", io.StringIO(lines))
         monkeypatch.setattr("sys.stdout", io.StringIO())
 
