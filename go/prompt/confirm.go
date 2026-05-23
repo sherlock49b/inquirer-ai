@@ -7,11 +7,13 @@ import (
 	"strings"
 )
 
+// ConfirmConfig configures a yes/no confirmation prompt.
 type ConfirmConfig struct {
 	Message string
 	Default bool
 }
 
+// Confirm prompts for a yes/no answer.
 func Confirm(cfg ConfirmConfig) (bool, error) {
 	if IsAgentMode() {
 		return confirmAgent(cfg)

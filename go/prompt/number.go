@@ -8,6 +8,7 @@ import (
 	"strconv"
 )
 
+// NumberConfig configures a numeric input prompt with optional bounds.
 type NumberConfig struct {
 	Message      string
 	Default      *float64
@@ -16,6 +17,7 @@ type NumberConfig struct {
 	FloatAllowed bool
 }
 
+// Number prompts for a numeric value, validating against optional min/max bounds.
 func Number(cfg NumberConfig) (float64, error) {
 	if IsAgentMode() {
 		return numberAgent(cfg)

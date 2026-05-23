@@ -6,6 +6,7 @@ import (
 	"os"
 )
 
+// AutocompleteConfig configures a text input prompt with suggestion completions.
 type AutocompleteConfig struct {
 	Message  string
 	Choices  []string
@@ -13,6 +14,8 @@ type AutocompleteConfig struct {
 	Validate func(string) error
 }
 
+// Autocomplete prompts for text input with auto-completion suggestions.
+// Accepts any string, not constrained to the suggestion list.
 func Autocomplete(cfg AutocompleteConfig) (string, error) {
 	if IsAgentMode() {
 		return autocompleteAgent(cfg)

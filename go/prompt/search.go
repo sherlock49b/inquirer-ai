@@ -4,12 +4,14 @@ import (
 	"fmt"
 )
 
+// SearchConfig configures a searchable selection prompt with a dynamic source.
 type SearchConfig struct {
 	Message  string
 	Source   func(term string) []ChoiceItem
 	PageSize int
 }
 
+// Search prompts the user to select from a dynamically filtered list.
 func Search(cfg SearchConfig) (any, error) {
 	if cfg.PageSize == 0 {
 		cfg.PageSize = 10

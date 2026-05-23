@@ -8,12 +8,14 @@ import (
 	"golang.org/x/term"
 )
 
+// PasswordConfig configures a masked password input prompt.
 type PasswordConfig struct {
 	Message  string
 	Mask     string
 	Validate func(string) error
 }
 
+// Password prompts for sensitive text input with masked display.
 func Password(cfg PasswordConfig) (string, error) {
 	if cfg.Mask == "" {
 		cfg.Mask = "*"

@@ -6,12 +6,14 @@ import (
 	"os/exec"
 )
 
+// EditorConfig configures an editor-based text input prompt.
 type EditorConfig struct {
 	Message string
 	Default string
 	Postfix string
 }
 
+// Editor opens the user's preferred editor ($VISUAL or $EDITOR) for multi-line text input.
 func Editor(cfg EditorConfig) (string, error) {
 	if cfg.Postfix == "" {
 		cfg.Postfix = ".txt"

@@ -7,11 +7,13 @@ import (
 	"strconv"
 )
 
+// RawlistConfig configures a numbered list selection prompt.
 type RawlistConfig struct {
 	Message string
 	Choices []ChoiceItem
 }
 
+// Rawlist prompts the user to select by typing a number index.
 func Rawlist(cfg RawlistConfig) (any, error) {
 	choices := parseChoices(cfg.Choices)
 	selectable := selectableIndices(choices)

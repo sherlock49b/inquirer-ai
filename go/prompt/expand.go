@@ -7,17 +7,20 @@ import (
 	"strings"
 )
 
+// ExpandChoice represents a single option in an expand prompt, identified by a key character.
 type ExpandChoice struct {
 	Key   string
 	Name  string
 	Value any
 }
 
+// ExpandConfig configures a compact key-based selection prompt.
 type ExpandConfig struct {
 	Message string
 	Choices []ExpandChoice
 }
 
+// Expand prompts the user to select by typing a single key character.
 func Expand(cfg ExpandConfig) (any, error) {
 	if len(cfg.Choices) == 0 {
 		return nil, fmt.Errorf("%w: choices cannot be empty", ErrInvalidChoice)

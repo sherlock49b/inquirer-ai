@@ -1,5 +1,6 @@
 package prompt
 
+// Theme controls the symbols used in terminal prompt rendering.
 type Theme struct {
 	SymQuestion  string
 	SymSuccess   string
@@ -8,6 +9,7 @@ type Theme struct {
 	SymUnchecked string
 }
 
+// DefaultTheme is the default set of symbols for prompt rendering.
 var DefaultTheme = Theme{
 	SymQuestion:  "?",
 	SymSuccess:   "✓",

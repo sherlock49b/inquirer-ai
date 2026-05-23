@@ -4,6 +4,7 @@ import (
 	"fmt"
 )
 
+// SelectConfig configures a single-choice selection prompt.
 type SelectConfig struct {
 	Message  string
 	Choices  []ChoiceItem
@@ -11,6 +12,7 @@ type SelectConfig struct {
 	PageSize int
 }
 
+// Select prompts the user to pick one item from a list.
 func Select(cfg SelectConfig) (any, error) {
 	if cfg.PageSize == 0 {
 		cfg.PageSize = 10

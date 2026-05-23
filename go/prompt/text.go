@@ -6,6 +6,7 @@ import (
 	"os"
 )
 
+// TextConfig configures a free-text input prompt.
 type TextConfig struct {
 	Message  string
 	Default  string
@@ -13,6 +14,7 @@ type TextConfig struct {
 	Filter   func(string) string
 }
 
+// Text prompts for a single line of text input.
 func Text(cfg TextConfig) (string, error) {
 	if IsAgentMode() {
 		return textAgent(cfg)

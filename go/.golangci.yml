@@ -10,9 +10,10 @@ linters:
     - unused
     - gosimple
     - gocritic
+    - gofmt
+    - goimports
     - misspell
     - revive
-    - exportloopref
 
 linters-settings:
   gocritic:

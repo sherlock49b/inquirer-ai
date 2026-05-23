@@ -2,6 +2,7 @@ package prompt
 
 import "fmt"
 
+// CheckboxConfig configures a multi-select checkbox prompt.
 type CheckboxConfig struct {
 	Message  string
 	Choices  []ChoiceItem
@@ -9,6 +10,7 @@ type CheckboxConfig struct {
 	PageSize int
 }
 
+// Checkbox prompts the user to select multiple items from a list.
 func Checkbox(cfg CheckboxConfig) ([]any, error) {
 	if cfg.PageSize == 0 {
 		cfg.PageSize = 10

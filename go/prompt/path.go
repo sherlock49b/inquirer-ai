@@ -8,6 +8,7 @@ import (
 	"strings"
 )
 
+// PathConfig configures a file/directory path input prompt.
 type PathConfig struct {
 	Message         string
 	Default         string
@@ -15,6 +16,7 @@ type PathConfig struct {
 	Validate        func(string) error
 }
 
+// Path prompts for a file or directory path.
 func Path(cfg PathConfig) (string, error) {
 	if IsAgentMode() {
 		return pathAgent(cfg)
