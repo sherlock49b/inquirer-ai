@@ -38,3 +38,31 @@ jobs:
 
       - name: Run tests
         run: uv run pytest -v --cov=inquirer_ai --cov-report=term-missing
+
+  go:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: go
+    strategy:
+      matrix:
+        go-version: ["1.22", "1.23"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ matrix.go-version }}
+
+      - name: Format check
+        run: test -z "$(gofmt -l ./prompt/ ./examples/)"
+
+      - name: Vet
+        run: go vet ./prompt/ ./examples/...
+
+      - name: Run tests
+        run: go test ./prompt/ -v -cover -count=1
+
+      - name: Build example
+        run: go build ./examples/demo/

@@ -1,16 +1,35 @@
 #!/usr/bin/env bash
 set -e
 
-cd "$(git rev-parse --show-toplevel)/python"
+ROOT="$(git rev-parse --show-toplevel)"
 
-echo "pre-push: ruff check..."
+# ── Python ──
+cd "$ROOT/python"
+
+echo "pre-push: [python] ruff check..."
 uv run ruff check src/ tests/
 
-echo "pre-push: ruff format..."
+echo "pre-push: [python] ruff format..."
 uv run ruff format --check src/ tests/
 
-echo "pre-push: pyright (strict)..."
+echo "pre-push: [python] pyright (strict)..."
 uv run pyright src/
 
-echo "pre-push: full test suite with coverage..."
+echo "pre-push: [python] full test suite with coverage..."
 uv run pytest tests/ -v --cov=inquirer_ai --cov-report=term-missing
+
+# ── Go ──
+cd "$ROOT/go"
+
+echo "pre-push: [go] gofmt..."
+UNFORMATTED=$(gofmt -l ./prompt/ ./examples/)
+if [ -n "$UNFORMATTED" ]; then
+  echo "Files need gofmt: $UNFORMATTED"
+  exit 1
+fi
+
+echo "pre-push: [go] vet..."
+go vet ./prompt/ ./examples/...
+
+echo "pre-push: [go] full test suite with coverage..."
+go test ./prompt/ -v -cover -count=1

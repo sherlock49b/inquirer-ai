@@ -1,16 +1,35 @@
 #!/usr/bin/env bash
 set -e
 
-cd "$(git rev-parse --show-toplevel)/python"
+ROOT="$(git rev-parse --show-toplevel)"
 
-echo "pre-commit: ruff check..."
+# ── Python ──
+cd "$ROOT/python"
+
+echo "pre-commit: [python] ruff check..."
 uv run ruff check src/ tests/
 
-echo "pre-commit: ruff format..."
+echo "pre-commit: [python] ruff format..."
 uv run ruff format --check src/ tests/
 
-echo "pre-commit: pyright (strict)..."
+echo "pre-commit: [python] pyright (strict)..."
 uv run pyright src/
 
-echo "pre-commit: pytest..."
+echo "pre-commit: [python] pytest..."
 uv run pytest tests/ -q
+
+# ── Go ──
+cd "$ROOT/go"
+
+echo "pre-commit: [go] gofmt..."
+UNFORMATTED=$(gofmt -l ./prompt/ ./examples/)
+if [ -n "$UNFORMATTED" ]; then
+  echo "Files need gofmt: $UNFORMATTED"
+  exit 1
+fi
+
+echo "pre-commit: [go] vet..."
+go vet ./prompt/ ./examples/...
+
+echo "pre-commit: [go] test..."
+go test ./prompt/ -count=1 -short
