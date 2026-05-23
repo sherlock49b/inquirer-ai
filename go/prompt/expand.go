@@ -1,9 +1,7 @@
 package prompt
 
 import (
-	"bufio"
 	"fmt"
-	"os"
 	"strings"
 )
 
@@ -74,7 +72,7 @@ func expandTerminal(cfg ExpandConfig) (any, error) {
 		keys[i] = strings.ToLower(c.Key)
 	}
 	hint := strings.Join(keys, "/")
-	scanner := bufio.NewScanner(os.Stdin)
+	scanner := getTerminalScanner()
 
 	for {
 		fmt.Printf("%s %s (%s): ", t.SymQuestion, cfg.Message, hint)

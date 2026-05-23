@@ -1,9 +1,6 @@
 package prompt
 
-import (
-	"errors"
-	"fmt"
-)
+import "errors"
 
 var (
 	ErrAborted       = errors.New("prompt aborted")
@@ -13,17 +10,3 @@ var (
 	ErrStdinClosed   = errors.New("stdin closed")
 	ErrEditor        = errors.New("editor error")
 )
-
-type PromptError struct {
-	PromptType string
-	Message    string
-	Err        error
-}
-
-func (e *PromptError) Error() string {
-	return fmt.Sprintf("[%s] %q: %v", e.PromptType, e.Message, e.Err)
-}
-
-func (e *PromptError) Unwrap() error {
-	return e.Err
-}

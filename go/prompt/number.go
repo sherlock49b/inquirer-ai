@@ -1,10 +1,8 @@
 package prompt
 
 import (
-	"bufio"
 	"fmt"
 	"math"
-	"os"
 	"strconv"
 )
 
@@ -46,7 +44,7 @@ func numberAgent(cfg NumberConfig) (float64, error) {
 
 func numberTerminal(cfg NumberConfig) (float64, error) {
 	t := DefaultTheme
-	scanner := bufio.NewScanner(os.Stdin)
+	scanner := getTerminalScanner()
 	for {
 		suffix := ""
 		if cfg.Default != nil {

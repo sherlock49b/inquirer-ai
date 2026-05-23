@@ -1,10 +1,6 @@
 package prompt
 
-import (
-	"bufio"
-	"fmt"
-	"os"
-)
+import "fmt"
 
 // TextConfig configures a free-text input prompt.
 type TextConfig struct {
@@ -46,6 +42,7 @@ func textAgent(cfg TextConfig) (string, error) {
 
 func textTerminal(cfg TextConfig) (string, error) {
 	t := DefaultTheme
+	scanner := getTerminalScanner()
 	for {
 		suffix := ""
 		if cfg.Default != "" {
@@ -53,7 +50,6 @@ func textTerminal(cfg TextConfig) (string, error) {
 		}
 		fmt.Printf("%s %s%s: ", t.SymQuestion, cfg.Message, suffix)
 
-		scanner := bufio.NewScanner(os.Stdin)
 		if !scanner.Scan() {
 			return "", ErrAborted
 		}

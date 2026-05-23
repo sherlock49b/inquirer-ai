@@ -1,11 +1,9 @@
 package prompt
 
 import (
-	"bufio"
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 )
 
 // PathConfig configures a file/directory path input prompt.
@@ -52,7 +50,7 @@ func pathAgent(cfg PathConfig) (string, error) {
 
 func pathTerminal(cfg PathConfig) (string, error) {
 	t := DefaultTheme
-	scanner := bufio.NewScanner(os.Stdin)
+	scanner := getTerminalScanner()
 	for {
 		suffix := ""
 		if cfg.Default != "" {
@@ -85,34 +83,4 @@ func pathTerminal(cfg PathConfig) (string, error) {
 		fmt.Printf("%s %s %s\n", t.SymSuccess, cfg.Message, result)
 		return result, nil
 	}
-}
-
-func pathCompletions(prefix string, onlyDirs bool) []string {
-	dir := filepath.Dir(prefix)
-	base := filepath.Base(prefix)
-	if prefix == "" {
-		dir = "."
-		base = ""
-	}
-
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		return nil
-	}
-
-	var results []string
-	for _, e := range entries {
-		if onlyDirs && !e.IsDir() {
-			continue
-		}
-		name := e.Name()
-		if strings.HasPrefix(name, base) {
-			full := filepath.Join(dir, name)
-			if e.IsDir() {
-				full += string(os.PathSeparator)
-			}
-			results = append(results, full)
-		}
-	}
-	return results
 }

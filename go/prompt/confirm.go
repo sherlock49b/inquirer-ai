@@ -1,9 +1,7 @@
 package prompt
 
 import (
-	"bufio"
 	"fmt"
-	"os"
 	"strings"
 )
 
@@ -45,7 +43,7 @@ func confirmTerminal(cfg ConfirmConfig) (bool, error) {
 		hint = "Y/n"
 	}
 
-	scanner := bufio.NewScanner(os.Stdin)
+	scanner := getTerminalScanner()
 	for {
 		fmt.Printf("%s %s (%s): ", t.SymQuestion, cfg.Message, hint)
 		if !scanner.Scan() {

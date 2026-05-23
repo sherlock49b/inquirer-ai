@@ -1,9 +1,7 @@
 package prompt
 
 import (
-	"bufio"
 	"fmt"
-	"os"
 	"strconv"
 )
 
@@ -64,7 +62,7 @@ func rawlistTerminal(cfg RawlistConfig, choices []resolvedChoice, selectable []i
 		fmt.Printf("  %d) %s\n", i+1, choices[idx].name)
 	}
 
-	scanner := bufio.NewScanner(os.Stdin)
+	scanner := getTerminalScanner()
 	for {
 		fmt.Printf("%s %s: ", t.SymQuestion, cfg.Message)
 		if !scanner.Scan() {

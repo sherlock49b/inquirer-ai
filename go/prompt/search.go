@@ -26,8 +26,8 @@ func Search(cfg SearchConfig) (any, error) {
 }
 
 func searchAgent(cfg SearchConfig) (any, error) {
-	initial := parseChoices(cfg.Source(""))
 	items := cfg.Source("")
+	initial := parseChoices(items)
 	payload := map[string]any{
 		"type":       "search",
 		"message":    cfg.Message,

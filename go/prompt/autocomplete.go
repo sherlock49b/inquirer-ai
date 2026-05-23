@@ -1,9 +1,7 @@
 package prompt
 
 import (
-	"bufio"
 	"fmt"
-	"os"
 )
 
 // AutocompleteConfig configures a text input prompt with suggestion completions.
@@ -55,7 +53,7 @@ func autocompleteAgent(cfg AutocompleteConfig) (string, error) {
 
 func autocompleteTerminal(cfg AutocompleteConfig) (string, error) {
 	t := DefaultTheme
-	scanner := bufio.NewScanner(os.Stdin)
+	scanner := getTerminalScanner()
 	for {
 		suffix := ""
 		if cfg.Default != "" {
