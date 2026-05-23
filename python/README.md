@@ -85,6 +85,49 @@ Each prompt writes one JSON line to stdout, then reads one JSON line from stdin.
 | `select` | `string` (value or name) | `{"answer": "PostgreSQL"}` |
 | `checkbox` | `list[string]` | `{"answer": ["Auth", "Cache"]}` |
 
+## Validation & Filtering
+
+All prompts accept optional `validate` and `filter` callbacks:
+
+```python
+email = text(
+    "Email address:",
+    validate=lambda v: True if "@" in v else "Must be a valid email",
+    filter=lambda v: v.strip().lower(),
+)
+
+features = checkbox(
+    "Select features:",
+    choices=["Auth", "DB", "Cache"],
+    validate=lambda v: True if len(v) >= 1 else "Select at least one",
+)
+```
+
+- `validate` — return `True` for valid, or a string error message. In terminal mode, the prompt re-displays on failure.
+- `filter` — transform the answer before returning it.
+
+## Keyboard Shortcuts
+
+### select
+
+| Key | Action |
+|-----|--------|
+| `↑` / `k` | Move cursor up |
+| `↓` / `j` | Move cursor down |
+| `Enter` | Confirm selection |
+| `Ctrl+C` | Abort |
+
+### checkbox
+
+| Key | Action |
+|-----|--------|
+| `↑` / `k` | Move cursor up |
+| `↓` / `j` | Move cursor down |
+| `Space` | Toggle current item |
+| `a` | Toggle all items |
+| `Enter` | Confirm selection |
+| `Ctrl+C` | Abort |
+
 ## Rich Choices
 
 Choices can be strings or objects with `name`/`value`:
@@ -99,6 +142,22 @@ db = select(
     ],
 )
 # Returns "pg", "mysql", or "sqlite"
+```
+
+## Theming
+
+Customize colors and symbols:
+
+```python
+from inquirer_ai import set_theme, Theme
+
+set_theme(Theme(
+    question="#61afef",
+    success="#98c379",
+    sym_pointer=">",
+    sym_checked="[x]",
+    sym_unchecked="[ ]",
+))
 ```
 
 ## License
