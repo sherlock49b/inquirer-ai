@@ -1,0 +1,43 @@
+name: Bug Report
+description: Report a bug in inquirer-ai
+labels: [bug]
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: What happened and what did you expect?
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to reproduce
+      description: Minimal code to reproduce the issue.
+      render: python
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: "Output of: python -c 'import inquirer_ai; print(inquirer_ai.__version__)'"
+    validations:
+      required: true
+  - type: dropdown
+    id: mode
+    attributes:
+      label: Mode
+      options:
+        - Terminal (human)
+        - Agent (JSON protocol)
+        - Both
+    validations:
+      required: true
+  - type: input
+    id: python-version
+    attributes:
+      label: Python version
+      description: "Output of: python --version"
+    validations:
+      required: true
