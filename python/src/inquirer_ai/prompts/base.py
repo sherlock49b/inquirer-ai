@@ -40,11 +40,13 @@ class BasePrompt(ABC, Generic[T]):
         default: Any = None,
         validate: Callable[[T], bool | str | None] | None = None,
         filter: Callable[[T], T] | None = None,
+        transformer: Callable[[T], str] | None = None,
     ) -> None:
         self.message = message
         self.default = default
         self.validate_fn = validate
         self.filter_fn = filter
+        self.transformer = transformer
 
     @property
     @abstractmethod
@@ -116,7 +118,7 @@ class BasePrompt(ABC, Generic[T]):
 
             if not agent:
                 t = get_theme()
-                display = self._format_answer(result)
+                display = self.transformer(result) if self.transformer else self._format_answer(result)
                 print(f"{t.ansi(t.success)}{t.sym_success}{RESET} {self.message} {t.ansi(t.answer)}{display}{RESET}")
 
             return result

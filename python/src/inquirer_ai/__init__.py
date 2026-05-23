@@ -25,8 +25,9 @@ def text(
     default: str | None = None,
     validate: Callable[[str], bool | str | None] | None = None,
     filter: Callable[[str], str] | None = None,
+    transformer: Callable[[str], str] | None = None,
 ) -> str:
-    return TextPrompt(message, default=default, validate=validate, filter=filter).execute()
+    return TextPrompt(message, default=default, validate=validate, filter=filter, transformer=transformer).execute()
 
 
 def confirm(
@@ -35,8 +36,9 @@ def confirm(
     default: bool = False,
     validate: Callable[[bool], bool | str | None] | None = None,
     filter: Callable[[bool], bool] | None = None,
+    transformer: Callable[[bool], str] | None = None,
 ) -> bool:
-    return ConfirmPrompt(message, default=default, validate=validate, filter=filter).execute()
+    return ConfirmPrompt(message, default=default, validate=validate, filter=filter, transformer=transformer).execute()
 
 
 @overload

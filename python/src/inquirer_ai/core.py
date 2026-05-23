@@ -24,6 +24,8 @@ class Question(_QuestionRequired, total=False):
     choices: list[str | dict[str, Any] | Choice[Any]]
     validate: Callable[[Any], bool | str | None]
     filter: Callable[[Any], Any]
+    transformer: Callable[[Any], str]
+    when: Callable[[dict[str, Any]], bool]
 
 
 _PROMPT_MAP: dict[str, type[BasePrompt[Any]]] = {
@@ -39,7 +41,11 @@ _PROMPT_MAP: dict[str, type[BasePrompt[Any]]] = {
 def prompt(questions: list[Question]) -> dict[str, Any]:
     answers: dict[str, Any] = {}
     for q in questions:
-        kwargs: dict[str, Any] = {k: v for k, v in q.items() if k not in ("type", "name", "message")}
+        when_fn = q.get("when")
+        if when_fn is not None and not when_fn(answers):
+            continue
+
+        kwargs: dict[str, Any] = {k: v for k, v in q.items() if k not in ("type", "name", "message", "when")}
 
         cls = _PROMPT_MAP.get(q["type"])
         if cls is None:
