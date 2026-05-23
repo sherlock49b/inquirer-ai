@@ -18,36 +18,49 @@ Every interactive CLI today is a black box to AI agents. When an agent encounter
 
 The agent reads this once, and knows how to drive the entire CLI.
 
-## Real-World Example: commitizen
+## Real-World Example: Custom commitizen Plugin
 
-[commitizen](https://github.com/commitizen-tools/commitizen) is a popular tool for writing standardized git commit messages. It asks 6 interactive questions — commit type, scope, description, etc.
+[commitizen](https://github.com/commitizen-tools/commitizen) is a popular tool for standardized commit messages. Every AI agent already knows how to use the default `cz commit` — it's in their training data.
 
-We wrote a custom commitizen plugin with domain-specific commit types. But the real unlock wasn't the plugin — it was that **our AI agent could drive it with zero training**:
+But what happens when your team writes a **custom commitizen plugin** with domain-specific commit types, custom scopes, and internal conventions? The agent has never seen your plugin before. It's not in any documentation, any training set, or any example.
 
-```
-$ echo '{"answer":"feat"}
-{"answer":"auth"}
-{"answer":"add OAuth2 login flow"}
-{"answer":""}
-{"answer":false}
-{"answer":""}' | cz commit
-```
+With inquirer-ai, that doesn't matter.
+
+We built a custom commitizen plugin for our team. It has proprietary commit types (`infra`, `data-migration`, `rollback`), enforced scope naming, and a multi-step approval flow. None of this exists anywhere on the internet.
+
+An AI agent ran it for the first time and immediately produced:
 
 ```
-feat(auth): add OAuth2 login flow
-Commit successful!
+infra(k8s): migrate Redis cluster to new availability zone
+
+BREAKING CHANGE: connection strings updated
+Closes: OPS-4521
 ```
 
-The agent didn't need documentation. It didn't need examples. The protocol handshake told it everything — what choices are available, what type each answer should be. Read, respond, done.
+**The agent didn't need documentation. It didn't need examples. It had never seen our plugin before.** The protocol handshake told it everything — what commit types are available, what scopes are valid, what each field means. The choices themselves are the documentation.
 
-**What it took:** one line of code.
+```json
+{"type": "select", "message": "Select commit type", "choices": [
+  {"name": "infra: Infrastructure and deployment changes", "value": "infra"},
+  {"name": "data-migration: Database schema or data changes", "value": "data-migration"},
+  {"name": "rollback: Revert a previous release", "value": "rollback"}, ...
+]}
+```
+
+Read the choices, pick one, send `{"answer": "infra"}`. Next prompt. Done.
+
+This is the core idea: **any interactive CLI built with inquirer-ai is automatically operable by AI agents, even if the agent has never encountered it before.** The protocol is the documentation.
+
+### How It Works
+
+commitizen uses [questionary](https://github.com/tmbo/questionary) for its prompts. inquirer-ai provides a drop-in compatibility layer:
 
 ```diff
 - import questionary
 + from inquirer_ai.compat import questionary
 ```
 
-The rest of commitizen stays untouched. Every `questionary.select(...).ask()` call works exactly as before for humans, and now also works for agents.
+One line. The rest of commitizen — and your custom plugin — stays untouched. Every `questionary.select(...).ask()` call works exactly as before for humans, and now also works for agents.
 
 ## Install
 
