@@ -62,6 +62,40 @@ commitizen uses [questionary](https://github.com/tmbo/questionary) for its promp
 
 One line. The rest of commitizen — and your custom plugin — stays untouched. Every `questionary.select(...).ask()` call works exactly as before for humans, and now also works for agents.
 
+## Real-World Example: gh-contribute
+
+We built a GitHub CLI extension that guides contributors through the fork-based workflow — forking, branching, creating PRs, syncing, and cleanup. It uses inquirer-ai's Go library.
+
+```
+$ gh contribute
+
+? What would you like to do?
+  ❯ Start a new contribution    (Fork + branch from upstream/main)
+    Create a PR from current branch
+    Sync fork with upstream
+    Clean up after merge
+
+? Branch type?
+  ❯ feat — new feature
+
+? Short description: add-oauth-support
+
+→ Branch 'feat/add-oauth-support' created from upstream/main.
+```
+
+An AI agent runs the same extension, sees JSON prompts, and drives the entire workflow without knowing anything about git commands:
+
+```json
+{"type": "select", "message": "What would you like to do?", "choices": [
+  {"name": "Start a new contribution", "value": "new"},
+  {"name": "Create a PR from current branch", "value": "pr"}, ...
+]}
+```
+
+The agent doesn't need to know `git checkout -b`, `git push -u origin`, or `gh pr create --repo`. It just answers questions.
+
+**Source:** [`extensions/gh-contribute/`](extensions/gh-contribute/)
+
 ## Install
 
 ```bash
