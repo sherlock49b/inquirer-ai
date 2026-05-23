@@ -10,6 +10,9 @@ type SelectConfig struct {
 	Choices  []ChoiceItem
 	Default  string
 	PageSize int
+	Loop     bool
+	Validate func(any) error
+	Filter   func(any) any
 }
 
 // Select prompts the user to pick one item from a list.
@@ -21,10 +24,17 @@ func Select(cfg SelectConfig) (any, error) {
 	if len(choices) == 0 {
 		return nil, fmt.Errorf("%w: choices cannot be empty", ErrInvalidChoice)
 	}
+	var result any
+	var err error
 	if IsAgentMode() {
-		return selectAgent(cfg, choices)
+		result, err = selectAgent(cfg, choices)
+	} else {
+		result, err = selectTerminal(cfg, choices)
 	}
-	return selectTerminal(cfg, choices)
+	if err != nil {
+		return nil, err
+	}
+	return applyCallbacks(result, cfg.Validate, cfg.Filter)
 }
 
 func selectAgent(cfg SelectConfig, choices []resolvedChoice) (any, error) {

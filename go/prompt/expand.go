@@ -14,8 +14,10 @@ type ExpandChoice struct {
 
 // ExpandConfig configures a compact key-based selection prompt.
 type ExpandConfig struct {
-	Message string
-	Choices []ExpandChoice
+	Message  string
+	Choices  []ExpandChoice
+	Validate func(any) error
+	Filter   func(any) any
 }
 
 // Expand prompts the user to select by typing a single key character.
@@ -32,10 +34,17 @@ func Expand(cfg ExpandConfig) (any, error) {
 		seen[k] = true
 	}
 
+	var result any
+	var err error
 	if IsAgentMode() {
-		return expandAgent(cfg)
+		result, err = expandAgent(cfg)
+	} else {
+		result, err = expandTerminal(cfg)
 	}
-	return expandTerminal(cfg)
+	if err != nil {
+		return nil, err
+	}
+	return applyCallbacks(result, cfg.Validate, cfg.Filter)
 }
 
 func expandAgent(cfg ExpandConfig) (any, error) {

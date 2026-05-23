@@ -7,8 +7,10 @@ import (
 
 // RawlistConfig configures a numbered list selection prompt.
 type RawlistConfig struct {
-	Message string
-	Choices []ChoiceItem
+	Message  string
+	Choices  []ChoiceItem
+	Validate func(any) error
+	Filter   func(any) any
 }
 
 // Rawlist prompts the user to select by typing a number index.
@@ -19,10 +21,17 @@ func Rawlist(cfg RawlistConfig) (any, error) {
 		return nil, fmt.Errorf("%w: choices cannot be empty", ErrInvalidChoice)
 	}
 
+	var result any
+	var err error
 	if IsAgentMode() {
-		return rawlistAgent(cfg, choices, selectable)
+		result, err = rawlistAgent(cfg, choices, selectable)
+	} else {
+		result, err = rawlistTerminal(cfg, choices, selectable)
 	}
-	return rawlistTerminal(cfg, choices, selectable)
+	if err != nil {
+		return nil, err
+	}
+	return applyCallbacks(result, cfg.Validate, cfg.Filter)
 }
 
 func rawlistAgent(cfg RawlistConfig, choices []resolvedChoice, selectable []int) (any, error) {

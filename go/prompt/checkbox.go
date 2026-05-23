@@ -8,6 +8,8 @@ type CheckboxConfig struct {
 	Choices  []ChoiceItem
 	Default  []string
 	PageSize int
+	Validate func(any) error
+	Filter   func(any) any
 }
 
 // Checkbox prompts the user to select multiple items from a list.
@@ -19,10 +21,17 @@ func Checkbox(cfg CheckboxConfig) ([]any, error) {
 	if len(choices) == 0 {
 		return nil, fmt.Errorf("%w: choices cannot be empty", ErrInvalidChoice)
 	}
+	var result []any
+	var err error
 	if IsAgentMode() {
-		return checkboxAgent(cfg, choices)
+		result, err = checkboxAgent(cfg, choices)
+	} else {
+		result, err = checkboxTerminal(cfg, choices)
 	}
-	return checkboxTerminal(cfg, choices)
+	if err != nil {
+		return nil, err
+	}
+	return applyCallbacksList(result, cfg.Validate, cfg.Filter)
 }
 
 func checkboxAgent(cfg CheckboxConfig, choices []resolvedChoice) ([]any, error) {

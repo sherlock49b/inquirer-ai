@@ -13,14 +13,31 @@ type NumberConfig struct {
 	Min          *float64
 	Max          *float64
 	FloatAllowed bool
+	Validate     func(float64) error
+	Filter       func(float64) float64
 }
 
 // Number prompts for a numeric value, validating against optional min/max bounds.
 func Number(cfg NumberConfig) (float64, error) {
+	var result float64
+	var err error
 	if IsAgentMode() {
-		return numberAgent(cfg)
+		result, err = numberAgent(cfg)
+	} else {
+		result, err = numberTerminal(cfg)
 	}
-	return numberTerminal(cfg)
+	if err != nil {
+		return 0, err
+	}
+	if cfg.Filter != nil {
+		result = cfg.Filter(result)
+	}
+	if cfg.Validate != nil {
+		if err := cfg.Validate(result); err != nil {
+			return 0, fmt.Errorf("%w: %v", ErrValidation, err)
+		}
+	}
+	return result, nil
 }
 
 func numberAgent(cfg NumberConfig) (float64, error) {

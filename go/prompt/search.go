@@ -9,6 +9,8 @@ type SearchConfig struct {
 	Message  string
 	Source   func(term string) []ChoiceItem
 	PageSize int
+	Validate func(any) error
+	Filter   func(any) any
 }
 
 // Search prompts the user to select from a dynamically filtered list.
@@ -19,10 +21,17 @@ func Search(cfg SearchConfig) (any, error) {
 	if cfg.Source == nil {
 		return nil, fmt.Errorf("%w: source function is required", ErrValidation)
 	}
+	var result any
+	var err error
 	if IsAgentMode() {
-		return searchAgent(cfg)
+		result, err = searchAgent(cfg)
+	} else {
+		result, err = searchTerminal(cfg)
 	}
-	return searchTerminal(cfg)
+	if err != nil {
+		return nil, err
+	}
+	return applyCallbacks(result, cfg.Validate, cfg.Filter)
 }
 
 func searchAgent(cfg SearchConfig) (any, error) {

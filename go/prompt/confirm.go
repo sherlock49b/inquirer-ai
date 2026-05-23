@@ -7,16 +7,35 @@ import (
 
 // ConfirmConfig configures a yes/no confirmation prompt.
 type ConfirmConfig struct {
-	Message string
-	Default bool
+	Message  string
+	Default  bool
+	Validate func(any) error
+	Filter   func(any) any
 }
 
 // Confirm prompts for a yes/no answer.
 func Confirm(cfg ConfirmConfig) (bool, error) {
+	var result bool
+	var err error
 	if IsAgentMode() {
-		return confirmAgent(cfg)
+		result, err = confirmAgent(cfg)
+	} else {
+		result, err = confirmTerminal(cfg)
 	}
-	return confirmTerminal(cfg)
+	if err != nil {
+		return false, err
+	}
+	if cfg.Filter != nil {
+		if v, ok := cfg.Filter(result).(bool); ok {
+			result = v
+		}
+	}
+	if cfg.Validate != nil {
+		if err := cfg.Validate(result); err != nil {
+			return false, fmt.Errorf("%w: %v", ErrValidation, err)
+		}
+	}
+	return result, nil
 }
 
 func confirmAgent(cfg ConfirmConfig) (bool, error) {
