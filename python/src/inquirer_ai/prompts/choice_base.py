@@ -77,7 +77,7 @@ class ChoiceBasePrompt(BasePrompt[T]):
 
         def get_message() -> FormattedText:
             return FormattedText([
-                (t.pt(t.question), "? "),
+                (t.pt(t.question), f"{t.sym_question} "),
                 ("bold", self.message),
             ])
 

@@ -25,6 +25,12 @@ class Theme:
     # oklch(0.62 0.015 280) - cool gray for hints
     muted: str = "#84858f"
 
+    sym_question: str = "?"
+    sym_success: str = "✓"
+    sym_pointer: str = "❯"
+    sym_checked: str = "◉"
+    sym_unchecked: str = "◯"
+
     def ansi(self, hex_color: str) -> str:
         h = hex_color.lstrip("#")
         r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)

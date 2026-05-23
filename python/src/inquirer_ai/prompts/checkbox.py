@@ -75,8 +75,8 @@ class CheckboxPrompt(ChoiceBasePrompt[list[Any]]):
 
     def _format_choice_line(self, index: int, choice: Choice, state: dict[str, Any]) -> tuple[str, str]:
         t = get_theme()
-        arrow = "❯" if index == state["cursor"] else " "
-        mark = "◉" if index in self._checked else "◯"
+        arrow = t.sym_pointer if index == state["cursor"] else " "
+        mark = t.sym_checked if index in self._checked else t.sym_unchecked
         if index == state["cursor"]:
             style = t.pt_bold(t.highlight)
         elif index in self._checked:

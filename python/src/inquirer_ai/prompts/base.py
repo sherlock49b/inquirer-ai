@@ -91,6 +91,6 @@ class BasePrompt(ABC, Generic[T]):
             if not agent:
                 t = get_theme()
                 display = self._format_answer(result)
-                print(f"{t.ansi(t.success)}✓{RESET} {self.message} {t.ansi(t.answer)}{display}{RESET}")
+                print(f"{t.ansi(t.success)}{t.sym_success}{RESET} {self.message} {t.ansi(t.answer)}{display}{RESET}")
 
             return result

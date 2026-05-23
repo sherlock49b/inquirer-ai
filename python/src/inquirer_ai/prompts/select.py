@@ -54,7 +54,7 @@ class SelectPrompt(ChoiceBasePrompt[Any]):
     def _format_choice_line(self, index: int, choice: Choice, state: dict[str, Any]) -> tuple[str, str]:
         t = get_theme()
         if index == state["cursor"]:
-            return (t.pt_bold(t.highlight), f"❯ {choice.name}")
+            return (t.pt_bold(t.highlight), f"{t.sym_pointer} {choice.name}")
         return ("", f"  {choice.name}")
 
     def _get_result(self, state: dict[str, Any]) -> Any:

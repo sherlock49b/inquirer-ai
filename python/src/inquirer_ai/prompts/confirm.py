@@ -31,7 +31,7 @@ class ConfirmPrompt(BasePrompt[bool]):
         t = get_theme()
         hint = "Y/n" if self.default else "y/N"
         message = FormattedText([
-            (t.pt(t.question), "? "),
+            (t.pt(t.question), f"{t.sym_question} "),
             ("bold", f"{self.message} ({hint}): "),
         ])
         while True:
