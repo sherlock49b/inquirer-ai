@@ -71,7 +71,7 @@ func editorTerminal(cfg EditorConfig) (string, error) {
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
-		return "", fmt.Errorf("editor failed: %w", err)
+		return "", fmt.Errorf("%w: %v", ErrEditor, err)
 	}
 
 	data, err := os.ReadFile(tmpPath)

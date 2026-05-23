@@ -53,9 +53,9 @@ func AgentReceive() (any, error) {
 	scanner := getScanner()
 	if !scanner.Scan() {
 		if err := scanner.Err(); err != nil {
-			return nil, fmt.Errorf("%w: %v", ErrStdinClosed, err)
+			return nil, fmt.Errorf("%w: stdin: %v", ErrAborted, err)
 		}
-		return nil, ErrStdinClosed
+		return nil, fmt.Errorf("%w: stdin closed", ErrAborted)
 	}
 
 	line := scanner.Text()
