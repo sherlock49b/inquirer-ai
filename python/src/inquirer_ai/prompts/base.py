@@ -6,12 +6,13 @@ import os
 import sys
 from abc import ABC, abstractmethod
 from collections.abc import Callable
-from typing import Any, Generic, TypeVar
+from typing import IO, Any, Generic, TypeVar
 
 from inquirer_ai.exceptions import PromptAbortedError, ValidationError
 from inquirer_ai.mode import is_agent_mode
 
 T = TypeVar("T")
+TextIO = IO[str]
 
 _agent_handshake_sent = False
 _agent_handshake_ack: dict[str, Any] | None = None
@@ -29,14 +30,14 @@ def _reset_agent_handshake() -> None:
     _agent_pushback_line = None
 
 
-def _get_agent_out() -> Any:
+def _get_agent_out() -> TextIO:
     fd_out = os.environ.get("INQUIRER_AI_FD_OUT")
     if fd_out is not None:
         return os.fdopen(int(fd_out), "w", closefd=False)
     return sys.stdout
 
 
-def _get_agent_in() -> Any:
+def _get_agent_in() -> TextIO:
     fd_in = os.environ.get("INQUIRER_AI_FD_IN")
     if fd_in is not None:
         return os.fdopen(int(fd_in), "r", closefd=False)
