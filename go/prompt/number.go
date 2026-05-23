@@ -90,6 +90,9 @@ func validateNumber(v any, cfg NumberConfig) (float64, error) {
 	var num float64
 	switch val := v.(type) {
 	case float64:
+		if math.IsNaN(val) || math.IsInf(val, 0) {
+			return 0, fmt.Errorf("%w: not a valid number", ErrValidation)
+		}
 		num = val
 	case int:
 		num = float64(val)
@@ -97,6 +100,9 @@ func validateNumber(v any, cfg NumberConfig) (float64, error) {
 		var err error
 		num, err = strconv.ParseFloat(val, 64)
 		if err != nil {
+			return 0, fmt.Errorf("%w: not a valid number: %q", ErrValidation, val)
+		}
+		if math.IsNaN(num) || math.IsInf(num, 0) {
 			return 0, fmt.Errorf("%w: not a valid number: %q", ErrValidation, val)
 		}
 	case nil:
