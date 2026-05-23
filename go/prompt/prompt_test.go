@@ -338,3 +338,108 @@ func TestHandshakeSentOnce(t *testing.T) {
 		t.Fatalf("expected 1 handshake, got %d", handshakeCount)
 	}
 }
+
+func TestPathAgent(t *testing.T) {
+	r, w, cleanup := agentSetup(t, `{"answer":"/tmp/test"}`+"\n")
+	defer cleanup()
+
+	result, err := Path(PathConfig{Message: "Path?"})
+	lines := readOutput(r, w)
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result != "/tmp/test" {
+		t.Fatalf("expected '/tmp/test', got %q", result)
+	}
+	if lines[1]["type"] != "path" {
+		t.Fatalf("expected type 'path', got %v", lines[1]["type"])
+	}
+}
+
+func TestPathAgentDefault(t *testing.T) {
+	r, w, cleanup := agentSetup(t, `{"answer":null}`+"\n")
+	defer cleanup()
+
+	result, err := Path(PathConfig{Message: "Path?", Default: "/home"})
+	readOutput(r, w)
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result != "/home" {
+		t.Fatalf("expected '/home', got %q", result)
+	}
+}
+
+func TestAutocompleteAgent(t *testing.T) {
+	r, w, cleanup := agentSetup(t, `{"answer":"golang"}`+"\n")
+	defer cleanup()
+
+	result, err := Autocomplete(AutocompleteConfig{
+		Message: "Lang?",
+		Choices: []string{"python", "golang", "rust"},
+	})
+	lines := readOutput(r, w)
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result != "golang" {
+		t.Fatalf("expected 'golang', got %q", result)
+	}
+	if lines[1]["type"] != "autocomplete" {
+		t.Fatalf("expected type 'autocomplete', got %v", lines[1]["type"])
+	}
+}
+
+func TestAutocompleteAcceptsNonChoice(t *testing.T) {
+	r, w, cleanup := agentSetup(t, `{"answer":"java"}`+"\n")
+	defer cleanup()
+
+	result, err := Autocomplete(AutocompleteConfig{
+		Message: "Lang?",
+		Choices: []string{"python", "golang"},
+	})
+	readOutput(r, w)
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result != "java" {
+		t.Fatalf("expected 'java', got %q", result)
+	}
+}
+
+func TestSearchAgent(t *testing.T) {
+	r, w, cleanup := agentSetup(t, `{"answer":"pg"}`+"\n")
+	defer cleanup()
+
+	result, err := Search(SearchConfig{
+		Message: "DB?",
+		Source: func(term string) []ChoiceItem {
+			return []ChoiceItem{
+				Choice{Name: "PostgreSQL", Value: "pg"},
+				Choice{Name: "MySQL", Value: "mysql"},
+			}
+		},
+	})
+	lines := readOutput(r, w)
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result != "pg" {
+		t.Fatalf("expected 'pg', got %v", result)
+	}
+	if lines[1]["type"] != "search" {
+		t.Fatalf("expected type 'search', got %v", lines[1]["type"])
+	}
+}
+
+func TestSearchNilSourceError(t *testing.T) {
+	_, err := Search(SearchConfig{Message: "Q"})
+	if err == nil {
+		t.Fatal("expected error for nil source")
+	}
+}
