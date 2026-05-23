@@ -22,7 +22,7 @@ classifiers = [
     "Topic :: Terminals",
 ]
 dependencies = [
-    "prompt-toolkit>=3.0",
+    "prompt-toolkit>=3.0,<4.0",
 ]
 
 [project.urls]
