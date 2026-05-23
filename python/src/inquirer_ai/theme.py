@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from contextvars import ContextVar
 from dataclasses import dataclass
 
 RESET = "\033[0m"
@@ -36,13 +37,12 @@ class Theme:
         return f"fg:{hex_color} bold"
 
 
-_current_theme = Theme()
+_theme_var: ContextVar[Theme] = ContextVar("inquirer_ai_theme", default=Theme())
 
 
 def set_theme(theme: Theme) -> None:
-    global _current_theme
-    _current_theme = theme
+    _theme_var.set(theme)
 
 
 def get_theme() -> Theme:
-    return _current_theme
+    return _theme_var.get()
