@@ -12,32 +12,32 @@ const VERSION: &str = "0.2.0";
 // fd-based I/O helpers
 // ---------------------------------------------------------------------------
 
+/// Creates a File from a raw fd specified in an environment variable.
+///
+/// # Safety
+///
+/// The fd must be valid and open. The caller must ensure the fd
+/// is not closed elsewhere while the File is in use.
 #[cfg(unix)]
-fn fd_out_file() -> Option<std::fs::File> {
+fn file_from_env_fd(var: &str) -> Option<std::fs::File> {
     use std::os::unix::io::FromRawFd;
-    std::env::var("INQUIRER_AI_FD_OUT")
+    std::env::var(var)
         .ok()
         .and_then(|s| s.parse::<i32>().ok())
         .map(|fd| unsafe { std::fs::File::from_raw_fd(fd) })
 }
 
 #[cfg(not(unix))]
+fn file_from_env_fd(_var: &str) -> Option<std::fs::File> {
+    None
+}
+
 fn fd_out_file() -> Option<std::fs::File> {
-    None
+    file_from_env_fd("INQUIRER_AI_FD_OUT")
 }
 
-#[cfg(unix)]
 fn fd_in_file() -> Option<std::fs::File> {
-    use std::os::unix::io::FromRawFd;
-    std::env::var("INQUIRER_AI_FD_IN")
-        .ok()
-        .and_then(|s| s.parse::<i32>().ok())
-        .map(|fd| unsafe { std::fs::File::from_raw_fd(fd) })
-}
-
-#[cfg(not(unix))]
-fn fd_in_file() -> Option<std::fs::File> {
-    None
+    file_from_env_fd("INQUIRER_AI_FD_IN")
 }
 
 /// Write a single JSON line to the agent output channel.

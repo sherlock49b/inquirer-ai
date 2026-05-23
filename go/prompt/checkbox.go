@@ -73,7 +73,11 @@ func checkboxAgent(cfg CheckboxConfig, choices []resolvedChoice) ([]any, error) 
 	if err != nil {
 		return nil, err
 	}
-	return raw.([]any), nil
+	val, ok := raw.([]any)
+	if !ok {
+		return nil, fmt.Errorf("%w: expected []any, got %T", ErrValidation, raw)
+	}
+	return val, nil
 }
 
 func checkboxTerminal(cfg CheckboxConfig, choices []resolvedChoice) ([]any, error) {

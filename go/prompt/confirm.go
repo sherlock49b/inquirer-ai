@@ -59,7 +59,11 @@ func confirmAgent(cfg ConfirmConfig) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	return raw.(bool), nil
+	val, ok := raw.(bool)
+	if !ok {
+		return false, fmt.Errorf("%w: expected bool, got %T", ErrValidation, raw)
+	}
+	return val, nil
 }
 
 func confirmTerminal(cfg ConfirmConfig) (bool, error) {

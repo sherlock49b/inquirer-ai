@@ -65,7 +65,11 @@ func numberAgent(cfg NumberConfig) (float64, error) {
 	if err != nil {
 		return 0, err
 	}
-	return raw.(float64), nil
+	val, ok := raw.(float64)
+	if !ok {
+		return 0, fmt.Errorf("%w: expected float64, got %T", ErrValidation, raw)
+	}
+	return val, nil
 }
 
 func numberTerminal(cfg NumberConfig) (float64, error) {

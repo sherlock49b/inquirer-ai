@@ -43,7 +43,11 @@ func autocompleteAgent(cfg AutocompleteConfig) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return raw.(string), nil
+	val, ok := raw.(string)
+	if !ok {
+		return "", fmt.Errorf("%w: expected string, got %T", ErrValidation, raw)
+	}
+	return val, nil
 }
 
 func autocompleteTerminal(cfg AutocompleteConfig) (string, error) {

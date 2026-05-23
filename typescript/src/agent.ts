@@ -29,9 +29,7 @@ export function resetAgent(): void {
 function getOutputStream(): NodeJS.WritableStream {
   const fdOut = process.env["INQUIRER_AI_FD_OUT"];
   if (fdOut) {
-    return fs.createWriteStream(null as unknown as string, {
-      fd: parseInt(fdOut, 10),
-    });
+    return fs.createWriteStream("", { fd: parseInt(fdOut, 10) });
   }
   return process.stdout;
 }
@@ -39,9 +37,7 @@ function getOutputStream(): NodeJS.WritableStream {
 function getInputStream(): NodeJS.ReadableStream {
   const fdIn = process.env["INQUIRER_AI_FD_IN"];
   if (fdIn) {
-    return fs.createReadStream(null as unknown as string, {
-      fd: parseInt(fdIn, 10),
-    });
+    return fs.createReadStream("", { fd: parseInt(fdIn, 10) });
   }
   return process.stdin;
 }

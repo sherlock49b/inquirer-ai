@@ -128,23 +128,24 @@ class BasePrompt(ABC, Generic[T]):
                 pass
         return line
 
+    @staticmethod
+    def _send_agent_json(data: dict[str, Any]) -> None:
+        out = _get_agent_out()
+        out.write(json.dumps(data, ensure_ascii=False) + "\n")
+        out.flush()
+
     def _execute_agent(self) -> T:
         global _agent_step
         _send_agent_handshake()
         _agent_step += 1
 
         for attempt in range(_MAX_VALIDATION_RETRIES):
-            out = _get_agent_out()
-            payload = self._to_agent_dict()
-            out.write(json.dumps(payload, ensure_ascii=False) + "\n")
-            out.flush()
+            self._send_agent_json(self._to_agent_dict())
 
             line = self._read_agent_line()
             if not line:
                 msg = 'No response received (stdin closed). Expected JSON like: {"answer": "<value>"}'
-                out2 = _get_agent_out()
-                out2.write(json.dumps({"kind": "error", "message": msg}, ensure_ascii=False) + "\n")
-                out2.flush()
+                self._send_agent_json({"kind": "error", "message": msg})
                 raise PromptAbortedError(msg)
             try:
                 response = json.loads(line)
@@ -159,9 +160,7 @@ class BasePrompt(ABC, Generic[T]):
                 return self._validate_answer(response["answer"])  # pyright: ignore[reportUnknownArgumentType]
             except ValidationError as e:
                 if attempt < _MAX_VALIDATION_RETRIES - 1:
-                    out3 = _get_agent_out()
-                    out3.write(json.dumps({"kind": "validation_error", "message": str(e)}, ensure_ascii=False) + "\n")
-                    out3.flush()
+                    self._send_agent_json({"kind": "validation_error", "message": str(e)})
                     continue
                 raise
 
@@ -178,9 +177,32 @@ class BasePrompt(ABC, Generic[T]):
             return result
         return "Validation failed"
 
-    def execute(self) -> T:
+    def _handle_validation_error_loop(self, error: str, is_agent: bool, retries: int) -> int:
+        """Handle a validation error during the execute loop.
+
+        Returns the updated retry count.  Raises ValidationError when
+        the agent-mode retry budget is exhausted.
+        """
         from inquirer_ai.theme import RESET, get_theme
 
+        if is_agent:
+            retries += 1
+            if retries >= _MAX_VALIDATION_RETRIES:
+                raise ValidationError(error)
+            self._send_agent_json({"kind": "validation_error", "message": error})
+            return retries
+        t = get_theme()
+        print(f"{t.ansi(t.error)}  {error}{RESET}")
+        return retries
+
+    def _print_success(self, result: T) -> None:
+        from inquirer_ai.theme import RESET, get_theme
+
+        t = get_theme()
+        display = self.transformer(result) if self.transformer else self._format_answer(result)
+        print(f"{t.ansi(t.success)}{t.sym_success}{RESET} {self.message} {t.ansi(t.answer)}{display}{RESET}")
+
+    def execute(self) -> T:
         agent = is_agent_mode()
 
         retries = 0
@@ -195,89 +217,26 @@ class BasePrompt(ABC, Generic[T]):
 
             error = self._run_user_validation(result)
             if error:
-                if agent:
-                    retries += 1
-                    if retries >= _MAX_VALIDATION_RETRIES:
-                        raise ValidationError(error)
-                    out = _get_agent_out()
-                    out.write(json.dumps({"kind": "validation_error", "message": error}, ensure_ascii=False) + "\n")
-                    out.flush()
-                    continue
-                t = get_theme()
-                print(f"{t.ansi(t.error)}  {error}{RESET}")
+                retries = self._handle_validation_error_loop(error, agent, retries)
                 continue
 
             if not agent:
-                t = get_theme()
-                display = self.transformer(result) if self.transformer else self._format_answer(result)
-                print(f"{t.ansi(t.success)}{t.sym_success}{RESET} {self.message} {t.ansi(t.answer)}{display}{RESET}")
+                self._print_success(result)
 
             return result
 
     async def _read_agent_line_async(self) -> str:
-        global _agent_pushback_line, _agent_handshake_ack
-        if _agent_pushback_line is not None:
-            line = _agent_pushback_line
-            _agent_pushback_line = None
-            return line
-        agent_in = _get_agent_in()
-        line = await asyncio.get_running_loop().run_in_executor(None, agent_in.readline)
-        if line:
-            try:
-                parsed_ack: dict[str, Any] = json.loads(line)
-                if isinstance(parsed_ack, dict) and parsed_ack.get("kind") == "handshake_ack":  # pyright: ignore[reportUnnecessaryIsInstance]
-                    _agent_handshake_ack = parsed_ack
-                    return await asyncio.get_running_loop().run_in_executor(None, agent_in.readline)
-            except json.JSONDecodeError:
-                pass
-        return line
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(None, self._read_agent_line)
 
     async def _execute_agent_async(self) -> T:
-        global _agent_step
-        _send_agent_handshake()
-        _agent_step += 1
-
-        for attempt in range(_MAX_VALIDATION_RETRIES):
-            out = _get_agent_out()
-            payload = self._to_agent_dict()
-            out.write(json.dumps(payload, ensure_ascii=False) + "\n")
-            out.flush()
-
-            line = await self._read_agent_line_async()
-            if not line:
-                msg = 'No response received (stdin closed). Expected JSON like: {"answer": "<value>"}'
-                out2 = _get_agent_out()
-                out2.write(json.dumps({"kind": "error", "message": msg}, ensure_ascii=False) + "\n")
-                out2.flush()
-                raise PromptAbortedError(msg)
-            try:
-                response = json.loads(line)
-            except json.JSONDecodeError as e:
-                raise ValidationError(f'Invalid JSON response: {e}. Expected JSON like: {{"answer": "<value>"}}') from e
-            if not isinstance(response, dict) or "answer" not in response:
-                raise ValidationError(
-                    f'Response must be a JSON object with an "answer" key, '
-                    f'e.g. {{"answer": "<value>"}}. Got: {line.strip()}'
-                )
-            try:
-                return self._validate_answer(response["answer"])  # pyright: ignore[reportUnknownArgumentType]
-            except ValidationError as e:
-                if attempt < _MAX_VALIDATION_RETRIES - 1:
-                    out3 = _get_agent_out()
-                    out3.write(json.dumps({"kind": "validation_error", "message": str(e)}, ensure_ascii=False) + "\n")
-                    out3.flush()
-                    continue
-                raise
-
-        # Should not reach here, but satisfy type checker
-        raise ValidationError("Maximum validation retries exceeded")  # pragma: no cover
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(None, self._execute_agent)
 
     async def _execute_terminal_async(self) -> T:
         return self._execute_terminal()
 
     async def execute_async(self) -> T:
-        from inquirer_ai.theme import RESET, get_theme
-
         agent = is_agent_mode()
 
         retries = 0
@@ -292,21 +251,10 @@ class BasePrompt(ABC, Generic[T]):
 
             error = self._run_user_validation(result)
             if error:
-                if agent:
-                    retries += 1
-                    if retries >= _MAX_VALIDATION_RETRIES:
-                        raise ValidationError(error)
-                    out = _get_agent_out()
-                    out.write(json.dumps({"kind": "validation_error", "message": error}, ensure_ascii=False) + "\n")
-                    out.flush()
-                    continue
-                t = get_theme()
-                print(f"{t.ansi(t.error)}  {error}{RESET}")
+                retries = self._handle_validation_error_loop(error, agent, retries)
                 continue
 
             if not agent:
-                t = get_theme()
-                display = self.transformer(result) if self.transformer else self._format_answer(result)
-                print(f"{t.ansi(t.success)}{t.sym_success}{RESET} {self.message} {t.ansi(t.answer)}{display}{RESET}")
+                self._print_success(result)
 
             return result

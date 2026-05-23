@@ -34,7 +34,11 @@ func textAgent(cfg TextConfig) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return raw.(string), nil
+	val, ok := raw.(string)
+	if !ok {
+		return "", fmt.Errorf("%w: expected string, got %T", ErrValidation, raw)
+	}
+	return val, nil
 }
 
 func textTerminal(cfg TextConfig) (string, error) {
