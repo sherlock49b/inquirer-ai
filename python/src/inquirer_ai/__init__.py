@@ -125,8 +125,8 @@ def checkbox(
     choices: Sequence[str | dict[str, Any] | Choice[Any]],
     default: list[Any] | None = None,
     page_size: int = 10,
-    validate: Callable[[Any], bool | str | None] | None = None,
-    filter: Callable[[Any], Any] | None = None,
+    validate: Callable[[list[Any]], bool | str | None] | None = None,
+    filter: Callable[[list[Any]], list[Any]] | None = None,
 ) -> list[Any]:
     return CheckboxPrompt(
         message, choices=list(choices), default=default, page_size=page_size, validate=validate, filter=filter

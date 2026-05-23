@@ -44,30 +44,30 @@ class SearchPrompt(BasePrompt[Any]):
 
     def _execute_terminal(self) -> Any:
         t = get_theme()
-        state: dict[str, Any] = {"cursor": 0, "filtered": []}
-        self._update_filtered(state, "")
+        self._cursor = 0
+        self._filtered: list[Choice[Any]] = []
+        self._refresh_filtered("")
 
         search_buffer = Buffer(
-            on_text_changed=lambda buf: self._update_filtered(state, buf.text),
+            on_text_changed=lambda buf: self._refresh_filtered(buf.text),
         )
 
         kb = KeyBindings()
 
         @kb.add("up")
         def _up(event: KeyPressEvent) -> None:
-            if state["filtered"]:
-                state["cursor"] = (state["cursor"] - 1) % len(state["filtered"])
+            if self._filtered:
+                self._cursor = (self._cursor - 1) % len(self._filtered)
 
         @kb.add("down")
         def _down(event: KeyPressEvent) -> None:
-            if state["filtered"]:
-                state["cursor"] = (state["cursor"] + 1) % len(state["filtered"])
+            if self._filtered:
+                self._cursor = (self._cursor + 1) % len(self._filtered)
 
         @kb.add("enter")
         def _enter(event: KeyPressEvent) -> None:
-            filtered: list[Choice[Any]] = state["filtered"]
-            if filtered:
-                event.app.exit(result=filtered[state["cursor"]].value)  # pyright: ignore[reportUnknownMemberType]
+            if self._filtered:
+                event.app.exit(result=self._filtered[self._cursor].value)
             else:
                 event.app.exit(result=None)
 
@@ -84,18 +84,17 @@ class SearchPrompt(BasePrompt[Any]):
             )
 
         def get_choices() -> FormattedText:
-            filtered: list[Choice[Any]] = state["filtered"]
             lines: list[tuple[str, str]] = []
-            end = min(len(filtered), self.page_size)
+            end = min(len(self._filtered), self.page_size)
             for i in range(end):
-                choice = filtered[i]
-                if i == state["cursor"]:
+                choice = self._filtered[i]
+                if i == self._cursor:
                     lines.append((t.pt_bold(t.highlight), f"{t.sym_pointer} {choice.name}"))
                 else:
                     lines.append(("", f"  {choice.name}"))
                 if i < end - 1:
                     lines.append(("", "\n"))
-            if not filtered:
+            if not self._filtered:
                 lines.append((t.pt(t.muted), "  No matches"))
             return FormattedText(lines)
 
@@ -115,9 +114,7 @@ class SearchPrompt(BasePrompt[Any]):
             raise PromptAbortedError("Prompt aborted by user")
         return result
 
-    def _update_filtered(self, state: dict[str, Any], term: str) -> None:
+    def _refresh_filtered(self, term: str) -> None:
         raw_choices = self.source(term)
-        state["filtered"] = [
-            c for raw in raw_choices if isinstance((c := parse_choice(raw)), Choice) and not c.disabled
-        ]
-        state["cursor"] = 0
+        self._filtered = [c for raw in raw_choices if isinstance((c := parse_choice(raw)), Choice) and not c.disabled]
+        self._cursor = 0
