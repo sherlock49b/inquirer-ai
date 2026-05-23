@@ -10,7 +10,8 @@ import (
 
 func main() {
 	fmt.Println("\n  project-init (Go) v0.1.0")
-	fmt.Println("  Interactive project scaffolding\n")
+	fmt.Println("  Interactive project scaffolding")
+	fmt.Println()
 
 	name, err := prompt.Text(prompt.TextConfig{
 		Message: "Project name",
