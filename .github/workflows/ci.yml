@@ -99,7 +99,7 @@ jobs:
         working-directory: rust
     strategy:
       matrix:
-        rust-version: ["stable", "1.75"]
+        rust-version: ["stable", "1.80"]
 
     steps:
       - uses: actions/checkout@v4
