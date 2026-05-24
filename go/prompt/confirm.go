@@ -2,6 +2,7 @@ package prompt
 
 import (
 	"fmt"
+	"math"
 	"strings"
 )
 
@@ -103,7 +104,7 @@ func toBool(v any) bool {
 		lower := strings.ToLower(val)
 		return lower == "y" || lower == "yes" || lower == "true" || lower == "1"
 	case float64:
-		return val != 0
+		return !math.IsNaN(val) && !math.IsInf(val, 0) && val != 0
 	default:
 		return false
 	}

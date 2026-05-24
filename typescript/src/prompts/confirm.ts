@@ -19,6 +19,9 @@ export class ConfirmPrompt extends BasePrompt<boolean> {
     if (typeof value === "string") {
       return ["y", "yes", "true", "1"].includes(value.toLowerCase());
     }
+    if (typeof value === "number") {
+      return Number.isFinite(value) && value !== 0;
+    }
     return Boolean(value);
   }
 

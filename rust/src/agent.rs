@@ -136,7 +136,7 @@ pub fn agent_receive() -> Result<Value> {
     }
 }
 
-fn extract_answer(resp: &Value) -> Result<Value> {
+pub fn extract_answer(resp: &Value) -> Result<Value> {
     match resp.get("answer") {
         Some(answer) => Ok(answer.clone()),
         None => Err(InquirerError::Validation(

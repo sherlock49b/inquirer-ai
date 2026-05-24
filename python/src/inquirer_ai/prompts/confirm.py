@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from typing import Any
 
 from prompt_toolkit import prompt as pt_prompt
@@ -22,6 +23,8 @@ class ConfirmPrompt(BasePrompt[bool]):
             return value
         if isinstance(value, str):
             return value.lower() in ("y", "yes", "true", "1")
+        if isinstance(value, float) and not math.isfinite(value):
+            return False
         return bool(value)
 
     def _format_answer(self, value: bool) -> str:

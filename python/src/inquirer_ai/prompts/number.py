@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from typing import Any
 
 from prompt_toolkit import prompt as pt_prompt
@@ -33,12 +34,16 @@ class NumberPrompt(BasePrompt[int | float]):
         if value is None and self.default is not None:
             return self.default
         if isinstance(value, (int, float)) and not isinstance(value, bool):
+            if isinstance(value, float) and not math.isfinite(value):
+                raise ValidationError(f"Not a valid number: {value}")
             num = value
         elif isinstance(value, str):
             try:
                 num = float(value) if "." in value else int(value)
             except ValueError:
                 raise ValidationError(f"Not a valid number: {value!r}") from None
+            if isinstance(num, float) and not math.isfinite(num):
+                raise ValidationError(f"Not a valid number: {value!r}")
         else:
             raise ValidationError(f"Expected a number, got {type(value).__name__}")
         if not self.float_allowed and isinstance(num, float):

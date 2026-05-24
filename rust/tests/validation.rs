@@ -62,7 +62,7 @@ fn number_rejects_float_when_not_allowed() {
         float_allowed: false,
     };
 
-    assert!(validate_number(&json!(3.14), &config).is_err());
+    assert!(validate_number(&json!(1.234), &config).is_err());
     let result = validate_number(&json!(5.0), &config).unwrap();
     assert_eq!(result, 5.0);
 }
@@ -89,7 +89,7 @@ fn number_rejects_boolean() {
 fn number_parses_string() {
     let config = NumberConfig::new("x");
     assert_eq!(validate_number(&json!("42"), &config).unwrap(), 42.0);
-    assert!((validate_number(&json!("3.14"), &config).unwrap() - 3.14).abs() < f64::EPSILON);
+    assert!((validate_number(&json!("1.234"), &config).unwrap() - 1.234).abs() < f64::EPSILON);
 }
 
 #[test]
