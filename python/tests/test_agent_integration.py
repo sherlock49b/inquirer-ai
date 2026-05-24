@@ -210,7 +210,7 @@ class TestHandshake:
         handshake = lines[0]
         assert handshake["kind"] == "handshake"
         assert handshake["protocol"] == "inquirer-ai"
-        assert handshake["version"] == "0.2.0"
+        assert handshake["version"] == "0.2.1"
         assert handshake["format"] == "jsonl"
         assert handshake["total"] is None
         assert "answer" in str(handshake["example_response"])

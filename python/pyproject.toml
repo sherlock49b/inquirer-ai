@@ -1,6 +1,6 @@
 [project]
 name = "inquirer-ai"
-version = "0.2.0"
+version = "0.2.1"
 description = "Interactive CLI prompts for both humans and AI agents"
 readme = "README.md"
 license = {text = "MIT"}
