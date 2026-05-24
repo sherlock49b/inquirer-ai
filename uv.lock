@@ -179,10 +179,20 @@ wheels = [
 
 [[package]]
 name = "inquirer-ai"
-version = "0.1.0"
+version = "0.2.0"
 source = { editable = "python" }
 dependencies = [
     { name = "prompt-toolkit" },
+]
+
+[package.optional-dependencies]
+dev = [
+    { name = "hypothesis" },
+    { name = "pyright" },
+    { name = "pytest" },
+    { name = "pytest-asyncio" },
+    { name = "pytest-cov" },
+    { name = "ruff" },
 ]
 
 [package.dev-dependencies]
@@ -196,7 +206,16 @@ dev = [
 ]
 
 [package.metadata]
-requires-dist = [{ name = "prompt-toolkit", specifier = ">=3.0,<4.0" }]
+requires-dist = [
+    { name = "hypothesis", marker = "extra == 'dev'", specifier = ">=6.0" },
+    { name = "prompt-toolkit", specifier = ">=3.0,<4.0" },
+    { name = "pyright", marker = "extra == 'dev'", specifier = ">=1.1.409" },
+    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0" },
+    { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.23" },
+    { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=5.0" },
+    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.11" },
+]
+provides-extras = ["dev"]
 
 [package.metadata.requires-dev]
 dev = [
