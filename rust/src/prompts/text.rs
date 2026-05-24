@@ -79,9 +79,24 @@ fn text_terminal(config: &TextConfig) -> Result<String> {
             result = f(result);
         }
         if let Some(v) = &config.validate {
-            if let Err(msg) = v(&result) {
-                eprintln!("{}", crate::terminal::format_error(&msg));
-                continue;
+            use std::panic::{catch_unwind, AssertUnwindSafe};
+            let res_ref = &result;
+            match catch_unwind(AssertUnwindSafe(|| v(res_ref))) {
+                Ok(Ok(())) => {}
+                Ok(Err(msg)) => {
+                    eprintln!("{}", crate::terminal::format_error(&msg));
+                    continue;
+                }
+                Err(panic_payload) => {
+                    let msg = if let Some(s) = panic_payload.downcast_ref::<&str>() {
+                        format!("Validator panicked: {s}")
+                    } else if let Some(s) = panic_payload.downcast_ref::<String>() {
+                        format!("Validator panicked: {s}")
+                    } else {
+                        "Validator panicked with an unknown payload".to_string()
+                    };
+                    return Err(crate::errors::InquirerError::Validation(msg));
+                }
             }
         }
         eprintln!("{}", format_success(&config.message, &result));

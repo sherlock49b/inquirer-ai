@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 	"sync"
 )
 
@@ -93,7 +94,7 @@ func AgentReceive() (any, error) {
 			return nil, fmt.Errorf("%w: stdin closed", ErrAborted)
 		}
 
-		line := scanner.Text()
+		line := strings.TrimRight(scanner.Text(), "\r")
 		var resp map[string]any
 		if err := json.Unmarshal([]byte(line), &resp); err != nil {
 			return nil, fmt.Errorf("%w: %v. Expected JSON like: {\"answer\": \"<value>\"}", ErrInvalidJSON, err)
@@ -125,7 +126,7 @@ func AgentPromptWithRetry(payload map[string]any, validate func(any) (any, error
 		if err != nil {
 			return nil, err
 		}
-		result, err := validate(answer)
+		result, err := safeCallValidate(validate, answer)
 		if err != nil {
 			if attempt < maxRetries-1 {
 				AgentSendValidationError(err.Error())
@@ -151,6 +152,22 @@ func AgentSendValidationError(msg string) error {
 	}
 	_, err = fmt.Fprintln(agentWriter, string(data))
 	return err
+}
+
+// safeCallValidate calls the validate function and recovers from panics,
+// converting them to ErrValidation errors.
+func safeCallValidate(validate func(any) (any, error), answer any) (result any, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			switch v := r.(type) {
+			case error:
+				err = fmt.Errorf("%w: validator panicked: %v", ErrValidation, v)
+			default:
+				err = fmt.Errorf("%w: validator panicked: %v", ErrValidation, v)
+			}
+		}
+	}()
+	return validate(answer)
 }
 
 // AgentSendError sends a general error message to the agent.

@@ -28,6 +28,9 @@ func Select(cfg SelectConfig) (any, error) {
 	if len(choices) == 0 {
 		return nil, fmt.Errorf("%w: choices cannot be empty", ErrInvalidChoice)
 	}
+	if len(selectableIndices(choices)) == 0 {
+		return nil, fmt.Errorf("%w: no selectable choices", ErrInvalidChoice)
+	}
 	if IsAgentMode() {
 		// selectAgent handles validation, filter, and retry internally
 		return selectAgent(cfg, choices)

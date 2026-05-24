@@ -75,7 +75,14 @@ export abstract class BasePrompt<T> {
 
   protected runUserValidation(value: T): string | null {
     if (!this.validateFn) return null;
-    const result = this.validateFn(value);
+    let result: boolean | string | null | undefined;
+    try {
+      result = this.validateFn(value);
+    } catch (err) {
+      if (err instanceof ValidationError) throw err;
+      const msg = err instanceof Error ? err.message : String(err);
+      throw new ValidationError(msg);
+    }
     if (result === true || result === null || result === undefined) return null;
     if (typeof result === "string") return result;
     return "Validation failed";

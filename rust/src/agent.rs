@@ -14,17 +14,22 @@ const VERSION: &str = "0.2.0";
 
 /// Creates a File from a raw fd specified in an environment variable.
 ///
-/// # Safety
-///
-/// The fd must be valid and open. The caller must ensure the fd
-/// is not closed elsewhere while the File is in use.
+/// Validates that the fd is actually open before constructing the File.
+/// Returns `None` if the env var is missing, not a valid integer, or
+/// points to a closed/invalid file descriptor.
 #[cfg(unix)]
 fn file_from_env_fd(var: &str) -> Option<std::fs::File> {
     use std::os::unix::io::FromRawFd;
-    std::env::var(var)
-        .ok()
-        .and_then(|s| s.parse::<i32>().ok())
-        .map(|fd| unsafe { std::fs::File::from_raw_fd(fd) })
+    let fd: i32 = std::env::var(var).ok()?.parse().ok()?;
+
+    // Validate the fd is open using fcntl(fd, F_GETFD).
+    // Returns -1 if the fd is not open.
+    if unsafe { libc::fcntl(fd, libc::F_GETFD) } == -1 {
+        return None;
+    }
+
+    // SAFETY: We verified the fd is open above.
+    Some(unsafe { std::fs::File::from_raw_fd(fd) })
 }
 
 #[cfg(not(unix))]
@@ -163,24 +168,43 @@ pub fn agent_send_error(msg: &str) -> Result<()> {
 
 /// Send a prompt payload to the agent, receive a response, validate it, and
 /// retry up to 3 times on validation errors.
+///
+/// If the `validate` closure panics, the panic is caught and converted into
+/// an `InquirerError::Validation` so that the caller never observes UB from
+/// an unwinding validator.
 pub fn agent_prompt_with_retry<T>(
     payload: &Value,
     validate: impl Fn(Value) -> Result<T>,
 ) -> Result<T> {
+    use std::panic::{catch_unwind, AssertUnwindSafe};
+
     const MAX_RETRIES: usize = 3;
     for attempt in 0..MAX_RETRIES {
         agent_send(payload)?;
         let answer = agent_receive()?;
-        match validate(answer) {
-            Ok(val) => return Ok(val),
-            Err(InquirerError::Validation(msg)) => {
+
+        let result = catch_unwind(AssertUnwindSafe(|| validate(answer)));
+
+        match result {
+            Ok(Ok(val)) => return Ok(val),
+            Ok(Err(InquirerError::Validation(msg))) => {
                 if attempt + 1 < MAX_RETRIES {
                     agent_send_validation_error(&msg)?;
                     continue;
                 }
                 return Err(InquirerError::Validation(msg));
             }
-            Err(e) => return Err(e),
+            Ok(Err(e)) => return Err(e),
+            Err(panic_payload) => {
+                let msg = if let Some(s) = panic_payload.downcast_ref::<&str>() {
+                    format!("Validator panicked: {s}")
+                } else if let Some(s) = panic_payload.downcast_ref::<String>() {
+                    format!("Validator panicked: {s}")
+                } else {
+                    "Validator panicked with an unknown payload".to_string()
+                };
+                return Err(InquirerError::Validation(msg));
+            }
         }
     }
     unreachable!()

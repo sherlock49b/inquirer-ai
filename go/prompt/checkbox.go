@@ -26,6 +26,9 @@ func Checkbox(cfg CheckboxConfig) ([]any, error) {
 	if len(choices) == 0 {
 		return nil, fmt.Errorf("%w: choices cannot be empty", ErrInvalidChoice)
 	}
+	if len(selectableIndices(choices)) == 0 {
+		return nil, fmt.Errorf("%w: no selectable choices", ErrInvalidChoice)
+	}
 	if IsAgentMode() {
 		// checkboxAgent handles validation, filter, and retry internally
 		return checkboxAgent(cfg, choices)

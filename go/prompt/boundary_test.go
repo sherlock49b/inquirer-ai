@@ -1,6 +1,7 @@
 package prompt
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
@@ -331,5 +332,129 @@ func TestConfirmStringCoercion(t *testing.T) {
 		if result != tc.expected {
 			t.Fatalf("input %s: expected %v, got %v", tc.input, tc.expected, result)
 		}
+	}
+}
+
+// --- Boundary tests ---
+
+func TestBoundaryCRLFLineEndings(t *testing.T) {
+	// Simulate \r\n line endings: bufio.Scanner strips \n but leaves \r
+	r, w, cleanup := agentSetup(t, "{\"answer\":\"hello\"}\r\n")
+	defer cleanup()
+
+	result, err := Text(TextConfig{Message: "Name?"})
+	readOutput(r, w)
+
+	if err != nil {
+		t.Fatalf("expected no error with \\r\\n line endings, got: %v", err)
+	}
+	if result != "hello" {
+		t.Fatalf("expected 'hello', got %q", result)
+	}
+}
+
+func TestBoundaryValidatorPanicsWithString(t *testing.T) {
+	// Provide 3 answers for the retry loop (validator always panics).
+	input := `{"answer":"ok"}` + "\n" +
+		`{"answer":"ok"}` + "\n" +
+		`{"answer":"ok"}` + "\n"
+	r, w, cleanup := agentSetup(t, input)
+	defer cleanup()
+
+	_, err := Select(SelectConfig{
+		Message: "Pick",
+		Choices: []ChoiceItem{
+			Choice{Name: "OK", Value: "ok"},
+		},
+		Validate: func(v any) error {
+			panic("kaboom")
+		},
+	})
+	readOutput(r, w)
+
+	if err == nil {
+		t.Fatal("expected error when validator panics")
+	}
+	if !errors.Is(err, ErrValidation) {
+		t.Fatalf("expected ErrValidation, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "kaboom") {
+		t.Fatalf("expected error to contain panic message, got: %v", err)
+	}
+}
+
+func TestBoundaryValidatorPanicsWithError(t *testing.T) {
+	// Provide 3 answers for the retry loop (validator always panics).
+	input := `{"answer":"ok"}` + "\n" +
+		`{"answer":"ok"}` + "\n" +
+		`{"answer":"ok"}` + "\n"
+	r, w, cleanup := agentSetup(t, input)
+	defer cleanup()
+
+	_, err := Select(SelectConfig{
+		Message: "Pick",
+		Choices: []ChoiceItem{
+			Choice{Name: "OK", Value: "ok"},
+		},
+		Validate: func(v any) error {
+			panic(fmt.Errorf("internal bug"))
+		},
+	})
+	readOutput(r, w)
+
+	if err == nil {
+		t.Fatal("expected error when validator panics with error")
+	}
+	if !errors.Is(err, ErrValidation) {
+		t.Fatalf("expected ErrValidation, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "internal bug") {
+		t.Fatalf("expected error to contain panic message, got: %v", err)
+	}
+}
+
+func TestBoundaryAllChoicesDisabled(t *testing.T) {
+	_, err := Select(SelectConfig{
+		Message: "Pick",
+		Choices: []ChoiceItem{
+			Choice{Name: "A", Value: "a", Disabled: true},
+			Choice{Name: "B", Value: "b", Disabled: true},
+		},
+	})
+
+	if err == nil {
+		t.Fatal("expected error when all choices are disabled")
+	}
+	if !errors.Is(err, ErrInvalidChoice) {
+		t.Fatalf("expected ErrInvalidChoice, got: %v", err)
+	}
+}
+
+func TestBoundaryEmptyChoiceList(t *testing.T) {
+	_, err := Select(SelectConfig{
+		Message: "Pick",
+		Choices: []ChoiceItem{},
+	})
+
+	if err == nil {
+		t.Fatal("expected error for empty choice list")
+	}
+	if !errors.Is(err, ErrInvalidChoice) {
+		t.Fatalf("expected ErrInvalidChoice, got: %v", err)
+	}
+}
+
+func TestBoundaryStdinEOFAgentMode(t *testing.T) {
+	r, w, cleanup := agentSetup(t, "")
+	defer cleanup()
+
+	_, err := Text(TextConfig{Message: "Name?"})
+	readOutput(r, w)
+
+	if err == nil {
+		t.Fatal("expected error on stdin EOF")
+	}
+	if !errors.Is(err, ErrAborted) {
+		t.Fatalf("expected ErrAborted, got: %v", err)
 	}
 }

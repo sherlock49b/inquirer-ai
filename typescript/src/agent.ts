@@ -29,7 +29,22 @@ export function resetAgent(): void {
 function getOutputStream(): NodeJS.WritableStream {
   const fdOut = process.env.INQUIRER_AI_FD_OUT;
   if (fdOut) {
-    return fs.createWriteStream("", { fd: parseInt(fdOut, 10) });
+    const fd = parseInt(fdOut, 10);
+    if (Number.isNaN(fd)) {
+      process.stderr.write(
+        `[inquirer-ai] Warning: invalid INQUIRER_AI_FD_OUT="${fdOut}", falling back to stdout\n`,
+      );
+      return process.stdout;
+    }
+    try {
+      return fs.createWriteStream("", { fd });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      process.stderr.write(
+        `[inquirer-ai] Warning: failed to open fd ${fd} for output: ${msg}, falling back to stdout\n`,
+      );
+      return process.stdout;
+    }
   }
   return process.stdout;
 }
@@ -37,7 +52,22 @@ function getOutputStream(): NodeJS.WritableStream {
 function getInputStream(): NodeJS.ReadableStream {
   const fdIn = process.env.INQUIRER_AI_FD_IN;
   if (fdIn) {
-    return fs.createReadStream("", { fd: parseInt(fdIn, 10) });
+    const fd = parseInt(fdIn, 10);
+    if (Number.isNaN(fd)) {
+      process.stderr.write(
+        `[inquirer-ai] Warning: invalid INQUIRER_AI_FD_IN="${fdIn}", falling back to stdin\n`,
+      );
+      return process.stdin;
+    }
+    try {
+      return fs.createReadStream("", { fd });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      process.stderr.write(
+        `[inquirer-ai] Warning: failed to open fd ${fd} for input: ${msg}, falling back to stdin\n`,
+      );
+      return process.stdin;
+    }
   }
   return process.stdin;
 }

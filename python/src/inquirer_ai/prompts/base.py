@@ -33,14 +33,26 @@ def _reset_agent_handshake() -> None:
 def _get_agent_out() -> TextIO:
     fd_out = os.environ.get("INQUIRER_AI_FD_OUT")
     if fd_out is not None:
-        return os.fdopen(int(fd_out), "w", closefd=False)
+        try:
+            return os.fdopen(int(fd_out), "w", closefd=False)
+        except (ValueError, OSError) as exc:
+            print(
+                f"inquirer-ai: invalid INQUIRER_AI_FD_OUT={fd_out!r} ({exc}), falling back to stdout",
+                file=sys.stderr,
+            )
     return sys.stdout
 
 
 def _get_agent_in() -> TextIO:
     fd_in = os.environ.get("INQUIRER_AI_FD_IN")
     if fd_in is not None:
-        return os.fdopen(int(fd_in), "r", closefd=False)
+        try:
+            return os.fdopen(int(fd_in), "r", closefd=False)
+        except (ValueError, OSError) as exc:
+            print(
+                f"inquirer-ai: invalid INQUIRER_AI_FD_IN={fd_in!r} ({exc}), falling back to stdin",
+                file=sys.stderr,
+            )
     return sys.stdin
 
 
@@ -118,12 +130,14 @@ class BasePrompt(ABC, Generic[T]):
             return line
         agent_in = _get_agent_in()
         line = agent_in.readline()
+        line = line.strip()
         if line:
             try:
                 parsed_ack: dict[str, Any] = json.loads(line)
                 if isinstance(parsed_ack, dict) and parsed_ack.get("kind") == "handshake_ack":  # pyright: ignore[reportUnnecessaryIsInstance]
                     _agent_handshake_ack = parsed_ack
-                    return agent_in.readline()
+                    next_line = agent_in.readline()
+                    return next_line.strip()
             except json.JSONDecodeError:
                 pass
         return line
@@ -170,7 +184,12 @@ class BasePrompt(ABC, Generic[T]):
     def _run_user_validation(self, value: T) -> str | None:
         if not self.validate_fn:
             return None
-        result = self.validate_fn(value)
+        try:
+            result = self.validate_fn(value)
+        except ValidationError:
+            raise
+        except Exception as exc:
+            raise ValidationError(str(exc) or f"{type(exc).__name__} in validator") from exc
         if result is True or result is None:
             return None
         if isinstance(result, str):
