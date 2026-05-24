@@ -35,3 +35,40 @@ name = "teamcz"
 ```
 
 **Source:** [`extensions/cz-teamcz/`](cz-teamcz/)
+
+## cz-inquirer-ai
+
+A Node.js commitizen adapter powered by inquirer-ai's TypeScript library. Provides agent-protocol-aware conventional commits — any AI agent can drive the commit flow via the JSON line protocol without knowing your project's conventions in advance.
+
+```bash
+# Install
+npm install --save-dev cz-inquirer-ai commitizen
+
+# Configure in package.json:
+{
+  "config": {
+    "commitizen": {
+      "path": "cz-inquirer-ai"
+    }
+  }
+}
+
+# Use
+npx cz
+```
+
+**Source:** [`extensions/cz-inquirer-ai/`](cz-inquirer-ai/)
+
+## cargo-deps
+
+A Cargo subcommand for interactive dependency management using inquirer-ai's Rust library. Search, add, and remove crates interactively — with full AI agent support via the inquirer-ai protocol.
+
+```bash
+# Install
+cargo install --path extensions/cargo-deps
+
+# Use
+cargo deps
+```
+
+**Source:** [`extensions/cargo-deps/`](cargo-deps/)

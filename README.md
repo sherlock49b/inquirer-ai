@@ -13,7 +13,7 @@ Every interactive CLI today is a black box to AI agents. When an agent encounter
 **inquirer-ai eliminates this entirely.** When stdin isn't a TTY, every prompt automatically switches to a self-describing JSON line protocol. The first line tells the agent exactly how to respond:
 
 ```json
-{"protocol": "inquirer-ai", "version": "0.1.0", "format": "jsonl", "example_response": {"answer": "<value>"}}
+{"protocol": "inquirer-ai", "version": "0.2.1", "format": "jsonl", "example_response": {"answer": "<value>"}}
 ```
 
 The agent reads this once, and knows how to drive the entire CLI.
@@ -106,6 +106,16 @@ pip install inquirer-ai    # Python
 go get github.com/sherlock49b/inquirer-ai/go/prompt  # Go
 ```
 
+```bash
+npm install inquirer-ai    # TypeScript / Node.js
+```
+
+```bash
+cargo add inquirer-ai      # Rust (crates.io)
+# or as a git dependency in Cargo.toml:
+# inquirer-ai = { git = "https://github.com/sherlock49b/inquirer-ai", subdirectory = "rust" }
+```
+
 ## Quick Start
 
 ```python
@@ -119,6 +129,31 @@ proceed = inquirer_ai.confirm("Create project?", default=True)
 
 When a human runs this, they get arrow keys, colored output, and interactive menus.
 When an AI agent runs it, they get JSON lines. Same code. Same behavior. Different interface.
+
+**TypeScript:**
+
+```typescript
+import { text, select, checkbox, confirm } from "inquirer-ai";
+
+const name = await text({ message: "Project name?" });
+const lang = await select({ message: "Language?", choices: ["Python", "Go", "Rust"] });
+const features = await checkbox({ message: "Features?", choices: ["Docker", "CI/CD", "Tests"] });
+const proceed = await confirm({ message: "Create project?", default: true });
+```
+
+**Rust:**
+
+```rust
+use inquirer_ai::*;
+
+let name = text(TextConfig { message: "Project name?".into(), ..Default::default() })?;
+let lang = select(SelectConfig {
+    message: "Language?".into(),
+    choices: vec!["Python".into(), "Go".into(), "Rust".into()],
+    ..Default::default()
+})?;
+let proceed = confirm(ConfirmConfig { message: "Create project?".into(), ..Default::default() })?;
+```
 
 ## 12 Prompt Types
 
@@ -191,26 +226,31 @@ Full specification: [`spec/protocol.md`](spec/protocol.md)
 Program                              Agent
   │                                    │
   ├──── handshake ────────────────────►│  protocol metadata (once)
-  ├──── {"type":"select",...} ────────►│  prompt
+  ├──── {"type":"select",...} ────────►│  prompt (includes kind, step/total)
   │◄─── {"answer":"value"} ───────────┤  response
   ├──── {"type":"confirm",...} ───────►│  prompt
   │◄─── {"answer":true} ──────────────┤  response
+  │     (validation error?)            │
+  ├──── {"error":"invalid"} ─────────►│  validation retry
+  │◄─── {"answer":"fixed"} ───────────┤  corrected response
   └────────────────────────────────────│
 ```
+
+v2 features: `kind` field for prompt semantics, `step`/`total` for progress tracking, validation retry loop.
 
 Auto-detection: non-TTY stdin → agent mode. Override: `INQUIRER_AI_MODE=agent|human`.
 
 ## Implementations
 
-| | Python | Go |
-|---|---|---|
-| Prompt types | 12 | 12 |
-| Terminal UI | prompt_toolkit | bubbletea + lipgloss |
-| Agent protocol | JSONL | Same JSONL |
-| Tests | 209 | 50 |
-| Async | `*_async()` | goroutines |
+| | Python | Go | TypeScript | Rust |
+|---|---|---|---|---|
+| Prompt types | 12 | 12 | 12 | 12 |
+| Terminal UI | prompt_toolkit | bubbletea + lipgloss | ink | crossterm |
+| Agent protocol | JSONL | Same JSONL | Same JSONL | Same JSONL |
+| Tests | 297 | ~130 | 128 | 108 |
+| Async | `*_async()` | goroutines | native async/await | tokio |
 
-Both implementations share the same protocol spec. An agent that learns from one can drive the other.
+All implementations share the same protocol spec. An agent that learns from one can drive any of the others.
 
 ## License
 
