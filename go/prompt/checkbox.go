@@ -39,10 +39,6 @@ func Checkbox(cfg CheckboxConfig) ([]any, error) {
 	if err != nil {
 		return nil, err
 	}
-	result, err = applyCallbacksList(result, cfg.Validate, cfg.Filter)
-	if err != nil {
-		return nil, err
-	}
 	if cfg.Required && len(result) == 0 {
 		msg := cfg.RequiredMessage
 		if msg == "" {
@@ -50,7 +46,7 @@ func Checkbox(cfg CheckboxConfig) ([]any, error) {
 		}
 		return nil, fmt.Errorf("%w: %s", ErrValidation, msg)
 	}
-	return result, nil
+	return applyCallbacksList(result, cfg.Validate, cfg.Filter)
 }
 
 func checkboxAgent(cfg CheckboxConfig, choices []resolvedChoice) ([]any, error) {
@@ -84,10 +80,6 @@ func checkboxAgent(cfg CheckboxConfig, choices []resolvedChoice) ([]any, error) 
 				return nil, fmt.Errorf("%w: %q", ErrInvalidChoice, s)
 			}
 		}
-		result, err := applyCallbacksList(result, cfg.Validate, cfg.Filter)
-		if err != nil {
-			return nil, err
-		}
 		if cfg.Required && len(result) == 0 {
 			msg := cfg.RequiredMessage
 			if msg == "" {
@@ -95,7 +87,7 @@ func checkboxAgent(cfg CheckboxConfig, choices []resolvedChoice) ([]any, error) 
 			}
 			return nil, fmt.Errorf("%w: %s", ErrValidation, msg)
 		}
-		return result, nil
+		return applyCallbacksList(result, cfg.Validate, cfg.Filter)
 	})
 	if err != nil {
 		return nil, err
