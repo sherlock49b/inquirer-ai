@@ -209,7 +209,8 @@ fn cmd_add(initial_query: &str) {
     let choices: Vec<ChoiceItem> = results
         .iter()
         .map(|c| {
-            let desc = c.description.as_deref().unwrap_or("").chars().take(60).collect::<String>();
+            let desc: String = c.description.as_deref().unwrap_or("")
+                .chars().filter(|c| !matches!(c, '\n' | '\r')).take(60).collect();
             let downloads = format_downloads(c.downloads);
             ChoiceItem::Choice(Choice {
                 name: format!("{} v{} ({})", c.name, c.max_version, downloads),
