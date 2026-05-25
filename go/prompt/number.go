@@ -12,6 +12,7 @@ type NumberConfig struct {
 	Default      *float64
 	Min          *float64
 	Max          *float64
+	Step         *float64
 	FloatAllowed bool
 	Validate     func(float64) error
 	Filter       func(float64) float64
@@ -45,6 +46,7 @@ func numberAgent(cfg NumberConfig) (float64, error) {
 		"default":       cfg.Default,
 		"min":           cfg.Min,
 		"max":           cfg.Max,
+		"step":          cfg.Step,
 		"float_allowed": cfg.FloatAllowed,
 	}
 	raw, err := AgentPromptWithRetry(payload, func(answer any) (any, error) {
@@ -135,6 +137,16 @@ func validateNumber(v any, cfg NumberConfig) (float64, error) {
 	}
 	if cfg.Max != nil && num > *cfg.Max {
 		return 0, fmt.Errorf("%w: must be at most %g", ErrValidation, *cfg.Max)
+	}
+	if cfg.Step != nil {
+		base := 0.0
+		if cfg.Min != nil {
+			base = *cfg.Min
+		}
+		remainder := math.Mod(num-base, *cfg.Step)
+		if math.Abs(remainder) > 1e-9 && math.Abs(remainder-*cfg.Step) > 1e-9 {
+			return 0, fmt.Errorf("%w: must be a multiple of %v (from %v)", ErrValidation, *cfg.Step, base)
+		}
 	}
 	return num, nil
 }

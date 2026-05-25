@@ -4,13 +4,15 @@ import "fmt"
 
 // CheckboxConfig configures a multi-select checkbox prompt.
 type CheckboxConfig struct {
-	Message  string
-	Choices  []ChoiceItem
-	Default  []string
-	PageSize int
-	Loop     *bool
-	Validate func(any) error
-	Filter   func(any) any
+	Message         string
+	Choices         []ChoiceItem
+	Default         []string
+	PageSize        int
+	Loop            *bool
+	Required        bool
+	RequiredMessage string // custom message, defaults to "At least one choice is required"
+	Validate        func(any) error
+	Filter          func(any) any
 }
 
 // Checkbox prompts the user to select multiple items from a list.
@@ -37,7 +39,18 @@ func Checkbox(cfg CheckboxConfig) ([]any, error) {
 	if err != nil {
 		return nil, err
 	}
-	return applyCallbacksList(result, cfg.Validate, cfg.Filter)
+	result, err = applyCallbacksList(result, cfg.Validate, cfg.Filter)
+	if err != nil {
+		return nil, err
+	}
+	if cfg.Required && len(result) == 0 {
+		msg := cfg.RequiredMessage
+		if msg == "" {
+			msg = "At least one choice is required"
+		}
+		return nil, fmt.Errorf("%w: %s", ErrValidation, msg)
+	}
+	return result, nil
 }
 
 func checkboxAgent(cfg CheckboxConfig, choices []resolvedChoice) ([]any, error) {
@@ -71,7 +84,18 @@ func checkboxAgent(cfg CheckboxConfig, choices []resolvedChoice) ([]any, error) 
 				return nil, fmt.Errorf("%w: %q", ErrInvalidChoice, s)
 			}
 		}
-		return applyCallbacksList(result, cfg.Validate, cfg.Filter)
+		result, err := applyCallbacksList(result, cfg.Validate, cfg.Filter)
+		if err != nil {
+			return nil, err
+		}
+		if cfg.Required && len(result) == 0 {
+			msg := cfg.RequiredMessage
+			if msg == "" {
+				msg = "At least one choice is required"
+			}
+			return nil, fmt.Errorf("%w: %s", ErrValidation, msg)
+		}
+		return result, nil
 	})
 	if err != nil {
 		return nil, err
