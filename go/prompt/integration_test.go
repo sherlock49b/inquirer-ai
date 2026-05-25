@@ -72,7 +72,7 @@ func runDemo(t *testing.T, answers []map[string]any) (lines []map[string]any, st
 
 	cmd := exec.Command(bin)
 	cmd.Stdin = &stdinBuf
-	cmd.Env = []string{"INQUIRER_AI_MODE=agent"}
+	cmd.Env = []string{"INQUIRER_AI_MODE=agent", "INQUIRER_AI_TRANSPORT=stdio"}
 
 	var stdoutBuf, stderrBuf bytes.Buffer
 	cmd.Stdout = &stdoutBuf

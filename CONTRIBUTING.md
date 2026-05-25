@@ -7,7 +7,7 @@
 - Python 3.10+
 - Go 1.22+ (for Go library)
 - [uv](https://docs.astral.sh/uv/)
-- [commitizen](https://commitizen-tools.github.io/commitizen/) (`uv tool install commitizen`)
+- [commitizen](https://commitizen-tools.github.io/commitizen/) (`uv tool install commitizen --with ./python --with ./extensions/cz-teamcz`)
 
 ### Setup
 
@@ -88,22 +88,23 @@ These constraints exist not because we distrust AI, but because unattended agent
 
 ### Making commits
 
-Run `cz commit` in agent mode. The tool will send prompts as JSON lines on stdout. Respond with `{"answer": <value>}` on stdin, **one at a time**.
-
-**Use a named pipe for bidirectional I/O:**
+Run `cz commit`. In agent mode (non-TTY stdin), the tool auto-creates a Unix socket and writes the handshake (with socket path) to stdout. Each prompt is served on a separate socket connection.
 
 ```bash
-mkfifo /tmp/cz_pipe
-cz commit < /tmp/cz_pipe > /tmp/cz_out 2>&1 &
+# Start cz, capture handshake
+INQUIRER_AI_MODE=agent cz commit > /tmp/handshake.txt &
+SOCK=$(jq -r .socket /tmp/handshake.txt)
+
+# Answer each prompt with an independent command
+echo '{"answer":"feat"}'        | nc -U -q1 $SOCK
+echo '{"answer":"python"}'      | nc -U -q1 $SOCK
+echo '{"answer":"add feature"}' | nc -U -q1 $SOCK
+echo '{"answer":""}'            | nc -U -q1 $SOCK
+echo '{"answer":false}'         | nc -U -q1 $SOCK
+echo '{"answer":""}'            | nc -U -q1 $SOCK
 ```
 
-Then read one prompt from `/tmp/cz_out`, write one answer to `/tmp/cz_pipe`, repeat.
-
-**Or batch if the questions are predictable:**
-
-```bash
-printf '{"answer":"feat"}\n{"answer":"python"}\n{"answer":"add X"}\n{"answer":""}\n{"answer":false}\n{"answer":""}\n' | cz commit
-```
+Each `nc` call connects, receives the prompt, sends the answer, and gets `{"status":"accepted"}`. No persistent session needed.
 
 ### Commit question flow
 
@@ -154,44 +155,43 @@ If you change the agent JSON protocol (handshake format, prompt fields, response
 
 1. Use commit type `protocol`
 2. Update `spec/protocol.md`
-3. Update both Python (`prompts/base.py`) and Go (`prompt/agent.go`) implementations
-4. Ensure all tests pass in both languages
+3. Update all 4 implementations: Python, Go, TypeScript, Rust
+4. Ensure all tests pass in all languages
 
 ### Git hooks reference
 
 | Hook | Runs | Blocks commit on failure? |
 |------|------|:------------------------:|
 | `commit-msg` | `cz check` (message format) | Yes |
-| `pre-commit` | Python lint + typecheck + tests, Go fmt + vet + tests | Yes |
+| `pre-commit` | Python lint + typecheck + tests, Go fmt + vet + tests, TS tsc + biome + tests, Rust fmt + clippy + tests | Yes |
 | `pre-push` | Same as pre-commit + coverage report | Yes |
 
 ### Code style
 
 - **Python**: ruff format (120 chars), ruff lint, pyright strict mode, 80% coverage minimum
-- **Go**: gofmt, go vet, golangci-lint
+- **Go**: gofmt, go vet
+- **TypeScript**: biome lint/format, tsc strict
+- **Rust**: rustfmt, clippy, `#![deny(warnings)]`
 
-### Example commit session
+### Example commit session (socket transport)
 
-```
-$ cz commit
+```bash
+$ INQUIRER_AI_MODE=agent cz commit > /tmp/hs.txt &
+$ SOCK=$(jq -r .socket /tmp/hs.txt)
 
-→ {"type":"select","message":"Select the type of change you are committing","choices":[{"name":"feat: A new prompt type...","value":"feat"},...]}
-← {"answer":"feat"}
+$ echo '{"answer":"feat"}' | nc -U -q1 $SOCK
+{"kind":"prompt","type":"select","message":"Select the type of change...","choices":[...]}
+{"status":"accepted"}
 
-→ {"type":"select","message":"What part of the project is affected?","choices":[{"name":"python: Python library","value":"python"},...]}
-← {"answer":"select"}
+$ echo '{"answer":"select"}' | nc -U -q1 $SOCK
+{"kind":"prompt","type":"select","message":"What part of the project is affected?","choices":[...]}
+{"status":"accepted"}
 
-→ {"type":"input","message":"Write a short summary..."}
-← {"answer":"add description shown on focused choice"}
+$ echo '{"answer":"add description shown on focused choice"}' | nc -U -q1 $SOCK
+{"kind":"prompt","type":"input","message":"Write a short summary..."}
+{"status":"accepted"}
 
-→ {"type":"input","message":"Why is this change needed?..."}
-← {"answer":""}
+# ... (3 more prompts)
 
-→ {"type":"confirm","message":"Is this a BREAKING CHANGE?...","default":false}
-← {"answer":false}
-
-→ {"type":"input","message":"References..."}
-← {"answer":"#42"}
-
-Result: feat(select): add description shown on focused choice
+# Result: feat(select): add description shown on focused choice
 ```

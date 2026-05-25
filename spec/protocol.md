@@ -1,4 +1,4 @@
-# inquirer-ai Agent Protocol Specification v2
+# inquirer-ai Agent Protocol Specification v2.1
 
 ## Overview
 
@@ -16,11 +16,29 @@ Agent mode is activated when any of the following is true:
 
 Terminal mode is forced when `INQUIRER_AI_MODE` is set to `human`.
 
-## I/O Channels
+## Transport
 
-By default, protocol messages use stdout (tool → agent) and stdin (agent → tool). Programs MUST NOT write non-protocol output to stdout in agent mode — use stderr for logs, progress, and user-facing text.
+### Socket transport (default in agent mode)
 
-### Optional: fd-based communication
+In agent mode, the tool creates a Unix domain socket and advertises its path in the handshake. Each prompt is served on a separate socket connection, allowing agents to interact with independent one-shot commands (`nc -U` or `socat`).
+
+```bash
+# Agent starts the CLI, reads handshake from stdout
+INQUIRER_AI_MODE=agent my-cli > /tmp/handshake.txt &
+SOCK=$(jq -r .socket /tmp/handshake.txt)
+
+# Each prompt is a separate connection
+echo '{"answer":"feat"}' | nc -U -q1 $SOCK
+echo '{"answer":"add login"}' | nc -U -q1 $SOCK
+```
+
+See [`socket-transport.md`](socket-transport.md) for the full specification.
+
+### Stdio transport (legacy)
+
+When `INQUIRER_AI_TRANSPORT=stdio` is set, or on platforms without Unix sockets, protocol messages use stdout (tool → agent) and stdin (agent → tool). Programs MUST NOT write non-protocol output to stdout in agent mode — use stderr for logs, progress, and user-facing text.
+
+### Optional: fd-based communication (stdio transport only)
 
 When `INQUIRER_AI_FD` is set, the tool uses dedicated file descriptors instead of stdin/stdout:
 
@@ -73,11 +91,12 @@ The first line emitted by the program is a handshake. It is sent exactly once, b
 {
   "kind": "handshake",
   "protocol": "inquirer-ai",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "format": "jsonl",
+  "socket": "/tmp/inquirer-ai-29481.sock",
   "interaction": "sequential",
   "total": 5,
-  "description": "Interactive prompt protocol. Prompts are sent one at a time — read one JSON line, respond with one JSON line, then wait for the next prompt.",
+  "description": "Interactive prompt protocol over Unix socket. Connect to read a prompt, send a JSON answer, receive status. One connection per prompt.",
   "example_response": {"answer": "<value>"}
 }
 ```
@@ -88,6 +107,7 @@ The first line emitted by the program is a handshake. It is sent exactly once, b
 | `protocol` | string | yes | Always `"inquirer-ai"` |
 | `version` | string | yes | Semantic version of the library |
 | `format` | string | yes | Always `"jsonl"` |
+| `socket` | string | no | Unix socket path for agent interaction. Present when socket transport is active. |
 | `interaction` | string | yes | Always `"sequential"` |
 | `total` | number \| null | no | Total number of prompts, `null` if unknown |
 | `description` | string | yes | Human-readable protocol description |

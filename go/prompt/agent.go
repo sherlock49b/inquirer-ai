@@ -116,7 +116,15 @@ func AgentReceive() (any, error) {
 // validation errors up to 3 times total. The validate function receives the
 // raw answer from the agent and should return the processed result or an error.
 // On error the helper sends a validation-error message and re-sends the prompt.
+//
+// If socket transport is active, the prompt cycle is handled over the Unix
+// socket instead of stdin/stdout.
 func AgentPromptWithRetry(payload map[string]any, validate func(any) (any, error)) (any, error) {
+	// Check for socket transport first.
+	if st := GetSocketTransport(); st != nil {
+		return st.PromptCycle(payload, validate)
+	}
+
 	const maxRetries = 3
 	for attempt := 0; attempt < maxRetries; attempt++ {
 		if err := AgentSend(payload); err != nil {

@@ -13,6 +13,7 @@ import (
 func agentSetup(t *testing.T, input string) (*os.File, *os.File, func()) {
 	t.Helper()
 	t.Setenv("INQUIRER_AI_MODE", "agent")
+	t.Setenv("INQUIRER_AI_TRANSPORT", "stdio")
 
 	handshakeOnce = sync.Once{}
 	scannerOnce = sync.Once{}
@@ -21,6 +22,9 @@ func agentSetup(t *testing.T, input string) (*os.File, *os.File, func()) {
 	agentStep = 0
 	agentWriter = nil
 	agentReader = nil
+
+	// Reset socket transport singleton to prevent interference.
+	ResetSocketTransport()
 
 	oldStdin := os.Stdin
 	oldStdout := os.Stdout
