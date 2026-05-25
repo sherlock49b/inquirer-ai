@@ -137,12 +137,19 @@ def checkbox(
     *,
     choices: Sequence[str | dict[str, Any] | Choice[Any]],
     default: list[Any] | None = None,
+    required: bool | str = False,
     page_size: int = 10,
     validate: Callable[[list[Any]], bool | str | None] | None = None,
     filter: Callable[[list[Any]], list[Any]] | None = None,
 ) -> list[Any]:
     return CheckboxPrompt(
-        message, choices=list(choices), default=default, page_size=page_size, validate=validate, filter=filter
+        message,
+        choices=list(choices),
+        default=default,
+        required=required,
+        page_size=page_size,
+        validate=validate,
+        filter=filter,
     ).execute()
 
 
@@ -232,12 +239,20 @@ def number(
     default: int | float | None = None,
     min: int | float | None = None,
     max: int | float | None = None,
+    step: int | float | None = None,
     float_allowed: bool = True,
     validate: Callable[[int | float], bool | str | None] | None = None,
     filter: Callable[[int | float], int | float] | None = None,
 ) -> int | float:
     return NumberPrompt(
-        message, default=default, min=min, max=max, float_allowed=float_allowed, validate=validate, filter=filter
+        message,
+        default=default,
+        min=min,
+        max=max,
+        step=step,
+        float_allowed=float_allowed,
+        validate=validate,
+        filter=filter,
     ).execute()
 
 

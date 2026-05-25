@@ -18,12 +18,14 @@ class NumberPrompt(BasePrompt[int | float]):
         *,
         min: int | float | None = None,
         max: int | float | None = None,
+        step: int | float | None = None,
         float_allowed: bool = True,
         **kwargs: Any,
     ) -> None:
         super().__init__(message, **kwargs)
         self.min = min
         self.max = max
+        self.step = step
         self.float_allowed = float_allowed
 
     @property
@@ -55,12 +57,18 @@ class NumberPrompt(BasePrompt[int | float]):
             raise ValidationError(f"Must be at least {self.min}")
         if self.max is not None and num > self.max:
             raise ValidationError(f"Must be at most {self.max}")
+        if self.step is not None:
+            base = self.min if self.min is not None else 0
+            remainder = (num - base) % self.step
+            if abs(remainder) > 1e-9 and abs(remainder - self.step) > 1e-9:
+                raise ValidationError(f"Must be a multiple of {self.step} (from {base})")
         return num
 
     def _to_agent_dict(self) -> dict[str, Any]:
         d = super()._to_agent_dict()
         d["min"] = self.min
         d["max"] = self.max
+        d["step"] = self.step
         d["float_allowed"] = self.float_allowed
         return d
 

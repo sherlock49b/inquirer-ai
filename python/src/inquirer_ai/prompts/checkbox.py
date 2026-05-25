@@ -17,10 +17,12 @@ class CheckboxPrompt(ChoiceBasePrompt[list[Any]]):
         *,
         choices: list[RawChoice],
         default: list[Any] | None = None,
+        required: bool | str = False,
         page_size: int = 10,
         **kwargs: Any,
     ) -> None:
         super().__init__(message, choices=choices, default=default or [], page_size=page_size, **kwargs)
+        self.required = required
         self._checked: set[int] = set()
         if self.default:
             for i, item in enumerate(self.items):
@@ -57,6 +59,9 @@ class CheckboxPrompt(ChoiceBasePrompt[list[Any]]):
                         break
             else:
                 raise ValidationError(f"Invalid choice: {v!r}. Valid: {list(valid_values)}")
+        if self.required and not result:
+            msg = self.required if isinstance(self.required, str) else "At least one choice is required"
+            raise ValidationError(msg)
         return result
 
     def _format_answer(self, value: list[Any]) -> str:
