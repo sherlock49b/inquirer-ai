@@ -20,3 +20,4 @@ node_modules/
 target/
 go/prompt/socket_*
 !/go/prompt/socket_*.go
+.checklist.active
