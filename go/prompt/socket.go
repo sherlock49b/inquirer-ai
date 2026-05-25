@@ -20,11 +20,11 @@ type SocketTransport struct {
 	path     string
 	listener net.Listener
 
-	mu                    sync.Mutex
-	stdoutHandshakeSent   bool
-	socketHandshakeSent   bool
-	step                  int
-	cleanedUp             bool
+	mu                  sync.Mutex
+	stdoutHandshakeSent bool
+	socketHandshakeSent bool
+	step                int
+	cleanedUp           bool
 }
 
 func defaultSocketPath() string {

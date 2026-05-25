@@ -89,6 +89,9 @@ jobs:
       - name: Type check
         run: npx tsc --noEmit
 
+      - name: Build
+        run: npx tsc
+
       - name: Lint
         run: npx biome check src/ tests/
 

@@ -193,7 +193,8 @@ fn render_items(
                     .description
                     .as_ref()
                     .map(|d| {
-                        let clean: String = d.chars().filter(|c| !matches!(c, '\n' | '\r')).collect();
+                        let clean: String =
+                            d.chars().filter(|c| !matches!(c, '\n' | '\r')).collect();
                         format!(" - {clean}")
                     })
                     .unwrap_or_default();
