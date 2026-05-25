@@ -47,9 +47,10 @@ class NumberPrompt(BasePrompt[int | float]):
         else:
             raise ValidationError(f"Expected a number, got {type(value).__name__}")
         if not self.float_allowed and isinstance(num, float):
-            if num != int(num):  # pyright: ignore[reportUnnecessaryComparison]
+            int_num = int(num)
+            if num != float(int_num):
                 raise ValidationError("Decimal numbers are not allowed")
-            num = int(num)
+            num = int_num
         if self.min is not None and num < self.min:
             raise ValidationError(f"Must be at least {self.min}")
         if self.max is not None and num > self.max:

@@ -7,8 +7,9 @@ import os
 import signal
 import socket
 import sys
+import types
 from collections.abc import Callable
-from typing import IO, Any, TypeVar
+from typing import IO, Any, TypeVar, cast
 
 from inquirer_ai.exceptions import ValidationError
 
@@ -40,7 +41,7 @@ class SocketTransport:
         atexit.register(self.cleanup)
         prev = signal.getsignal(signal.SIGTERM)
 
-        def _on_sigterm(signo: int, frame: Any) -> None:
+        def _on_sigterm(signo: int, frame: types.FrameType | None) -> None:
             self.cleanup()
             if callable(prev) and prev not in (signal.SIG_DFL, signal.SIG_IGN):
                 prev(signo, frame)
@@ -113,7 +114,7 @@ class SocketTransport:
                     line = line.strip()
 
                     try:
-                        parsed = json.loads(line)
+                        raw_parsed: Any = json.loads(line)
                     except json.JSONDecodeError:
                         retries_used += 1
                         msg = f"Invalid JSON: {line}"
@@ -123,13 +124,13 @@ class SocketTransport:
                         self._write(wfile, {"kind": "validation_error", "message": msg})
                         continue
 
-                    if isinstance(parsed, dict) and parsed.get("kind") == "handshake_ack":  # pyright: ignore[reportUnknownMemberType]
+                    if isinstance(raw_parsed, dict) and cast(dict[str, Any], raw_parsed).get("kind") == "handshake_ack":
                         line = rfile.readline()
                         if not line or not line.strip():
                             break
                         line = line.strip()
                         try:
-                            parsed = json.loads(line)
+                            raw_parsed = json.loads(line)
                         except json.JSONDecodeError:
                             retries_used += 1
                             msg = f"Invalid JSON: {line}"
@@ -139,7 +140,7 @@ class SocketTransport:
                             self._write(wfile, {"kind": "validation_error", "message": msg})
                             continue
 
-                    if not isinstance(parsed, dict) or "answer" not in parsed:
+                    if not isinstance(raw_parsed, dict) or "answer" not in raw_parsed:
                         retries_used += 1
                         msg = 'Response must be a JSON object with an "answer" key'
                         if retries_used >= _MAX_RETRIES:
@@ -148,7 +149,8 @@ class SocketTransport:
                         self._write(wfile, {"kind": "validation_error", "message": msg})
                         continue
 
-                    answer: Any = parsed["answer"]  # pyright: ignore[reportUnknownVariableType]
+                    parsed = cast(dict[str, Any], raw_parsed)
+                    answer: Any = parsed["answer"]
 
                     try:
                         result = validate(answer)

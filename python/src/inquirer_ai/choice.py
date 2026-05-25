@@ -21,17 +21,17 @@ class Choice(Generic[V]):
     def from_raw(cls, raw: str) -> Choice[str]: ...
     @overload
     @classmethod
-    def from_raw(cls, raw: Choice[V]) -> Choice[V]: ...
-    @overload
-    @classmethod
-    def from_raw(cls, raw: dict[str, Any]) -> Choice[Any]: ...
+    def from_raw(cls, raw: dict[str, Any] | Choice[Any]) -> Choice[Any]: ...
     @classmethod
     def from_raw(cls, raw: str | dict[str, Any] | Choice[Any]) -> Choice[Any]:
         if isinstance(raw, Choice):
             return raw
         if isinstance(raw, str):
             return Choice(name=raw, value=raw)
-        if not isinstance(raw, dict):  # pyright: ignore[reportUnnecessaryIsInstance]
+        # Runtime guard for callers passing invalid types via type: ignore.
+        # Use type() instead of isinstance() to avoid pyright narrowing issues
+        # since the static type is already dict[str, Any] at this point.
+        if type(raw) is not dict:
             raise InvalidChoiceError(f"Cannot convert {type(raw).__name__} to Choice")
         if "name" not in raw and "value" not in raw:
             raise InvalidChoiceError("Choice dict must have at least 'name' or 'value'")
@@ -68,5 +68,4 @@ RawChoice = str | dict[str, Any] | Choice[Any] | Separator
 def parse_choice(raw: RawChoice) -> ChoiceItem:
     if isinstance(raw, Separator):
         return raw
-    result: Choice[Any] = Choice.from_raw(raw)  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType]
-    return result
+    return Choice.from_raw(raw)

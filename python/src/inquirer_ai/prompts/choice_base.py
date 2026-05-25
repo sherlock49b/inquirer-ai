@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from abc import abstractmethod
-from typing import Any, TypeVar
+from typing import Any, TypedDict, TypeVar
 
 from prompt_toolkit import Application
 from prompt_toolkit.formatted_text import FormattedText
@@ -14,6 +14,12 @@ from inquirer_ai.prompts.base import BasePrompt
 from inquirer_ai.theme import get_theme
 
 T = TypeVar("T")
+
+
+class PromptState(TypedDict):
+    """State dictionary for choice-based prompts."""
+
+    cursor: int
 
 
 class ChoiceBasePrompt(BasePrompt[T]):
@@ -29,7 +35,7 @@ class ChoiceBasePrompt(BasePrompt[T]):
         super().__init__(message, **kwargs)
         if not choices:
             raise InvalidChoiceError("choices cannot be empty")
-        self.items: list[ChoiceItem] = [parse_choice(c) for c in choices]  # pyright: ignore[reportUnknownMemberType]
+        self.items: list[ChoiceItem] = [parse_choice(c) for c in choices]
         self.choices: list[Choice[Any]] = [c for c in self.items if isinstance(c, Choice)]
         if not any(not c.disabled for c in self.choices):
             raise InvalidChoiceError("choices must contain at least one selectable item")
@@ -42,13 +48,13 @@ class ChoiceBasePrompt(BasePrompt[T]):
         return d
 
     @abstractmethod
-    def _build_keybindings(self, kb: KeyBindings, choices: list[Choice[Any]], state: dict[str, Any]) -> None: ...
+    def _build_keybindings(self, kb: KeyBindings, choices: list[Choice[Any]], state: PromptState) -> None: ...
 
     @abstractmethod
-    def _format_choice_line(self, index: int, item: ChoiceItem, state: dict[str, Any]) -> tuple[str, str]: ...
+    def _format_choice_line(self, index: int, item: ChoiceItem, state: PromptState) -> tuple[str, str]: ...
 
     @abstractmethod
-    def _get_result(self, state: dict[str, Any]) -> Any: ...
+    def _get_result(self, state: PromptState) -> Any: ...
 
     def _is_selectable(self, index: int) -> bool:
         item = self.items[index]
@@ -73,7 +79,7 @@ class ChoiceBasePrompt(BasePrompt[T]):
     def _execute_terminal(self) -> T:
         t = get_theme()
         items = self.items
-        state: dict[str, Any] = {"cursor": self._init_cursor()}
+        state: PromptState = {"cursor": self._init_cursor()}
 
         kb = KeyBindings()
 
@@ -145,7 +151,7 @@ class ChoiceBasePrompt(BasePrompt[T]):
     async def _execute_terminal_async(self) -> T:  # pragma: no cover
         t = get_theme()
         items = self.items
-        state: dict[str, Any] = {"cursor": self._init_cursor()}
+        state: PromptState = {"cursor": self._init_cursor()}
 
         kb = KeyBindings()
 

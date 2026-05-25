@@ -22,7 +22,7 @@ class RawlistPrompt(BasePrompt[Any]):
         super().__init__(message, **kwargs)
         if not choices:
             raise InvalidChoiceError("choices cannot be empty")
-        self.choices: list[Choice[Any]] = [Choice.from_raw(c) for c in choices]  # pyright: ignore[reportUnknownMemberType]
+        self.choices: list[Choice[Any]] = [Choice.from_raw(c) for c in choices]
 
     @property
     def prompt_type(self) -> str:

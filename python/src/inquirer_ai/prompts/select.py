@@ -6,7 +6,7 @@ from prompt_toolkit.key_binding import KeyBindings
 
 from inquirer_ai.choice import Choice, ChoiceItem, RawChoice, Separator
 from inquirer_ai.exceptions import ValidationError
-from inquirer_ai.prompts.choice_base import ChoiceBasePrompt
+from inquirer_ai.prompts.choice_base import ChoiceBasePrompt, PromptState
 from inquirer_ai.theme import get_theme
 
 
@@ -53,10 +53,10 @@ class SelectPrompt(ChoiceBasePrompt[Any]):
                     return i
         return self._selectable_indices()[0]
 
-    def _build_keybindings(self, kb: KeyBindings, choices: list[Choice[Any]], state: dict[str, Any]) -> None:
+    def _build_keybindings(self, kb: KeyBindings, choices: list[Choice[Any]], state: PromptState) -> None:
         pass
 
-    def _format_choice_line(self, index: int, item: ChoiceItem, state: dict[str, Any]) -> tuple[str, str]:
+    def _format_choice_line(self, index: int, item: ChoiceItem, state: PromptState) -> tuple[str, str]:
         t = get_theme()
         if isinstance(item, Separator):
             return (t.pt(t.muted), f"  {item.text}")
@@ -68,7 +68,7 @@ class SelectPrompt(ChoiceBasePrompt[Any]):
             return (t.pt_bold(t.highlight), f"{t.sym_pointer} {item.name}{desc}")
         return ("", f"  {item.name}")
 
-    def _get_result(self, state: dict[str, Any]) -> Any:
+    def _get_result(self, state: PromptState) -> Any:
         cursor: int = state["cursor"]
         item = self.items[cursor]
         assert isinstance(item, Choice)

@@ -6,7 +6,7 @@ import os
 import sys
 from abc import ABC, abstractmethod
 from collections.abc import Callable
-from typing import IO, Any, Generic, TypeVar
+from typing import IO, Any, Generic, Literal, TypedDict, TypeVar, cast
 
 from inquirer_ai.exceptions import PromptAbortedError, ValidationError
 from inquirer_ai.mode import is_agent_mode
@@ -18,6 +18,25 @@ _agent_handshake_sent = False
 _agent_handshake_ack: dict[str, Any] | None = None
 _agent_step = 0
 _agent_pushback_line: str | None = None
+
+
+class HandshakeMessage(TypedDict):
+    """Protocol handshake message sent at connection start."""
+
+    kind: Literal["handshake"]
+    protocol: str
+    version: str
+    format: str
+    interaction: str
+    total: None
+    description: str
+    example_response: dict[str, str]
+
+
+class AgentResponse(TypedDict):
+    """Response from the agent containing an answer."""
+
+    answer: Any  # Genuinely Any — values come from user-provided JSON
 
 _MAX_VALIDATION_RETRIES = 3
 
@@ -63,7 +82,7 @@ def _send_agent_handshake() -> None:
     _agent_handshake_sent = True
     from importlib.metadata import version
 
-    meta = {
+    meta: HandshakeMessage = {
         "kind": "handshake",
         "protocol": "inquirer-ai",
         "version": version("inquirer-ai"),
@@ -88,13 +107,13 @@ class BasePrompt(ABC, Generic[T]):
         self,
         message: str,
         *,
-        default: Any = None,
+        default: T | None = None,
         validate: Callable[[T], bool | str | None] | None = None,
         filter: Callable[[T], T] | None = None,
         transformer: Callable[[T], str] | None = None,
     ) -> None:
         self.message = message
-        self.default = default
+        self.default: T | None = default
         self.validate_fn = validate
         self.filter_fn = filter
         self.transformer = transformer
@@ -133,13 +152,15 @@ class BasePrompt(ABC, Generic[T]):
         line = line.strip()
         if line:
             try:
-                parsed_ack: dict[str, Any] = json.loads(line)
-                if isinstance(parsed_ack, dict) and parsed_ack.get("kind") == "handshake_ack":  # pyright: ignore[reportUnnecessaryIsInstance]
-                    _agent_handshake_ack = parsed_ack
+                raw: Any = json.loads(line)
+            except json.JSONDecodeError:
+                return line
+            if isinstance(raw, dict):
+                maybe_ack = cast(dict[str, Any], raw)
+                if maybe_ack.get("kind") == "handshake_ack":
+                    _agent_handshake_ack = maybe_ack
                     next_line = agent_in.readline()
                     return next_line.strip()
-            except json.JSONDecodeError:
-                pass
         return line
 
     @staticmethod
@@ -162,16 +183,18 @@ class BasePrompt(ABC, Generic[T]):
                 self._send_agent_json({"kind": "error", "message": msg})
                 raise PromptAbortedError(msg)
             try:
-                response = json.loads(line)
+                raw_response: Any = json.loads(line)
             except json.JSONDecodeError as e:
                 raise ValidationError(f'Invalid JSON response: {e}. Expected JSON like: {{"answer": "<value>"}}') from e
-            if not isinstance(response, dict) or "answer" not in response:
+            if not isinstance(raw_response, dict) or "answer" not in raw_response:
                 raise ValidationError(
                     f'Response must be a JSON object with an "answer" key, '
                     f'e.g. {{"answer": "<value>"}}. Got: {line.strip()}'
                 )
+            response = cast(dict[str, Any], raw_response)
+            answer: Any = response["answer"]
             try:
-                return self._validate_answer(response["answer"])  # pyright: ignore[reportUnknownArgumentType]
+                return self._validate_answer(answer)
             except ValidationError as e:
                 if attempt < _MAX_VALIDATION_RETRIES - 1:
                     self._send_agent_json({"kind": "validation_error", "message": str(e)})

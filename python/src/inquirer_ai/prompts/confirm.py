@@ -42,7 +42,7 @@ class ConfirmPrompt(BasePrompt[bool]):
         while True:
             result = pt_prompt(message)
             if not result:
-                return self.default
+                return self.default if self.default is not None else False
             lower = result.strip().lower()
             if lower in ("y", "yes"):
                 return True

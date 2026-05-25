@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, cast
 
 from prompt_toolkit.key_binding import KeyBindings, KeyPressEvent
 
 from inquirer_ai.choice import Choice, ChoiceItem, RawChoice, Separator
 from inquirer_ai.exceptions import ValidationError
-from inquirer_ai.prompts.choice_base import ChoiceBasePrompt
+from inquirer_ai.prompts.choice_base import ChoiceBasePrompt, PromptState
 from inquirer_ai.theme import get_theme
 
 
@@ -38,11 +38,12 @@ class CheckboxPrompt(ChoiceBasePrompt[list[Any]]):
     def _validate_answer(self, value: Any) -> list[Any]:
         if not isinstance(value, list):
             raise ValidationError(f"Expected a list, got {type(value).__name__}")
+        input_items: list[Any] = cast(list[Any], value)
         result: list[Any] = []
         enabled = [c for c in self.choices if not c.disabled]
         valid_values: set[Any] = {c.value for c in enabled}
         valid_names: set[str] = {c.name for c in enabled}
-        for v in value:  # pyright: ignore[reportUnknownVariableType]
+        for v in input_items:
             if v in valid_values:
                 result.append(v)
             elif v in valid_names:
@@ -58,7 +59,7 @@ class CheckboxPrompt(ChoiceBasePrompt[list[Any]]):
         names = [c.short or c.name for c in self.choices if c.value in value]
         return ", ".join(names) if names else "none"
 
-    def _build_keybindings(self, kb: KeyBindings, choices: list[Choice[Any]], state: dict[str, Any]) -> None:
+    def _build_keybindings(self, kb: KeyBindings, choices: list[Choice[Any]], state: PromptState) -> None:
         checked = self._checked
         selectable = self._selectable_indices()
 
@@ -78,7 +79,7 @@ class CheckboxPrompt(ChoiceBasePrompt[list[Any]]):
             else:
                 checked.update(selectable)
 
-    def _format_choice_line(self, index: int, item: ChoiceItem, state: dict[str, Any]) -> tuple[str, str]:
+    def _format_choice_line(self, index: int, item: ChoiceItem, state: PromptState) -> tuple[str, str]:
         t = get_theme()
         if isinstance(item, Separator):
             return (t.pt(t.muted), f"  {item.text}")
@@ -95,7 +96,7 @@ class CheckboxPrompt(ChoiceBasePrompt[list[Any]]):
             style = ""
         return (style, f"{arrow} {mark} {item.name}")
 
-    def _get_result(self, state: dict[str, Any]) -> list[Any]:
+    def _get_result(self, state: PromptState) -> list[Any]:
         result: list[Any] = []
         for i in sorted(self._checked):
             item = self.items[i]
