@@ -166,8 +166,10 @@ pub fn agent_send_error(msg: &str) -> Result<()> {
     write_line(&payload.to_string())
 }
 
-/// Send a prompt payload to the agent, receive a response, validate it, and
-/// retry up to 3 times on validation errors.
+/// Send a prompt payload to the agent via socket or stdio, validate, and retry.
+///
+/// If socket transport is available, uses the socket for the prompt cycle.
+/// Otherwise, falls back to the stdio-based agent protocol.
 ///
 /// If the `validate` closure panics, the panic is caught and converted into
 /// an `InquirerError::Validation` so that the caller never observes UB from
@@ -176,6 +178,11 @@ pub fn agent_prompt_with_retry<T>(
     payload: &Value,
     validate: impl Fn(Value) -> Result<T>,
 ) -> Result<T> {
+    // Check for socket transport first
+    if let Some(transport) = crate::socket::get_socket_transport() {
+        return transport.prompt_cycle(payload, validate);
+    }
+
     use std::panic::{catch_unwind, AssertUnwindSafe};
 
     const MAX_RETRIES: usize = 3;

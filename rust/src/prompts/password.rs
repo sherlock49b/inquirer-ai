@@ -1,4 +1,4 @@
-use crate::agent::{agent_receive, agent_send};
+use crate::agent::agent_prompt_with_retry;
 use crate::errors::Result;
 use crate::mode::is_agent_mode;
 use crate::terminal::{format_question, format_success, read_line};
@@ -33,13 +33,12 @@ fn password_agent(config: &PasswordConfig) -> Result<String> {
         "default": null,
         "mask": config.mask,
     });
-    agent_send(&payload)?;
-    let answer = agent_receive()?;
-    match answer {
+
+    agent_prompt_with_retry(&payload, |answer| match answer {
         Value::Null => Ok(String::new()),
         Value::String(s) => Ok(s),
         other => Ok(other.to_string()),
-    }
+    })
 }
 
 fn password_terminal(config: &PasswordConfig) -> Result<String> {

@@ -1,4 +1,4 @@
-use crate::agent::{agent_receive, agent_send};
+use crate::agent::agent_prompt_with_retry;
 use crate::errors::{InquirerError, Result};
 use crate::mode::is_agent_mode;
 use crate::terminal::format_success;
@@ -31,19 +31,19 @@ pub fn editor(config: EditorConfig) -> Result<String> {
 }
 
 fn editor_agent(config: &EditorConfig) -> Result<String> {
+    let default = config.default.clone();
     let payload = json!({
         "type": "editor",
         "message": config.message,
         "default": config.default,
         "postfix": config.postfix,
     });
-    agent_send(&payload)?;
-    let answer = agent_receive()?;
-    match answer {
-        Value::Null => Ok(config.default.clone().unwrap_or_default()),
+
+    agent_prompt_with_retry(&payload, move |answer| match answer {
+        Value::Null => Ok(default.clone().unwrap_or_default()),
         Value::String(s) => Ok(s),
         other => Ok(other.to_string()),
-    }
+    })
 }
 
 fn editor_terminal(config: &EditorConfig) -> Result<String> {

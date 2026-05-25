@@ -1,4 +1,4 @@
-use crate::agent::{agent_receive, agent_send};
+use crate::agent::agent_prompt_with_retry;
 use crate::errors::Result;
 use crate::mode::is_agent_mode;
 use crate::terminal::{format_question, format_success, read_line};
@@ -29,19 +29,19 @@ pub fn path(config: PathConfig) -> Result<String> {
 }
 
 fn path_agent(config: &PathConfig) -> Result<String> {
+    let default = config.default.clone();
     let payload = json!({
         "type": "path",
         "message": config.message,
         "default": config.default,
         "only_directories": config.only_directories,
     });
-    agent_send(&payload)?;
-    let answer = agent_receive()?;
-    match answer {
-        Value::Null => Ok(config.default.clone().unwrap_or_default()),
+
+    agent_prompt_with_retry(&payload, move |answer| match answer {
+        Value::Null => Ok(default.clone().unwrap_or_default()),
         Value::String(s) => Ok(s),
         other => Ok(other.to_string()),
-    }
+    })
 }
 
 fn path_terminal(config: &PathConfig) -> Result<String> {

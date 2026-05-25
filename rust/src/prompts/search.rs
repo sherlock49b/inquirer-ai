@@ -1,4 +1,4 @@
-use crate::agent::{agent_receive, agent_send};
+use crate::agent::agent_prompt_with_retry;
 use crate::choice::{Choice, ChoiceItem};
 use crate::errors::{InquirerError, Result};
 use crate::mode::is_agent_mode;
@@ -53,8 +53,8 @@ fn search_agent(config: &SearchConfig) -> Result<Value> {
         "searchable": true,
         "choices": initial,
     });
-    agent_send(&payload)?;
-    agent_receive()
+
+    agent_prompt_with_retry(&payload, Ok)
 }
 
 fn search_terminal(config: &SearchConfig) -> Result<Value> {

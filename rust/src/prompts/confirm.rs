@@ -1,4 +1,4 @@
-use crate::agent::{agent_receive, agent_send};
+use crate::agent::agent_prompt_with_retry;
 use crate::errors::Result;
 use crate::mode::is_agent_mode;
 use crate::terminal::{format_error, format_question, format_success, read_line};
@@ -42,9 +42,8 @@ fn confirm_agent(config: &ConfirmConfig) -> Result<bool> {
         "message": config.message,
         "default": config.default,
     });
-    agent_send(&payload)?;
-    let answer = agent_receive()?;
-    Ok(coerce_bool(&answer))
+
+    agent_prompt_with_retry(&payload, |answer| Ok(coerce_bool(&answer)))
 }
 
 fn confirm_terminal(config: &ConfirmConfig) -> Result<bool> {
