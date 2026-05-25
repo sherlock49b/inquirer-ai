@@ -21,6 +21,7 @@ export { type RawlistConfig, RawlistPrompt } from "./prompts/rawlist.js";
 export { type SearchConfig, SearchPrompt } from "./prompts/search.js";
 export { type SelectConfig, SelectPrompt } from "./prompts/select.js";
 export { type TextConfig, TextPrompt } from "./prompts/text.js";
+export { getSocketTransport, resetSocketTransport, SocketTransport } from "./socket.js";
 export { getTheme, setTheme, type Theme } from "./theme.js";
 
 import { type AutocompleteConfig, AutocompletePrompt } from "./prompts/autocomplete.js";

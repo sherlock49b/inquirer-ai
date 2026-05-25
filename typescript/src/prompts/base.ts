@@ -1,6 +1,7 @@
 import { agentReceive, agentSend, agentSendValidationError } from "../agent.js";
 import { PromptAbortedError, ValidationError } from "../errors.js";
 import { isAgentMode } from "../mode.js";
+import { getSocketTransport } from "../socket.js";
 import { formatError, formatSuccess } from "../terminal.js";
 
 const MAX_AGENT_RETRIES = 3;
@@ -89,6 +90,22 @@ export abstract class BasePrompt<T> {
   }
 
   async execute(): Promise<T> {
+    // Socket transport takes priority when available
+    const transport = getSocketTransport();
+    if (transport) {
+      const userValidateFn = this.validateFn
+        ? (value: T): string | boolean | null | undefined => {
+            return this.validateFn!(value);
+          }
+        : null;
+      return transport.promptCycle(
+        { kind: "prompt", ...this.toAgentDict() },
+        (value: unknown) => this.validateAnswer(value),
+        this.filterFn ?? null,
+        userValidateFn,
+      ) as Promise<T>;
+    }
+
     const agent = isAgentMode();
     let userValidationRetries = 0;
 

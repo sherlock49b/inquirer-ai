@@ -13,6 +13,7 @@ import { RawlistPrompt } from "../src/prompts/rawlist.js";
 import { SearchPrompt } from "../src/prompts/search.js";
 import { SelectPrompt } from "../src/prompts/select.js";
 import { TextPrompt } from "../src/prompts/text.js";
+import { resetSocketTransport } from "../src/socket.js";
 
 const ACK = '{"kind":"handshake_ack"}';
 
@@ -35,7 +36,9 @@ function captureStdout(): { chunks: string[]; writable: Writable } {
 describe("Agent mode prompts (mocked stdin/stdout)", () => {
   beforeEach(() => {
     resetAgent();
+    resetSocketTransport();
     vi.stubEnv("INQUIRER_AI_MODE", "agent");
+    vi.stubEnv("INQUIRER_AI_TRANSPORT", "stdio");
   });
 
   it("TextPrompt agent sends correct JSON and reads answer", async () => {

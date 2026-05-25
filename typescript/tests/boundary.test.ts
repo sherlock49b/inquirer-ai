@@ -9,12 +9,15 @@ import {
 import { CheckboxPrompt } from "../src/prompts/checkbox.js";
 import { SelectPrompt } from "../src/prompts/select.js";
 import { TextPrompt } from "../src/prompts/text.js";
+import { resetSocketTransport } from "../src/socket.js";
 
 const ACK = '{"kind":"handshake_ack"}';
 
 function setup(answers: string[]) {
   resetAgent();
+  resetSocketTransport();
   vi.stubEnv("INQUIRER_AI_MODE", "agent");
+  vi.stubEnv("INQUIRER_AI_TRANSPORT", "stdio");
   const stdin = Readable.from(answers.map((a) => `${a}\n`).join(""));
   const writable = new Writable({
     write(_c: Buffer, _e: string, cb: () => void) {
@@ -173,7 +176,9 @@ describe("Boundary tests", () => {
 
     it("INQUIRER_AI_FD_IN with non-numeric value falls back to stdin", async () => {
       resetAgent();
+      resetSocketTransport();
       vi.stubEnv("INQUIRER_AI_MODE", "agent");
+      vi.stubEnv("INQUIRER_AI_TRANSPORT", "stdio");
       vi.stubEnv("INQUIRER_AI_FD_IN", "not_a_number");
 
       const stderrSpy = vi.spyOn(process.stderr, "write");

@@ -13,12 +13,15 @@ import { PathPrompt } from "../src/prompts/path.js";
 import { RawlistPrompt } from "../src/prompts/rawlist.js";
 import { SelectPrompt } from "../src/prompts/select.js";
 import { TextPrompt } from "../src/prompts/text.js";
+import { resetSocketTransport } from "../src/socket.js";
 
 const ACK = '{"kind":"handshake_ack"}';
 
 function setup(answers: string[]) {
   resetAgent();
+  resetSocketTransport();
   vi.stubEnv("INQUIRER_AI_MODE", "agent");
+  vi.stubEnv("INQUIRER_AI_TRANSPORT", "stdio");
   const stdin = Readable.from(answers.map((a) => `${a}\n`).join(""));
   const writable = new Writable({
     write(_c: Buffer, _e: string, cb: () => void) { cb(); },
