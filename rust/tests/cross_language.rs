@@ -207,6 +207,7 @@ fn validate_number_at_min_boundary() {
         max: Some(10.0),
         step: None,
         float_allowed: true,
+        keep_input: true,
     };
     assert_eq!(validate_number(&json!(5), &config).unwrap(), 5.0);
 }
@@ -220,6 +221,7 @@ fn validate_number_at_max_boundary() {
         max: Some(10.0),
         step: None,
         float_allowed: true,
+        keep_input: true,
     };
     assert_eq!(validate_number(&json!(10), &config).unwrap(), 10.0);
 }
@@ -233,6 +235,7 @@ fn validate_number_below_min_rejected() {
         max: Some(10.0),
         step: None,
         float_allowed: true,
+        keep_input: true,
     };
     assert!(validate_number(&json!(4), &config).is_err());
 }
@@ -246,6 +249,7 @@ fn validate_number_above_max_rejected() {
         max: Some(10.0),
         step: None,
         float_allowed: true,
+        keep_input: true,
     };
     assert!(validate_number(&json!(11), &config).is_err());
 }
@@ -264,6 +268,7 @@ fn validate_number_float_not_allowed_whole_number_accepted() {
         max: None,
         step: None,
         float_allowed: false,
+        keep_input: true,
     };
     let result = validate_number(&json!(3.0), &config).unwrap();
     assert_eq!(result, 3.0);
@@ -279,6 +284,7 @@ fn validate_number_float_not_allowed_fractional_rejected() {
         max: None,
         step: None,
         float_allowed: false,
+        keep_input: true,
     };
     assert!(
         validate_number(&json!(3.5), &config).is_err(),
@@ -295,6 +301,7 @@ fn validate_number_float_not_allowed_string_whole_accepted() {
         max: None,
         step: None,
         float_allowed: false,
+        keep_input: true,
     };
     let result = validate_number(&json!("3.0"), &config).unwrap();
     assert_eq!(result, 3.0);
@@ -309,6 +316,7 @@ fn validate_number_float_not_allowed_string_fractional_rejected() {
         max: None,
         step: None,
         float_allowed: false,
+        keep_input: true,
     };
     assert!(
         validate_number(&json!("3.5"), &config).is_err(),

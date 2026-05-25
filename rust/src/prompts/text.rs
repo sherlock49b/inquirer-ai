@@ -1,7 +1,7 @@
 use crate::agent::agent_prompt_with_retry;
 use crate::errors::Result;
 use crate::mode::is_agent_mode;
-use crate::terminal::{format_question, format_success, read_line};
+use crate::terminal::{format_question, format_success, read_line, read_line_with_default};
 use serde_json::{json, Value};
 
 pub type Validator = Box<dyn Fn(&str) -> std::result::Result<(), String>>;
@@ -11,6 +11,7 @@ pub struct TextConfig {
     pub default: Option<String>,
     pub validate: Option<Validator>,
     pub filter: Option<Box<dyn Fn(String) -> String>>,
+    pub keep_input: bool,
 }
 
 impl TextConfig {
@@ -20,6 +21,7 @@ impl TextConfig {
             default: None,
             validate: None,
             filter: None,
+            keep_input: true,
         }
     }
 }
@@ -67,13 +69,18 @@ fn text_terminal(config: &TextConfig) -> Result<String> {
         .as_ref()
         .map(|d| format!(" ({d})"))
         .unwrap_or_default();
+    let mut prefill: Option<String> = None;
     loop {
         let prompt = format_question(&config.message, &suffix);
-        let raw = read_line(&prompt)?;
+        let raw = if config.keep_input {
+            read_line_with_default(&prompt, prefill.as_deref())?
+        } else {
+            read_line(&prompt)?
+        };
         let mut result = if raw.is_empty() {
             config.default.clone().unwrap_or_default()
         } else {
-            raw
+            raw.clone()
         };
         if let Some(f) = &config.filter {
             result = f(result);
@@ -85,6 +92,9 @@ fn text_terminal(config: &TextConfig) -> Result<String> {
                 Ok(Ok(())) => {}
                 Ok(Err(msg)) => {
                     eprintln!("{}", crate::terminal::format_error(&msg));
+                    if config.keep_input {
+                        prefill = Some(raw);
+                    }
                     continue;
                 }
                 Err(panic_payload) => {

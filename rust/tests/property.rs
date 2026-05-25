@@ -43,6 +43,7 @@ proptest! {
             max: Some(max_val as f64),
             step: None,
             float_allowed: true,
+            keep_input: true,
         };
         match validate_number(&json!(value), &config) {
             Ok(n) => {
@@ -64,6 +65,7 @@ proptest! {
             max: None,
             step: None,
             float_allowed: false,
+            keep_input: true,
         };
         let result = validate_number(&json!(value), &config).unwrap();
         prop_assert_eq!(result, value as f64);

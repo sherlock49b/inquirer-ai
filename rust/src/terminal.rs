@@ -5,14 +5,37 @@ use crossterm::{queue, terminal};
 use std::io::{self, BufRead, Write};
 
 pub fn read_line(prompt: &str) -> io::Result<String> {
-    eprint!("{prompt}");
-    io::stderr().flush()?;
-    let mut line = String::new();
-    io::stdin().lock().read_line(&mut line)?;
-    Ok(line
-        .trim_end_matches('\n')
-        .trim_end_matches('\r')
-        .to_string())
+    read_line_with_default(prompt, None)
+}
+
+pub fn read_line_with_default(prompt: &str, prefill: Option<&str>) -> io::Result<String> {
+    match prefill {
+        Some(default) => {
+            eprint!("{prompt}{default}");
+            io::stderr().flush()?;
+            let mut line = String::new();
+            io::stdin().lock().read_line(&mut line)?;
+            let trimmed = line
+                .trim_end_matches('\n')
+                .trim_end_matches('\r')
+                .to_string();
+            if trimmed.is_empty() {
+                Ok(default.to_string())
+            } else {
+                Ok(trimmed)
+            }
+        }
+        None => {
+            eprint!("{prompt}");
+            io::stderr().flush()?;
+            let mut line = String::new();
+            io::stdin().lock().read_line(&mut line)?;
+            Ok(line
+                .trim_end_matches('\n')
+                .trim_end_matches('\r')
+                .to_string())
+        }
+    }
 }
 
 pub fn format_question(message: &str, suffix: &str) -> String {

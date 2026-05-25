@@ -163,6 +163,15 @@ fn checkbox_terminal(config: &CheckboxConfig) -> Result<Vec<Value>> {
                     }
                 }
             }
+            KeyInput::Char(c @ '1'..='9') => {
+                let n = (c as usize) - ('0' as usize);
+                let target = if n >= indices.len() {
+                    indices.len() - 1
+                } else {
+                    n - 1
+                };
+                cursor = indices[target];
+            }
             KeyInput::Enter => {
                 if config.required && checked.is_empty() {
                     continue;

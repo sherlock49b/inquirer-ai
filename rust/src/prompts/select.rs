@@ -122,6 +122,15 @@ fn select_terminal(config: &SelectConfig) -> Result<Value> {
                     return Ok(c.value.clone());
                 }
             }
+            KeyInput::Char(c @ '1'..='9') => {
+                let n = (c as usize) - ('0' as usize);
+                let target = if n >= indices.len() {
+                    indices.len() - 1
+                } else {
+                    n - 1
+                };
+                cursor = indices[target];
+            }
             KeyInput::CtrlC => {
                 renderer.clear();
                 ListRenderer::disable_raw()?;

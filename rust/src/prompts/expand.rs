@@ -1,7 +1,10 @@
 use crate::agent::agent_prompt_with_retry;
 use crate::errors::{InquirerError, Result};
 use crate::mode::is_agent_mode;
-use crate::terminal::{format_error, format_question, format_success, read_line};
+use crate::terminal::{
+    format_error, format_question, format_success, read_line, KeyInput, ListRenderer,
+};
+use crate::theme::{ansi_color, BOLD, DEFAULT_THEME, RESET};
 use serde_json::{json, Value};
 
 #[derive(Debug, Clone)]
@@ -92,23 +95,109 @@ fn expand_terminal(config: &ExpandConfig) -> Result<Value> {
         .map(|c| c.key.as_str())
         .collect::<Vec<_>>()
         .join("/");
-    let suffix = format!(" ({keys})");
-    let prompt = format_question(&config.message, &suffix);
+    let compact_suffix = format!(" ({keys}/h)");
+    let mut show_help = false;
+
     loop {
-        let raw = read_line(&prompt)?;
-        let lower = raw.trim().to_lowercase();
-        if lower == "h" || lower == "help" {
+        if show_help {
+            // Full menu mode using ListRenderer (raw mode)
+            let t = &DEFAULT_THEME;
+            ListRenderer::enable_raw()?;
+            let mut renderer = ListRenderer::new();
+
+            let mut cursor: usize = 0;
+
+            loop {
+                let header = format!(
+                    "{}{}{}  {BOLD}{}{RESET}  (h: hide help)",
+                    ansi_color(t.question),
+                    t.sym_question,
+                    RESET,
+                    config.message,
+                );
+                let items: Vec<(String, String)> = config
+                    .choices
+                    .iter()
+                    .enumerate()
+                    .map(|(i, c)| {
+                        if i == cursor {
+                            let hc = ansi_color(t.highlight);
+                            (hc, format!("{} {}) {}", t.sym_pointer, c.key, c.name))
+                        } else {
+                            (String::new(), format!("  {}) {}", c.key, c.name))
+                        }
+                    })
+                    .collect();
+                renderer.render(&header, &items);
+
+                match crate::terminal::read_key()? {
+                    KeyInput::Up | KeyInput::Char('k') => {
+                        if cursor > 0 {
+                            cursor -= 1;
+                        } else {
+                            cursor = config.choices.len() - 1;
+                        }
+                    }
+                    KeyInput::Down | KeyInput::Char('j') => {
+                        if cursor < config.choices.len() - 1 {
+                            cursor += 1;
+                        } else {
+                            cursor = 0;
+                        }
+                    }
+                    KeyInput::Enter => {
+                        renderer.clear();
+                        ListRenderer::disable_raw()?;
+                        let c = &config.choices[cursor];
+                        eprintln!("{}", format_success(&config.message, &c.name));
+                        return Ok(c.value.clone());
+                    }
+                    KeyInput::Char('h') => {
+                        renderer.clear();
+                        ListRenderer::disable_raw()?;
+                        show_help = false;
+                        break;
+                    }
+                    KeyInput::Char(ch) => {
+                        let lower = ch.to_ascii_lowercase();
+                        let found = config.choices.iter().position(|c| {
+                            c.key.len() == 1
+                                && c.key.chars().next().unwrap().to_ascii_lowercase() == lower
+                        });
+                        if let Some(idx) = found {
+                            renderer.clear();
+                            ListRenderer::disable_raw()?;
+                            let c = &config.choices[idx];
+                            eprintln!("{}", format_success(&config.message, &c.name));
+                            return Ok(c.value.clone());
+                        }
+                    }
+                    KeyInput::CtrlC => {
+                        renderer.clear();
+                        ListRenderer::disable_raw()?;
+                        return Err(InquirerError::PromptAborted(
+                            "Prompt aborted by user".into(),
+                        ));
+                    }
+                    _ => {}
+                }
+            }
+        } else {
+            // Compact mode: simple line input
+            let prompt = format_question(&config.message, &compact_suffix);
+            let raw = read_line(&prompt)?;
+            let lower = raw.trim().to_lowercase();
+            if lower == "h" || lower == "help" {
+                show_help = true;
+                continue;
+            }
             for c in &config.choices {
-                eprintln!("  {}) {}", c.key, c.name);
+                if lower == c.key {
+                    eprintln!("{}", format_success(&config.message, &c.name));
+                    return Ok(c.value.clone());
+                }
             }
-            continue;
+            eprintln!("{}", format_error("Invalid key. Press h for help."));
         }
-        for c in &config.choices {
-            if lower == c.key {
-                eprintln!("{}", format_success(&config.message, &c.name));
-                return Ok(c.value.clone());
-            }
-        }
-        eprintln!("{}", format_error("Invalid key. Press h for help."));
     }
 }

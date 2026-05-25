@@ -178,6 +178,7 @@ proptest! {
             max: Some(max_val as f64),
             step: None,
             float_allowed: true,
+            keep_input: true,
         };
         if let Ok(n) = validate_number(&json!(value), &config) {
             prop_assert!(n >= min_val as f64, "result {} < min {}", n, min_val);
@@ -195,6 +196,7 @@ proptest! {
             max: None,
             step: None,
             float_allowed: false,
+            keep_input: true,
         };
         let result = validate_number(&json!(value), &config).unwrap();
         prop_assert_eq!(result.trunc(), result, "result should be an integer");
@@ -217,6 +219,7 @@ proptest! {
                 max: None,
                 step: None,
                 float_allowed: false,
+            keep_input: true,
             };
             // Pass as string to avoid serde_json normalizing e.g. 1.0 to 1
             let val_str = format!("{val}");
