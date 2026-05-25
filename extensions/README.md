@@ -28,7 +28,9 @@ Commit types: `feat`, `fix`, `protocol`, `compat`, `refactor`, `test`, `docs`, `
 Scopes: `python`, `go`, `spec`, and individual prompt types (`select`, `checkbox`, etc.)
 
 ```bash
-# Install: copy into commitizen's cz directory and register in __init__.py
+# Install
+uv tool install commitizen --with ./python --with ./extensions/cz-teamcz
+
 # Configure in pyproject.toml:
 [tool.commitizen]
 name = "teamcz"
@@ -36,19 +38,19 @@ name = "teamcz"
 
 **Source:** [`extensions/cz-teamcz/`](cz-teamcz/)
 
-## cz-inquirer-ai
+## cz-ai
 
 A Node.js commitizen adapter powered by inquirer-ai's TypeScript library. Provides agent-protocol-aware conventional commits — any AI agent can drive the commit flow via the JSON line protocol without knowing your project's conventions in advance.
 
 ```bash
 # Install
-npm install --save-dev cz-inquirer-ai commitizen
+npm install --save-dev cz-ai commitizen
 
 # Configure in package.json:
 {
   "config": {
     "commitizen": {
-      "path": "cz-inquirer-ai"
+      "path": "cz-ai"
     }
   }
 }
@@ -57,7 +59,7 @@ npm install --save-dev cz-inquirer-ai commitizen
 npx cz
 ```
 
-**Source:** [`extensions/cz-inquirer-ai/`](cz-inquirer-ai/)
+**Source:** [`extensions/cz-ai/`](cz-ai/)
 
 ## cargo-deps
 
