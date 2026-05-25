@@ -20,7 +20,8 @@ var (
 	agentIOOnce   sync.Once
 )
 
-const version = "0.2.0"
+// version is read from version.go (single source, updated by cz bump)
+var version = Version
 
 // initAgentIO sets up the writer and reader used for agent protocol I/O.
 // If INQUIRER_AI_FD_OUT / INQUIRER_AI_FD_IN are set, those file descriptors

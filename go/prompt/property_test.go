@@ -111,7 +111,7 @@ func TestPropertyToBoolDeterministic(t *testing.T) {
 
 // ── Property: applyCallbacks filter-then-validate ordering ──
 
-func TestPropertyCallbacksFilterBeforeValidate(t *testing.T) {
+func TestPropertyCallbacksValidateBeforeFilter(t *testing.T) {
 	var order []string
 
 	filter := func(v any) any {
@@ -126,8 +126,8 @@ func TestPropertyCallbacksFilterBeforeValidate(t *testing.T) {
 	order = nil
 	applyCallbacks("test", validate, filter)
 
-	if len(order) != 2 || order[0] != "filter" || order[1] != "validate" {
-		t.Fatalf("expected [filter, validate], got %v", order)
+	if len(order) != 2 || order[0] != "validate" || order[1] != "filter" {
+		t.Fatalf("expected [validate, filter], got %v", order)
 	}
 }
 

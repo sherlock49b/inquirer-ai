@@ -6,7 +6,7 @@ use std::sync::Once;
 
 static HANDSHAKE: Once = Once::new();
 static STEP: AtomicUsize = AtomicUsize::new(0);
-const VERSION: &str = "0.2.1";
+const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 // ---------------------------------------------------------------------------
 // fd-based I/O helpers

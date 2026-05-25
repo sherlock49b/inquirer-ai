@@ -4,8 +4,8 @@ import * as readline from "node:readline";
 
 import { ValidationError } from "./errors.js";
 import { isAgentMode } from "./mode.js";
+import { VERSION } from "./version.js";
 
-const VERSION = "0.2.1";
 const MAX_RETRIES = 3;
 
 interface Connection {
@@ -276,12 +276,7 @@ export class SocketTransport {
             throw err;
           }
 
-          // Apply filter
-          if (filterFn) {
-            result = filterFn(result);
-          }
-
-          // Run user validation
+          // Run user validation (before filter — filter only runs on accepted values)
           if (userValidate) {
             let error: string | null = null;
             try {
@@ -312,7 +307,10 @@ export class SocketTransport {
             }
           }
 
-          // All valid
+          // All valid — apply filter only once on accepted value
+          if (filterFn) {
+            result = filterFn(result);
+          }
           this._writeTo(conn.socket, { status: "accepted" });
           this._closeConnection(conn);
           return result;

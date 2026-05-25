@@ -61,7 +61,7 @@ describe("Agent mode prompts (mocked stdin/stdout)", () => {
       const handshake = JSON.parse(lines[0]!);
       expect(handshake.kind).toBe("handshake");
       expect(handshake.protocol).toBe("inquirer-ai");
-      expect(handshake.version).toBe("0.2.0");
+      expect(handshake.version).toBe("0.2.1");
       expect(handshake.interaction).toBe("sequential");
       expect(handshake.total).toBeNull();
 

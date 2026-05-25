@@ -6,9 +6,8 @@ name = "teamcz"
 version = "0.2.1"
 version_files = [
     "python/pyproject.toml:version",
-    "go/prompt/agent.go:version",
+    "go/prompt/version.go:Version",
     "typescript/package.json:version",
-    "rust/src/agent.rs:VERSION",
     "rust/Cargo.toml:version",
 ]
 tag_format = "v$version"

@@ -114,10 +114,6 @@ export abstract class BasePrompt<T> {
         throw new PromptAbortedError("Prompt aborted (stdin closed)");
       }
 
-      if (this.filterFn) {
-        result = this.filterFn(result);
-      }
-
       const error = this.runUserValidation(result);
       if (error) {
         if (agent) {
@@ -130,6 +126,10 @@ export abstract class BasePrompt<T> {
         }
         process.stderr.write(`${formatError(error)}\n`);
         continue;
+      }
+
+      if (this.filterFn) {
+        result = this.filterFn(result);
       }
 
       if (!agent) {

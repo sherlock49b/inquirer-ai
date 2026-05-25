@@ -1,7 +1,6 @@
 import * as fs from "node:fs";
 import * as readline from "node:readline";
-
-const VERSION = "0.2.0";
+import { VERSION } from "./version.js";
 
 let handshakeSent = false;
 let handshakeAck: Record<string, unknown> | null = null;

@@ -166,9 +166,6 @@ class SocketTransport:
                         self._write(wfile, {"kind": "validation_error", "message": str(e)})
                         continue
 
-                    if filter_fn:
-                        result = filter_fn(result)
-
                     if user_validate:
                         try:
                             error = user_validate(result)
@@ -182,6 +179,8 @@ class SocketTransport:
                             self._write(wfile, {"kind": "validation_error", "message": error})
                             continue
 
+                    if filter_fn:
+                        result = filter_fn(result)
                     self._write(wfile, {"status": "accepted"})
                     return result
 

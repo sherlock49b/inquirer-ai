@@ -38,12 +38,6 @@ class HandshakeMessage(TypedDict):
     example_response: dict[str, str]
 
 
-class AgentResponse(TypedDict):
-    """Response from the agent containing an answer."""
-
-    answer: Any  # Genuinely Any — values come from user-provided JSON
-
-
 _MAX_VALIDATION_RETRIES = 3
 
 
@@ -268,13 +262,13 @@ class BasePrompt(ABC, Generic[T]):
             except EOFError:
                 raise PromptAbortedError("Prompt aborted (stdin closed)") from None
 
-            if self.filter_fn:
-                result = self.filter_fn(result)
-
             error = self._run_user_validation(result)
             if error:
                 retries = self._handle_validation_error_loop(error, agent, retries)
                 continue
+
+            if self.filter_fn:
+                result = self.filter_fn(result)
 
             if not agent:
                 self._print_success(result)
@@ -302,13 +296,13 @@ class BasePrompt(ABC, Generic[T]):
             except EOFError:
                 raise PromptAbortedError("Prompt aborted (stdin closed)") from None
 
-            if self.filter_fn:
-                result = self.filter_fn(result)
-
             error = self._run_user_validation(result)
             if error:
                 retries = self._handle_validation_error_loop(error, agent, retries)
                 continue
+
+            if self.filter_fn:
+                result = self.filter_fn(result)
 
             if not agent:
                 self._print_success(result)
