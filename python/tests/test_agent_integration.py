@@ -13,7 +13,7 @@ def _run_agent_script_raw(script: str, stdin_lines: list[dict[str, object]]) -> 
         input=stdin_payload,
         capture_output=True,
         text=True,
-        env={"INQUIRER_AI_MODE": "agent", "PATH": ""},
+        env={"PATH": "", "INQUIRER_AI_TRANSPORT": "stdio"},
         timeout=10,
     )
     if result.returncode != 0:

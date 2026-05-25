@@ -1,0 +1,15 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "teamcz"
+version = "0.1.0"
+requires-python = ">=3.9"
+dependencies = ["commitizen>=4", "inquirer-ai>=0.2.1"]
+
+[project.entry-points."commitizen.plugin"]
+teamcz = "teamcz.teamcz:TeamCz"
+
+[tool.hatch.build.targets.wheel]
+packages = ["teamcz"]

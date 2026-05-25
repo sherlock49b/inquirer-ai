@@ -6,7 +6,7 @@ use std::sync::Once;
 
 static HANDSHAKE: Once = Once::new();
 static STEP: AtomicUsize = AtomicUsize::new(0);
-const VERSION: &str = "0.2.0";
+const VERSION: &str = "0.2.1";
 
 // ---------------------------------------------------------------------------
 // fd-based I/O helpers
@@ -207,7 +207,7 @@ pub fn agent_prompt_with_retry<T>(
             }
         }
     }
-    unreachable!()
+    Err(InquirerError::Validation("Max retries exceeded".into()))
 }
 
 #[cfg(test)]

@@ -222,6 +222,17 @@ class BasePrompt(ABC, Generic[T]):
         print(f"{t.ansi(t.success)}{t.sym_success}{RESET} {self.message} {t.ansi(t.answer)}{display}{RESET}")
 
     def execute(self) -> T:
+        from inquirer_ai.socket_transport import get_socket_transport
+
+        transport = get_socket_transport()
+        if transport is not None:
+            return transport.prompt_cycle(
+                self._to_agent_dict(),
+                self._validate_answer,
+                filter_fn=self.filter_fn,
+                user_validate=self._run_user_validation,
+            )
+
         agent = is_agent_mode()
 
         retries = 0

@@ -103,8 +103,8 @@ fn search_terminal(config: &SearchConfig) -> Result<Value> {
             KeyInput::Enter => {
                 renderer.clear();
                 ListRenderer::disable_raw()?;
-                if !filtered.is_empty() {
-                    let choice = &filtered[cursor];
+                let safe_cursor = cursor.min(filtered.len().saturating_sub(1));
+                if let Some(choice) = filtered.get(safe_cursor) {
                     let display = choice.short.as_deref().unwrap_or(&choice.name);
                     eprintln!("{}", format_success(&config.message, display));
                     return Ok(choice.value.clone());

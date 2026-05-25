@@ -80,7 +80,10 @@ fn checkbox_agent(config: &CheckboxConfig, enabled: &[&Choice]) -> Result<Vec<Va
                 result.push(v.clone());
             } else if let Some(name) = v.as_str() {
                 if valid_names.contains(name) {
-                    let choice = enabled.iter().find(|c| c.name == name).unwrap();
+                    let choice = enabled
+                        .iter()
+                        .find(|c| c.name == name)
+                        .ok_or_else(|| InquirerError::Validation(format!("Invalid choice: {v}")))?;
                     result.push(choice.value.clone());
                 } else {
                     return Err(InquirerError::Validation(format!(

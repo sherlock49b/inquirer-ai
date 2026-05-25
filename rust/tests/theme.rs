@@ -25,6 +25,14 @@ fn default_theme_symbols() {
 }
 
 #[test]
+fn ansi_color_short_hex_no_panic() {
+    assert_eq!(ansi_color("#ff"), "");
+    assert_eq!(ansi_color(""), "");
+    assert_eq!(ansi_color("#"), "");
+    assert_eq!(ansi_color("abc"), "");
+}
+
+#[test]
 fn reset_and_bold() {
     assert_eq!(RESET, "\x1b[0m");
     assert_eq!(BOLD, "\x1b[1m");
