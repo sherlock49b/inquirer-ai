@@ -14,6 +14,7 @@ type NumberConfig struct {
 	Max          *float64
 	Step         *float64
 	FloatAllowed bool
+	KeepInput    *bool
 	Validate     func(float64) error
 	Filter       func(float64) float64
 }
@@ -74,9 +75,17 @@ func numberAgent(cfg NumberConfig) (float64, error) {
 	return val, nil
 }
 
+func numberKeepInput(cfg NumberConfig) bool {
+	if cfg.KeepInput != nil {
+		return *cfg.KeepInput
+	}
+	return true // default true
+}
+
 func numberTerminal(cfg NumberConfig) (float64, error) {
 	t := DefaultTheme
 	scanner := getTerminalScanner()
+	keepInput := numberKeepInput(cfg)
 	for {
 		suffix := ""
 		if cfg.Default != nil {
@@ -94,6 +103,12 @@ func numberTerminal(cfg NumberConfig) (float64, error) {
 		result, err := validateNumber(raw, cfg)
 		if err != nil {
 			fmt.Printf("  %s\n", err)
+			if keepInput {
+				parsed, parseErr := strconv.ParseFloat(raw, 64)
+				if parseErr == nil {
+					cfg.Default = &parsed
+				}
+			}
 			continue
 		}
 		fmt.Printf("%s %s %g\n", t.SymSuccess, cfg.Message, result)

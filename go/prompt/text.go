@@ -4,10 +4,11 @@ import "fmt"
 
 // TextConfig configures a free-text input prompt.
 type TextConfig struct {
-	Message  string
-	Default  string
-	Validate func(string) error
-	Filter   func(string) string
+	Message   string
+	Default   string
+	KeepInput *bool
+	Validate  func(string) error
+	Filter    func(string) string
 }
 
 // Text prompts for a single line of text input.
@@ -41,8 +42,16 @@ func textAgent(cfg TextConfig) (string, error) {
 	return val, nil
 }
 
+func textKeepInput(cfg TextConfig) bool {
+	if cfg.KeepInput != nil {
+		return *cfg.KeepInput
+	}
+	return true // default true
+}
+
 func textTerminal(cfg TextConfig) (string, error) {
 	scanner := getTerminalScanner()
+	keepInput := textKeepInput(cfg)
 	for {
 		suffix := ""
 		if cfg.Default != "" {
@@ -61,6 +70,9 @@ func textTerminal(cfg TextConfig) (string, error) {
 		final, err := applyTextCallbacks(result, cfg)
 		if err != nil {
 			fmt.Println(renderError(err.Error()))
+			if keepInput {
+				cfg.Default = result
+			}
 			continue
 		}
 		fmt.Println(renderSuccess(cfg.Message, final))

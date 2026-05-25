@@ -27,6 +27,12 @@ func (m selectModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.cursor = moveCursor(m.cursor, -1, m.selectable, m.loop)
 		case "down", "j":
 			m.cursor = moveCursor(m.cursor, 1, m.selectable, m.loop)
+		case "1", "2", "3", "4", "5", "6", "7", "8", "9":
+			n := int(keyMsg.String()[0] - '0') // 1-based index
+			if n > len(m.selectable) {
+				n = len(m.selectable)
+			}
+			m.cursor = m.selectable[n-1]
 		case "enter":
 			m.done = true
 			return m, tea.Quit
