@@ -160,11 +160,10 @@ class BasePrompt(ABC, Generic[T]):
                 raw: Any = json.loads(line)
             except json.JSONDecodeError:
                 return line
-            if _is_json_dict(raw):
-                if raw.get("kind") == "handshake_ack":
-                    _agent_handshake_ack = raw
-                    next_line = agent_in.readline()
-                    return next_line.strip()
+            if _is_json_dict(raw) and raw.get("kind") == "handshake_ack":
+                _agent_handshake_ack = raw
+                next_line = agent_in.readline()
+                return next_line.strip()
         return line
 
     @staticmethod
