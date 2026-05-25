@@ -136,6 +136,14 @@ export class SelectPrompt<V = unknown> extends BasePrompt<V> {
           return { done: false };
         }
         if (key === "ctrl-c") return { done: true, result: null };
+        // Number jump: '1'-'9' jumps to Nth selectable item (1-based)
+        if (key >= "1" && key <= "9") {
+          const n = parseInt(key, 10);
+          if (n <= indices.length) {
+            cursor = indices[n - 1]!;
+          }
+          return { done: false };
+        }
         return { done: false };
       },
     });

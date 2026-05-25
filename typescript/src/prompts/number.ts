@@ -7,6 +7,7 @@ export interface NumberConfig extends BaseConfig<number> {
   max?: number | null;
   floatAllowed?: boolean;
   step?: number;
+  keepInput?: boolean;
 }
 
 export class NumberPrompt extends BasePrompt<number> {
@@ -14,6 +15,8 @@ export class NumberPrompt extends BasePrompt<number> {
   private max: number | null;
   private floatAllowed: boolean;
   private step: number | null;
+  private keepInput: boolean;
+  private lastFailedInput: string | null = null;
 
   constructor(config: NumberConfig) {
     super(config);
@@ -21,6 +24,7 @@ export class NumberPrompt extends BasePrompt<number> {
     this.max = config.max ?? null;
     this.floatAllowed = config.floatAllowed ?? true;
     this.step = config.step ?? null;
+    this.keepInput = config.keepInput ?? true;
   }
 
   get promptType(): string {
@@ -67,16 +71,39 @@ export class NumberPrompt extends BasePrompt<number> {
   }
 
   protected async executeTerminal(): Promise<number> {
-    const suffix = this.defaultValue != null ? ` (${this.defaultValue})` : "";
-    const prompt = formatQuestion(this.message, suffix);
+    let currentDefault = this.lastFailedInput ?? (this.defaultValue != null ? String(this.defaultValue) : null);
     while (true) {
+      const suffix = currentDefault != null ? ` (${currentDefault})` : "";
+      const prompt = formatQuestion(this.message, suffix);
       const raw = await readLine(prompt);
-      if (!raw && this.defaultValue != null) return this.defaultValue;
+      if (!raw && currentDefault != null) {
+        try {
+          const result = this.validateAnswer(currentDefault);
+          if (this.keepInput) {
+            this.lastFailedInput = currentDefault;
+          }
+          return result;
+        } catch (e) {
+          if (e instanceof ValidationError) {
+            process.stderr.write(`${formatError(e.message)}\n`);
+            continue;
+          }
+          throw e;
+        }
+      }
       try {
-        return this.validateAnswer(raw);
+        const result = this.validateAnswer(raw);
+        if (this.keepInput && raw) {
+          this.lastFailedInput = raw;
+        }
+        return result;
       } catch (e) {
         if (e instanceof ValidationError) {
           process.stderr.write(`${formatError(e.message)}\n`);
+          if (this.keepInput && raw) {
+            currentDefault = raw;
+            this.lastFailedInput = raw;
+          }
           continue;
         }
         throw e;

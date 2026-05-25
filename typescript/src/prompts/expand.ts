@@ -65,14 +65,18 @@ export class ExpandPrompt extends BasePrompt<unknown> {
 
   protected async executeTerminal(): Promise<unknown> {
     const keys = this.expandChoices.map((c) => c.key).join("/");
-    const prompt = formatQuestion(this.message, ` (${keys})`);
+    let showHelp = false;
     while (true) {
-      const raw = await readLine(prompt);
-      const lower = raw.trim().toLowerCase();
-      if (lower === "h" || lower === "help") {
+      const prompt = formatQuestion(this.message, ` (${keys})`);
+      if (showHelp) {
         for (const c of this.expandChoices) {
           process.stderr.write(`  ${c.key}) ${c.name}\n`);
         }
+      }
+      const raw = await readLine(prompt);
+      const lower = raw.trim().toLowerCase();
+      if (lower === "h" || lower === "help") {
+        showHelp = !showHelp;
         continue;
       }
       for (const c of this.expandChoices) {
