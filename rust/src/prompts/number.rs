@@ -9,6 +9,7 @@ pub struct NumberConfig {
     pub default: Option<f64>,
     pub min: Option<f64>,
     pub max: Option<f64>,
+    pub step: Option<f64>,
     pub float_allowed: bool,
 }
 
@@ -19,6 +20,7 @@ impl NumberConfig {
             default: None,
             min: None,
             max: None,
+            step: None,
             float_allowed: true,
         }
     }
@@ -86,6 +88,16 @@ pub fn validate_number(value: &Value, config: &NumberConfig) -> Result<f64> {
         }
     }
 
+    if let Some(step) = config.step {
+        let base = config.min.unwrap_or(0.0);
+        let remainder = (num - base) % step;
+        if remainder.abs() > 1e-9 && (remainder - step).abs() > 1e-9 {
+            return Err(InquirerError::Validation(format!(
+                "Must be a multiple of {step} (from {base})"
+            )));
+        }
+    }
+
     Ok(num)
 }
 
@@ -96,6 +108,7 @@ fn number_agent(config: &NumberConfig) -> Result<f64> {
         "default": config.default,
         "min": config.min,
         "max": config.max,
+        "step": config.step,
         "float_allowed": config.float_allowed,
     });
 

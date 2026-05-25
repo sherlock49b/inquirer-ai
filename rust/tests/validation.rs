@@ -34,6 +34,7 @@ fn number_validates_bounds() {
         default: None,
         min: Some(10.0),
         max: Some(100.0),
+        step: None,
         float_allowed: true,
     };
 
@@ -59,6 +60,7 @@ fn number_rejects_float_when_not_allowed() {
         default: None,
         min: None,
         max: None,
+        step: None,
         float_allowed: false,
     };
 
@@ -74,6 +76,7 @@ fn number_uses_default() {
         default: Some(42.0),
         min: None,
         max: None,
+        step: None,
         float_allowed: true,
     };
     assert_eq!(validate_number(&json!(null), &config).unwrap(), 42.0);

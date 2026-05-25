@@ -205,6 +205,7 @@ fn validate_number_at_min_boundary() {
         default: None,
         min: Some(5.0),
         max: Some(10.0),
+        step: None,
         float_allowed: true,
     };
     assert_eq!(validate_number(&json!(5), &config).unwrap(), 5.0);
@@ -217,6 +218,7 @@ fn validate_number_at_max_boundary() {
         default: None,
         min: Some(5.0),
         max: Some(10.0),
+        step: None,
         float_allowed: true,
     };
     assert_eq!(validate_number(&json!(10), &config).unwrap(), 10.0);
@@ -229,6 +231,7 @@ fn validate_number_below_min_rejected() {
         default: None,
         min: Some(5.0),
         max: Some(10.0),
+        step: None,
         float_allowed: true,
     };
     assert!(validate_number(&json!(4), &config).is_err());
@@ -241,6 +244,7 @@ fn validate_number_above_max_rejected() {
         default: None,
         min: Some(5.0),
         max: Some(10.0),
+        step: None,
         float_allowed: true,
     };
     assert!(validate_number(&json!(11), &config).is_err());
@@ -258,6 +262,7 @@ fn validate_number_float_not_allowed_whole_number_accepted() {
         default: None,
         min: None,
         max: None,
+        step: None,
         float_allowed: false,
     };
     let result = validate_number(&json!(3.0), &config).unwrap();
@@ -272,6 +277,7 @@ fn validate_number_float_not_allowed_fractional_rejected() {
         default: None,
         min: None,
         max: None,
+        step: None,
         float_allowed: false,
     };
     assert!(
@@ -287,6 +293,7 @@ fn validate_number_float_not_allowed_string_whole_accepted() {
         default: None,
         min: None,
         max: None,
+        step: None,
         float_allowed: false,
     };
     let result = validate_number(&json!("3.0"), &config).unwrap();
@@ -300,6 +307,7 @@ fn validate_number_float_not_allowed_string_fractional_rejected() {
         default: None,
         min: None,
         max: None,
+        step: None,
         float_allowed: false,
     };
     assert!(

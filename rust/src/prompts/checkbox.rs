@@ -13,6 +13,7 @@ pub struct CheckboxConfig {
     pub default: Vec<Value>,
     pub page_size: usize,
     pub r#loop: bool,
+    pub required: bool,
 }
 
 impl CheckboxConfig {
@@ -23,6 +24,7 @@ impl CheckboxConfig {
             default: Vec::new(),
             page_size: 10,
             r#loop: true,
+            required: false,
         }
     }
 }
@@ -59,7 +61,8 @@ fn checkbox_agent(config: &CheckboxConfig, enabled: &[&Choice]) -> Result<Vec<Va
         "choices": choices_json,
     });
 
-    agent_prompt_with_retry(&payload, |answer| {
+    let required = config.required;
+    agent_prompt_with_retry(&payload, move |answer| {
         let arr = match answer.as_array() {
             Some(a) => a,
             None => {
@@ -93,6 +96,12 @@ fn checkbox_agent(config: &CheckboxConfig, enabled: &[&Choice]) -> Result<Vec<Va
             } else {
                 return Err(InquirerError::Validation(format!("Invalid choice: {v}")));
             }
+        }
+
+        if required && result.is_empty() {
+            return Err(InquirerError::Validation(
+                "At least one choice must be selected".into(),
+            ));
         }
 
         Ok(result)
@@ -155,6 +164,9 @@ fn checkbox_terminal(config: &CheckboxConfig) -> Result<Vec<Value>> {
                 }
             }
             KeyInput::Enter => {
+                if config.required && checked.is_empty() {
+                    continue;
+                }
                 renderer.clear();
                 ListRenderer::disable_raw()?;
                 let result: Vec<Value> = checked

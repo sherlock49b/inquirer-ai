@@ -41,6 +41,7 @@ proptest! {
             default: None,
             min: Some(min_val as f64),
             max: Some(max_val as f64),
+            step: None,
             float_allowed: true,
         };
         match validate_number(&json!(value), &config) {
@@ -61,6 +62,7 @@ proptest! {
             default: None,
             min: None,
             max: None,
+            step: None,
             float_allowed: false,
         };
         let result = validate_number(&json!(value), &config).unwrap();
