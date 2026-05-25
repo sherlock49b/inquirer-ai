@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from collections.abc import Callable
+import asyncio
+import inspect
+from collections.abc import Awaitable, Callable
 from typing import Any
 
 from prompt_toolkit import Application
@@ -20,13 +22,26 @@ class SearchPrompt(BasePrompt[Any]):
         self,
         message: str,
         *,
-        source: Callable[[str], list[RawChoice]],
+        source: Callable[[str], list[RawChoice]] | Callable[[str], Awaitable[list[RawChoice]]],
         page_size: int = 10,
         **kwargs: Any,
     ) -> None:
         super().__init__(message, **kwargs)
         self.source = source
         self.page_size = page_size
+        self._is_async_source = inspect.iscoroutinefunction(source)
+
+    def _call_source_sync(self, term: str) -> list[RawChoice]:
+        """Call source synchronously. If source is async, run it in a new event loop."""
+        if self._is_async_source:
+            return asyncio.run(self.source(term))  # type: ignore[arg-type]
+        return self.source(term)  # type: ignore[return-value]
+
+    async def _call_source_async(self, term: str) -> list[RawChoice]:
+        """Call source asynchronously. If source is sync, call it directly."""
+        if self._is_async_source:
+            return await self.source(term)  # type: ignore[misc]
+        return self.source(term)  # type: ignore[return-value]
 
     @property
     def prompt_type(self) -> str:
@@ -38,7 +53,9 @@ class SearchPrompt(BasePrompt[Any]):
     def _to_agent_dict(self) -> dict[str, Any]:
         d = super()._to_agent_dict()
         d["searchable"] = True
-        initial: list[Choice[Any]] = [c for raw in self.source("") if isinstance((c := parse_choice(raw)), Choice)]
+        initial: list[Choice[Any]] = [
+            c for raw in self._call_source_sync("") if isinstance((c := parse_choice(raw)), Choice)
+        ]
         d["choices"] = [c.to_dict() for c in initial]
         return d
 
@@ -118,6 +135,7 @@ class SearchPrompt(BasePrompt[Any]):
         t = get_theme()
         self._cursor = 0
         self._filtered: list[Choice[Any]] = []
+        # Use sync refresh here since prompt_toolkit buffer callbacks are synchronous
         self._refresh_filtered("")
 
         search_buffer = Buffer(
@@ -187,6 +205,6 @@ class SearchPrompt(BasePrompt[Any]):
         return result
 
     def _refresh_filtered(self, term: str) -> None:
-        raw_choices = self.source(term)
+        raw_choices = self._call_source_sync(term)
         self._filtered = [c for raw in raw_choices if isinstance((c := parse_choice(raw)), Choice) and not c.disabled]
         self._cursor = 0

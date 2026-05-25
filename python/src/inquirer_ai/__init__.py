@@ -1,4 +1,4 @@
-from collections.abc import Callable, Sequence
+from collections.abc import Awaitable, Callable, Sequence
 from importlib.metadata import version
 from typing import Any, TypeVar, overload
 
@@ -167,7 +167,7 @@ def editor(
 def search(
     message: str,
     *,
-    source: Callable[[str], list[RawChoice]],
+    source: Callable[[str], list[RawChoice]] | Callable[[str], Awaitable[list[RawChoice]]],
     page_size: int = 10,
     validate: Callable[[Any], bool | str | None] | None = None,
     filter: Callable[[Any], Any] | None = None,
@@ -402,7 +402,7 @@ async def editor_async(
 async def search_async(
     message: str,
     *,
-    source: Callable[[str], list[RawChoice]],
+    source: Callable[[str], list[RawChoice]] | Callable[[str], Awaitable[list[RawChoice]]],
     page_size: int = 10,
     validate: Callable[[Any], bool | str | None] | None = None,
     filter: Callable[[Any], Any] | None = None,

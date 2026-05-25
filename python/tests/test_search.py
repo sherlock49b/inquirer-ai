@@ -84,3 +84,53 @@ def test_terminal_mode_abort(monkeypatch):
         p = SearchPrompt("Pick a fruit", source=_source)
         with pytest.raises(PromptAbortedError):
             p.execute()
+
+
+# --- Async source tests ---
+
+
+async def _async_source(term: str) -> list[str]:
+    if not term:
+        return ALL_ITEMS
+    return [item for item in ALL_ITEMS if term.lower() in item.lower()]
+
+
+def test_agent_mode_async_source(monkeypatch):
+    monkeypatch.setenv("INQUIRER_AI_MODE", "agent")
+    stdin = io.StringIO(json.dumps({"answer": "Cherry"}) + "\n")
+    stdout = io.StringIO()
+    monkeypatch.setattr("sys.stdin", stdin)
+    monkeypatch.setattr("sys.stdout", stdout)
+
+    p = SearchPrompt("Pick a fruit", source=_async_source)
+    result = p.execute()
+
+    assert result == "Cherry"
+    prompt_data = parse_prompt_from_stdout(stdout)
+    assert prompt_data["type"] == "search"
+    assert prompt_data["searchable"] is True
+    assert len(prompt_data["choices"]) == 5
+
+
+def test_agent_dict_async_source_shows_initial_choices():
+    p = SearchPrompt("Pick", source=_async_source)
+    d = p._to_agent_dict()
+    names = [c["name"] for c in d["choices"]]
+    assert names == ALL_ITEMS
+
+
+@pytest.mark.asyncio
+async def test_agent_mode_async_source_with_execute_async(monkeypatch):
+    monkeypatch.setenv("INQUIRER_AI_MODE", "agent")
+    stdin = io.StringIO(json.dumps({"answer": "Apple"}) + "\n")
+    stdout = io.StringIO()
+    monkeypatch.setattr("sys.stdin", stdin)
+    monkeypatch.setattr("sys.stdout", stdout)
+
+    p = SearchPrompt("Pick a fruit", source=_async_source)
+    result = await p.execute_async()
+
+    assert result == "Apple"
+    prompt_data = parse_prompt_from_stdout(stdout)
+    assert prompt_data["type"] == "search"
+    assert len(prompt_data["choices"]) == 5
