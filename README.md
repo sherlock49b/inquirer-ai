@@ -10,13 +10,17 @@ No adapter. No wrapper. No "agent mode" bolted on as an afterthought.
 
 Every interactive CLI today is a black box to AI agents. When an agent encounters a `[y/N]` prompt or an arrow-key menu, it has to resort to brittle hacks — simulating keystrokes, parsing ANSI escape codes, or asking the human to do it manually.
 
-**inquirer-ai eliminates this entirely.** When stdin isn't a TTY, every prompt automatically switches to a self-describing JSON line protocol. The first line tells the agent exactly how to respond:
+**inquirer-ai eliminates this entirely.** When an AI agent runs a CLI built with inquirer-ai, the tool creates a Unix socket and writes a handshake to stdout:
 
 ```json
-{"protocol": "inquirer-ai", "version": "0.2.1", "format": "jsonl", "example_response": {"answer": "<value>"}}
+{"protocol": "inquirer-ai", "version": "0.2.1", "socket": "/tmp/inquirer-ai-29481.sock", "format": "jsonl", "example_response": {"answer": "<value>"}}
 ```
 
-The agent reads this once, and knows how to drive the entire CLI.
+The agent reads the socket path, then drives the entire CLI with independent commands — one per prompt:
+
+```bash
+echo '{"answer":"feat"}' | nc -U /tmp/inquirer-ai-29481.sock
+```
 
 ## Real-World Example: Custom commitizen Plugin
 
@@ -220,25 +224,27 @@ db = await inquirer_ai.select_async("DB?", choices=["pg", "mysql"])
 
 ## Agent Protocol
 
-Full specification: [`spec/protocol.md`](spec/protocol.md)
+Full specification: [`spec/protocol.md`](spec/protocol.md) | Socket transport: [`spec/socket-transport.md`](spec/socket-transport.md)
 
 ```
 Program                              Agent
   │                                    │
-  ├──── handshake ────────────────────►│  protocol metadata (once)
-  ├──── {"type":"select",...} ────────►│  prompt (includes kind, step/total)
-  │◄─── {"answer":"value"} ───────────┤  response
-  ├──── {"type":"confirm",...} ───────►│  prompt
-  │◄─── {"answer":true} ──────────────┤  response
-  │     (validation error?)            │
-  ├──── {"error":"invalid"} ─────────►│  validation retry
-  │◄─── {"answer":"fixed"} ───────────┤  corrected response
-  └────────────────────────────────────│
+  ├──── handshake (stdout) ──────────►│  includes socket path
+  │                                    │
+  │  ┌── socket connection 1 ──┐       │
+  │  │◄─ prompt JSON ──────────│──────►│
+  │  │── {"answer":"value"} ───│◄──────┤
+  │  │◄─ {"status":"accepted"} │──────►│
+  │  └─────────────────────────┘       │
+  │                                    │
+  │  ┌── socket connection 2 ──┐       │
+  │  │◄─ prompt JSON ──────────│──────►│
+  │  │── {"answer":true} ──────│◄──────┤
+  │  │◄─ {"status":"accepted"} │──────►│
+  │  └─────────────────────────┘       │
 ```
 
-v2 features: `kind` field for prompt semantics, `step`/`total` for progress tracking, validation retry loop.
-
-Auto-detection: non-TTY stdin → agent mode. Override: `INQUIRER_AI_MODE=agent|human`.
+Each prompt is a separate socket connection. Agents interact with `nc -U` or `socat` — no persistent session needed. Override: `INQUIRER_AI_MODE=agent|human`.
 
 ## Implementations
 
@@ -247,7 +253,7 @@ Auto-detection: non-TTY stdin → agent mode. Override: `INQUIRER_AI_MODE=agent|
 | Prompt types | 12 | 12 | 12 | 12 |
 | Terminal UI | prompt_toolkit | bubbletea + lipgloss | ink | crossterm |
 | Agent protocol | JSONL | Same JSONL | Same JSONL | Same JSONL |
-| Tests | 297 | ~130 | 128 | 108 |
+| Tests | 321 | ~268 | 147 | 124 |
 | Async | `*_async()` | goroutines | native async/await | tokio |
 
 All implementations share the same protocol spec. An agent that learns from one can drive any of the others.
