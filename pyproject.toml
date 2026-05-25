@@ -3,10 +3,13 @@ members = ["python"]
 
 [tool.commitizen]
 name = "teamcz"
-version = "0.1.0"
+version = "0.2.1"
 version_files = [
     "python/pyproject.toml:version",
     "go/prompt/agent.go:version",
+    "typescript/package.json:version",
+    "rust/src/agent.rs:VERSION",
+    "rust/Cargo.toml:version",
 ]
 tag_format = "v$version"
 update_changelog_on_bump = true

@@ -9,43 +9,50 @@ permissions:
   contents: write
 
 jobs:
-  auto-tag:
+  auto-bump:
     if: github.ref_type == 'branch'
     runs-on: ubuntu-latest
     outputs:
-      tag_created: ${{ steps.tag.outputs.created }}
-      version: ${{ steps.version.outputs.version }}
+      bumped: ${{ steps.bump.outputs.bumped }}
+      version: ${{ steps.bump.outputs.version }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Read version
-        id: version
-        run: |
-          VERSION=$(grep '^version' python/pyproject.toml | head -1 | sed 's/.*"\(.*\)"/\1/')
-          echo "version=v${VERSION}" >> "$GITHUB_OUTPUT"
+      - uses: astral-sh/setup-uv@v6
 
-      - name: Check and create tag
-        id: tag
+      - name: Install commitizen
+        run: uv tool install commitizen
+
+      - name: Configure git
         run: |
-          if git rev-parse "${{ steps.version.outputs.version }}" >/dev/null 2>&1; then
-            echo "Tag ${{ steps.version.outputs.version }} already exists"
-            echo "created=false" >> "$GITHUB_OUTPUT"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Bump version
+        id: bump
+        run: |
+          if cz bump --yes --changelog 2>&1 | tee /tmp/bump.log; then
+            VERSION=$(grep '^version' python/pyproject.toml | head -1 | sed 's/.*"\(.*\)"/\1/')
+            echo "version=v${VERSION}" >> "$GITHUB_OUTPUT"
+            echo "bumped=true" >> "$GITHUB_OUTPUT"
+            git push --follow-tags
           else
-            git tag "${{ steps.version.outputs.version }}"
-            git push origin "${{ steps.version.outputs.version }}"
-            echo "created=true" >> "$GITHUB_OUTPUT"
+            echo "No version bump needed (no feat/fix/breaking commits since last tag)"
+            echo "bumped=false" >> "$GITHUB_OUTPUT"
           fi
 
   release:
-    needs: [auto-tag]
-    if: always() && (needs.auto-tag.outputs.tag_created == 'true' || (needs.auto-tag.result == 'skipped' && github.ref_type == 'tag'))
+    needs: [auto-bump]
+    if: always() && (needs.auto-bump.outputs.bumped == 'true' || (needs.auto-bump.result == 'skipped' && github.ref_type == 'tag'))
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          ref: ${{ needs.auto-bump.outputs.version || github.ref_name }}
 
       - name: Generate changelog
         uses: orhun/git-cliff-action@v4
@@ -57,18 +64,20 @@ jobs:
       - name: Create GitHub release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ needs.auto-tag.outputs.version || github.ref_name }}
+          tag_name: ${{ needs.auto-bump.outputs.version || github.ref_name }}
           body: ${{ steps.changelog.outputs.content }}
 
   publish-pypi:
-    needs: [auto-tag]
-    if: always() && (needs.auto-tag.outputs.tag_created == 'true' || (needs.auto-tag.result == 'skipped' && github.ref_type == 'tag'))
+    needs: [auto-bump]
+    if: always() && (needs.auto-bump.outputs.bumped == 'true' || (needs.auto-bump.result == 'skipped' && github.ref_type == 'tag'))
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: python
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.auto-bump.outputs.version || github.ref_name }}
 
       - uses: astral-sh/setup-uv@v6
 
