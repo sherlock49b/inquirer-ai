@@ -1,14 +1,12 @@
 {
-  "name": "cz-inquirer-ai",
+  "name": "cz-ai",
   "version": "0.1.0",
-  "description": "Commitizen adapter powered by inquirer-ai — agent-protocol-aware conventional commits",
+  "description": "Commitizen adapter that AI agents can drive — conventional commits over inquirer-ai protocol",
   "type": "module",
   "main": "index.js",
   "keywords": [
     "commitizen",
     "cz",
-    "adapter",
-    "inquirer",
     "ai",
     "agent",
     "conventional-commits"
@@ -18,7 +16,7 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/sherlock49b/inquirer-ai.git",
-    "directory": "extensions/cz-inquirer-ai"
+    "directory": "extensions/cz-ai"
   },
   "dependencies": {
     "inquirer-ai": "file:../../typescript",
