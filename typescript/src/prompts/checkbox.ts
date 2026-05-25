@@ -70,6 +70,7 @@ export class CheckboxPrompt<V = unknown> extends BasePrompt<V[]> {
   private moveCursor(current: number, direction: number): number {
     const indices = this.selectableIndices();
     let pos = indices.indexOf(current);
+    // indices is non-empty: constructor guarantees at least one selectable item
     if (pos === -1) return indices[0]!;
     pos += direction;
     if (this.loop) {
@@ -77,12 +78,14 @@ export class CheckboxPrompt<V = unknown> extends BasePrompt<V[]> {
     } else {
       pos = Math.max(0, Math.min(pos, indices.length - 1));
     }
+    // pos is clamped to [0, indices.length - 1]
     return indices[pos]!;
   }
 
   protected async executeTerminal(): Promise<V[]> {
     const t = getTheme();
     const indices = this.selectableIndices();
+    // indices is non-empty: constructor guarantees at least one selectable item
     let cursor = indices[0]!;
     const checked = new Set<number>();
     const defaults = this.defaultValue ?? [];
@@ -90,7 +93,8 @@ export class CheckboxPrompt<V = unknown> extends BasePrompt<V[]> {
     for (let i = 0; i < this.items.length; i++) {
       const item = this.items[i]!;
       if (!isSeparator(item) && !item.disabled) {
-        if (defaults.includes(item.value) || defaults.includes(item.name as V)) {
+        // Check both value match and string name match for default pre-selection
+        if (defaults.includes(item.value) || defaults.some((d) => d === item.name)) {
           checked.add(i);
         }
       }
@@ -162,6 +166,7 @@ export class CheckboxPrompt<V = unknown> extends BasePrompt<V[]> {
     });
 
     if (raw === null) throw new PromptAbortedError("Prompt aborted by user");
-    return raw as V[];
+    // raw comes from item.value entries which are already V[], validate to satisfy the type system
+    return this.validateAnswer(raw);
   }
 }

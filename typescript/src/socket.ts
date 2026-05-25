@@ -166,12 +166,12 @@ export class SocketTransport {
     }
   }
 
-  async promptCycle(
+  async promptCycle<T>(
     payload: Record<string, unknown>,
-    validateFn: (value: unknown) => unknown,
-    filterFn?: ((value: any) => any) | null,
-    userValidate?: ((value: any) => string | boolean | null | undefined) | null,
-  ): Promise<unknown> {
+    validateFn: (value: unknown) => T,
+    filterFn?: ((value: T) => T) | null,
+    userValidate?: ((value: T) => string | boolean | null | undefined) | null,
+  ): Promise<T> {
     this._step++;
     const promptPayload = { ...payload, step: this._step };
     let retriesUsed = 0;
@@ -201,7 +201,11 @@ export class SocketTransport {
           // Parse JSON
           let parsed: Record<string, unknown>;
           try {
-            parsed = JSON.parse(trimmed) as Record<string, unknown>;
+            const raw: unknown = JSON.parse(trimmed);
+            if (typeof raw !== "object" || raw === null) {
+              throw new SyntaxError("not an object");
+            }
+            parsed = raw as Record<string, unknown>;
           } catch {
             retriesUsed++;
             const msg = `Invalid JSON: ${trimmed}`;
@@ -221,7 +225,11 @@ export class SocketTransport {
               break;
             }
             try {
-              parsed = JSON.parse(nextLine.trim()) as Record<string, unknown>;
+              const rawNext: unknown = JSON.parse(nextLine.trim());
+              if (typeof rawNext !== "object" || rawNext === null) {
+                throw new SyntaxError("not an object");
+              }
+              parsed = rawNext as Record<string, unknown>;
             } catch {
               retriesUsed++;
               const msg = `Invalid JSON: ${nextLine.trim()}`;
@@ -251,7 +259,7 @@ export class SocketTransport {
           const answer: unknown = parsed.answer;
 
           // Validate through prompt's validateAnswer
-          let result: unknown;
+          let result: T;
           try {
             result = validateFn(answer);
           } catch (err) {

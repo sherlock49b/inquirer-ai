@@ -24,6 +24,9 @@ export function createSeparator(text = "────────"): Separator {
 
 export function parseChoice<V = unknown>(raw: RawChoice<V>): ChoiceItem<V> {
   if (typeof raw === "string") {
+    // When a raw string is passed, it serves as both name and value.
+    // The caller is responsible for ensuring V is compatible with string
+    // (e.g., RawChoice<string> or RawChoice<unknown>).
     return { name: raw, value: raw as V };
   }
   if ("type" in raw && raw.type === "separator") {

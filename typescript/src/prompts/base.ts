@@ -93,17 +93,12 @@ export abstract class BasePrompt<T> {
     // Socket transport takes priority when available
     const transport = getSocketTransport();
     if (transport) {
-      const userValidateFn = this.validateFn
-        ? (value: T): string | boolean | null | undefined => {
-            return this.validateFn!(value);
-          }
-        : null;
-      return transport.promptCycle(
+      return transport.promptCycle<T>(
         { kind: "prompt", ...this.toAgentDict() },
         (value: unknown) => this.validateAnswer(value),
         this.filterFn ?? null,
-        userValidateFn,
-      ) as Promise<T>;
+        this.validateFn ?? null,
+      );
     }
 
     const agent = isAgentMode();

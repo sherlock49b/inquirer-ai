@@ -170,7 +170,11 @@ export async function agentReceive(): Promise<unknown> {
     }
     let resp: Record<string, unknown>;
     try {
-      resp = JSON.parse(line) as Record<string, unknown>;
+      const raw: unknown = JSON.parse(line);
+      if (typeof raw !== "object" || raw === null) {
+        throw new SyntaxError("not an object");
+      }
+      resp = raw as Record<string, unknown>;
     } catch {
       throw new Error(
         `Invalid JSON response: ${line.trim()}. Expected JSON like: {"answer": "<value>"}`,
@@ -180,12 +184,14 @@ export async function agentReceive(): Promise<unknown> {
       handshakeAck = resp;
       continue;
     }
-    if (typeof resp !== "object" || resp === null || !("answer" in resp)) {
+    if (!("answer" in resp)) {
       throw new Error(
         `Response must be a JSON object with an "answer" key, ` +
           `e.g. {"answer": "<value>"}. Got: ${line.trim()}`,
       );
     }
+    // Return the raw answer value; the caller (BasePrompt.executeAgent) passes it
+    // through validateAnswer() which narrows it to the prompt's concrete type T.
     return resp.answer;
   }
 }

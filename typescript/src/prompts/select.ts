@@ -62,6 +62,7 @@ export class SelectPrompt<V = unknown> extends BasePrompt<V> {
   private moveCursor(current: number, direction: number): number {
     const indices = this.selectableIndices();
     let pos = indices.indexOf(current);
+    // indices is non-empty: constructor guarantees at least one selectable item
     if (pos === -1) return indices[0]!;
     pos += direction;
     if (this.loop) {
@@ -69,12 +70,14 @@ export class SelectPrompt<V = unknown> extends BasePrompt<V> {
     } else {
       pos = Math.max(0, Math.min(pos, indices.length - 1));
     }
+    // pos is clamped to [0, indices.length - 1]
     return indices[pos]!;
   }
 
   protected async executeTerminal(): Promise<V> {
     const t = getTheme();
     const indices = this.selectableIndices();
+    // indices is non-empty: constructor guarantees at least one selectable item
     let cursor = indices[0]!;
 
     if (this.defaultValue != null) {
@@ -138,6 +141,7 @@ export class SelectPrompt<V = unknown> extends BasePrompt<V> {
     });
 
     if (raw === null) throw new PromptAbortedError("Prompt aborted by user");
-    return raw as V;
+    // raw comes from item.value which is already V, validate to satisfy the type system
+    return this.validateAnswer(raw);
   }
 }

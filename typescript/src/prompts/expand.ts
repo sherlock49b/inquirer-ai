@@ -16,7 +16,7 @@ function parseExpandChoice(raw: ExpandChoice | Record<string, unknown>): ExpandC
   if ("key" in raw && typeof raw.key === "string") {
     return {
       key: raw.key.toLowerCase(),
-      name: (raw.name as string | undefined) ?? raw.key,
+      name: typeof raw.name === "string" ? raw.name : raw.key,
       value: raw.value ?? raw.key,
     };
   }
