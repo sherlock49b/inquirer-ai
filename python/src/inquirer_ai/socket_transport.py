@@ -19,6 +19,7 @@ T = TypeVar("T")
 def _is_json_dict(value: object) -> TypeGuard[dict[str, Any]]:
     return isinstance(value, dict)
 
+
 _MAX_RETRIES = 3
 
 

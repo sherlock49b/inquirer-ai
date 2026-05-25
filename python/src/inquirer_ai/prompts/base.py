@@ -18,6 +18,7 @@ TextIO = IO[str]
 def _is_json_dict(value: object) -> TypeGuard[dict[str, Any]]:
     return isinstance(value, dict)
 
+
 _agent_handshake_sent = False
 _agent_handshake_ack: dict[str, Any] | None = None
 _agent_step = 0
