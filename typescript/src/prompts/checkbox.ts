@@ -8,6 +8,7 @@ export interface CheckboxConfig<V = unknown> extends BaseConfig<V[]> {
   choices: RawChoice<V>[];
   pageSize?: number;
   loop?: boolean;
+  required?: boolean | string;
 }
 
 export class CheckboxPrompt<V = unknown> extends BasePrompt<V[]> {
@@ -15,6 +16,7 @@ export class CheckboxPrompt<V = unknown> extends BasePrompt<V[]> {
   private choices: Choice<V>[];
   private pageSize: number;
   private loop: boolean;
+  private required: boolean | string;
 
   constructor(config: CheckboxConfig<V>) {
     super({ ...config, default: config.default ?? [] });
@@ -26,6 +28,7 @@ export class CheckboxPrompt<V = unknown> extends BasePrompt<V[]> {
     }
     this.pageSize = config.pageSize ?? 10;
     this.loop = config.loop ?? true;
+    this.required = config.required ?? false;
   }
 
   get promptType(): string {
@@ -47,6 +50,10 @@ export class CheckboxPrompt<V = unknown> extends BasePrompt<V[]> {
       } else {
         throw new ValidationError(`Invalid choice: ${JSON.stringify(v)}. Valid: ${JSON.stringify([...validValues])}`);
       }
+    }
+    if (this.required && result.length === 0) {
+      const msg = typeof this.required === "string" ? this.required : "At least one choice is required";
+      throw new ValidationError(msg);
     }
     return result;
   }
