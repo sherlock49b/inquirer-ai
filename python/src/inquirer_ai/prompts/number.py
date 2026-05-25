@@ -20,6 +20,7 @@ class NumberPrompt(BasePrompt[int | float]):
         max: int | float | None = None,
         step: int | float | None = None,
         float_allowed: bool = True,
+        keep_input: bool = True,
         **kwargs: Any,
     ) -> None:
         super().__init__(message, **kwargs)
@@ -27,6 +28,7 @@ class NumberPrompt(BasePrompt[int | float]):
         self.max = max
         self.step = step
         self.float_allowed = float_allowed
+        self.keep_input = keep_input
 
     @property
     def prompt_type(self) -> str:
@@ -75,17 +77,27 @@ class NumberPrompt(BasePrompt[int | float]):
     def _execute_terminal(self) -> int | float:
         t = get_theme()
         suffix = f" ({self.default})" if self.default is not None else ""
-        message = FormattedText(
-            [
-                (t.pt(t.question), f"{t.sym_question} "),
-                ("bold", f"{self.message}{suffix}: "),
-            ]
-        )
+        retry_default: str | None = None
         while True:
-            raw = pt_prompt(message)
+            message = FormattedText(
+                [
+                    (t.pt(t.question), f"{t.sym_question} "),
+                    ("bold", f"{self.message}{suffix}: "),
+                ]
+            )
+            raw = pt_prompt(message, default=retry_default or "")
             if not raw and self.default is not None:
                 return self.default
             try:
-                return self._validate_answer(raw)
+                result = self._validate_answer(raw)
             except ValidationError as e:
                 print(f"{t.ansi(t.error)}  {e}{RESET}")
+                retry_default = raw if self.keep_input else None
+                continue
+            # Run user-provided validation
+            error = self._run_user_validation(result)
+            if error:
+                print(f"{t.ansi(t.error)}  {error}{RESET}")
+                retry_default = raw if self.keep_input else None
+                continue
+            return result

@@ -135,13 +135,13 @@ def test_agent_dict_includes_options():
 
 def test_terminal_mode(monkeypatch):
     monkeypatch.setenv("INQUIRER_AI_MODE", "human")
-    monkeypatch.setattr("inquirer_ai.prompts.number.pt_prompt", lambda _: "42")
+    monkeypatch.setattr("inquirer_ai.prompts.number.pt_prompt", lambda _, **kw: "42")
     p = NumberPrompt("Num?")
     assert p.execute() == 42
 
 
 def test_terminal_mode_default(monkeypatch):
     monkeypatch.setenv("INQUIRER_AI_MODE", "human")
-    monkeypatch.setattr("inquirer_ai.prompts.number.pt_prompt", lambda _: "")
+    monkeypatch.setattr("inquirer_ai.prompts.number.pt_prompt", lambda _, **kw: "")
     p = NumberPrompt("Num?", default=7)
     assert p.execute() == 7

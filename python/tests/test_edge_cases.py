@@ -91,7 +91,7 @@ class TestHandshakeDefense:
 
     def test_handshake_not_sent_in_human_mode(self, monkeypatch):
         monkeypatch.setenv("INQUIRER_AI_MODE", "human")
-        monkeypatch.setattr("inquirer_ai.prompts.text.pt_prompt", lambda _: "hi")
+        monkeypatch.setattr("inquirer_ai.prompts.text.pt_prompt", lambda _, **kw: "hi")
         stdout = io.StringIO()
         monkeypatch.setattr("sys.stdout", stdout)
 

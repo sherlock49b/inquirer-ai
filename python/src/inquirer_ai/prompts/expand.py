@@ -73,18 +73,29 @@ class ExpandPrompt(BasePrompt[Any]):
     def _execute_terminal(self) -> Any:
         t = get_theme()
         keys = "/".join(c.key for c in self.expand_choices)
+        compact_hint = "(" + "/".join(c.key for c in self.expand_choices) + "/h)"
+        expanded = False
         while True:
-            message = FormattedText(
-                [
-                    (t.pt(t.question), f"{t.sym_question} "),
-                    ("bold", f"{self.message} ({keys}): "),
-                ]
-            )
+            if expanded:
+                for c in self.expand_choices:
+                    print(f"  {c.key}) {c.name}")
+                message = FormattedText(
+                    [
+                        (t.pt(t.question), f"{t.sym_question} "),
+                        ("bold", f"{self.message} ({keys}/h): "),
+                    ]
+                )
+            else:
+                message = FormattedText(
+                    [
+                        (t.pt(t.question), f"{t.sym_question} "),
+                        ("bold", f"{self.message} {compact_hint}: "),
+                    ]
+                )
             raw = pt_prompt(message)
             lower = raw.strip().lower()
             if lower == "h" or lower == "help":
-                for c in self.expand_choices:
-                    print(f"  {c.key}) {c.name}")
+                expanded = not expanded
                 continue
             for c in self.expand_choices:
                 if lower == c.key:

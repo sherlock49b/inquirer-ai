@@ -7,7 +7,7 @@ from inquirer_ai.prompts.text import TextPrompt
 
 def test_transformer_changes_display_not_value(monkeypatch):
     monkeypatch.setenv("INQUIRER_AI_MODE", "human")
-    monkeypatch.setattr("inquirer_ai.prompts.text.pt_prompt", lambda _: "secret123")
+    monkeypatch.setattr("inquirer_ai.prompts.text.pt_prompt", lambda _, **kw: "secret123")
 
     output_lines: list[str] = []
     monkeypatch.setattr("builtins.print", lambda s: output_lines.append(s))

@@ -101,6 +101,17 @@ class ChoiceBasePrompt(BasePrompt[T]):
         def _abort(event: KeyPressEvent) -> None:
             event.app.exit(result=None)
 
+        # Number jump: pressing 1-9 jumps to that selectable item (1-based)
+        selectable = self._selectable_indices()
+
+        for _digit in "123456789":
+
+            @kb.add(_digit)
+            def _jump(event: KeyPressEvent, _sel: list[int] = selectable) -> None:
+                num = int(event.data)  # 1-based
+                idx = min(num, len(_sel)) - 1  # clamp & convert to 0-based
+                state["cursor"] = _sel[idx]
+
         self._build_keybindings(kb, self.choices, state)
 
         def get_message() -> FormattedText:
@@ -172,6 +183,17 @@ class ChoiceBasePrompt(BasePrompt[T]):
         @kb.add("c-c")
         def _abort(event: KeyPressEvent) -> None:
             event.app.exit(result=None)
+
+        # Number jump: pressing 1-9 jumps to that selectable item (1-based)
+        selectable = self._selectable_indices()
+
+        for _digit in "123456789":
+
+            @kb.add(_digit)
+            def _jump(event: KeyPressEvent, _sel: list[int] = selectable) -> None:
+                num = int(event.data)  # 1-based
+                idx = min(num, len(_sel)) - 1  # clamp & convert to 0-based
+                state["cursor"] = _sel[idx]
 
         self._build_keybindings(kb, self.choices, state)
 

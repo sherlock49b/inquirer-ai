@@ -95,20 +95,20 @@ def test_agent_mode_filter(monkeypatch):
 
 def test_terminal_mode_basic(monkeypatch):
     monkeypatch.setenv("INQUIRER_AI_MODE", "human")
-    monkeypatch.setattr("inquirer_ai.prompts.text.pt_prompt", lambda _: "alice")
+    monkeypatch.setattr("inquirer_ai.prompts.text.pt_prompt", lambda _, **kw: "alice")
     p = TextPrompt("Name")
     assert p.execute() == "alice"
 
 
 def test_terminal_mode_default(monkeypatch):
     monkeypatch.setenv("INQUIRER_AI_MODE", "human")
-    monkeypatch.setattr("inquirer_ai.prompts.text.pt_prompt", lambda _: "")
+    monkeypatch.setattr("inquirer_ai.prompts.text.pt_prompt", lambda _, **kw: "")
     p = TextPrompt("Name", default="bob")
     assert p.execute() == "bob"
 
 
 def test_terminal_mode_empty_no_default(monkeypatch):
     monkeypatch.setenv("INQUIRER_AI_MODE", "human")
-    monkeypatch.setattr("inquirer_ai.prompts.text.pt_prompt", lambda _: "")
+    monkeypatch.setattr("inquirer_ai.prompts.text.pt_prompt", lambda _, **kw: "")
     p = TextPrompt("Name")
     assert p.execute() == ""
