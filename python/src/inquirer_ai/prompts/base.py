@@ -6,13 +6,17 @@ import os
 import sys
 from abc import ABC, abstractmethod
 from collections.abc import Callable
-from typing import IO, Any, Generic, Literal, TypedDict, TypeVar, cast
+from typing import IO, Any, Generic, Literal, TypedDict, TypeGuard, TypeVar
 
 from inquirer_ai.exceptions import PromptAbortedError, ValidationError
 from inquirer_ai.mode import is_agent_mode
 
 T = TypeVar("T")
 TextIO = IO[str]
+
+
+def _is_json_dict(value: object) -> TypeGuard[dict[str, Any]]:
+    return isinstance(value, dict)
 
 _agent_handshake_sent = False
 _agent_handshake_ack: dict[str, Any] | None = None
@@ -37,6 +41,7 @@ class AgentResponse(TypedDict):
     """Response from the agent containing an answer."""
 
     answer: Any  # Genuinely Any — values come from user-provided JSON
+
 
 _MAX_VALIDATION_RETRIES = 3
 
@@ -155,10 +160,9 @@ class BasePrompt(ABC, Generic[T]):
                 raw: Any = json.loads(line)
             except json.JSONDecodeError:
                 return line
-            if isinstance(raw, dict):
-                maybe_ack = cast(dict[str, Any], raw)
-                if maybe_ack.get("kind") == "handshake_ack":
-                    _agent_handshake_ack = maybe_ack
+            if _is_json_dict(raw):
+                if raw.get("kind") == "handshake_ack":
+                    _agent_handshake_ack = raw
                     next_line = agent_in.readline()
                     return next_line.strip()
         return line
@@ -186,13 +190,12 @@ class BasePrompt(ABC, Generic[T]):
                 raw_response: Any = json.loads(line)
             except json.JSONDecodeError as e:
                 raise ValidationError(f'Invalid JSON response: {e}. Expected JSON like: {{"answer": "<value>"}}') from e
-            if not isinstance(raw_response, dict) or "answer" not in raw_response:
+            if not _is_json_dict(raw_response) or "answer" not in raw_response:
                 raise ValidationError(
                     f'Response must be a JSON object with an "answer" key, '
                     f'e.g. {{"answer": "<value>"}}. Got: {line.strip()}'
                 )
-            response = cast(dict[str, Any], raw_response)
-            answer: Any = response["answer"]
+            answer: Any = raw_response["answer"]
             try:
                 return self._validate_answer(answer)
             except ValidationError as e:

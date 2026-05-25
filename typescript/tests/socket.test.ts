@@ -297,6 +297,7 @@ describe("Socket transport", () => {
     const msgs1 = await readUntilPrompt(sock1);
     expect(msgs1[msgs1.length - 1]!.kind).toBe("prompt");
     sock1.destroy();
+    await new Promise((r) => setTimeout(r, 100));
 
     // Second connection: same prompt, now answer
     const sock2 = await connectSocket(sockPath);

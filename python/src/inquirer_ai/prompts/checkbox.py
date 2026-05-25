@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, cast
+from typing import Any, TypeGuard
 
 from prompt_toolkit.key_binding import KeyBindings, KeyPressEvent
 
@@ -35,10 +35,14 @@ class CheckboxPrompt(ChoiceBasePrompt[list[Any]]):
     def prompt_type(self) -> str:
         return "checkbox"
 
+    @staticmethod
+    def _is_list(value: object) -> TypeGuard[list[Any]]:
+        return isinstance(value, list)
+
     def _validate_answer(self, value: Any) -> list[Any]:
-        if not isinstance(value, list):
+        if not self._is_list(value):
             raise ValidationError(f"Expected a list, got {type(value).__name__}")
-        input_items: list[Any] = cast(list[Any], value)
+        input_items = value
         result: list[Any] = []
         enabled = [c for c in self.choices if not c.disabled]
         valid_values: set[Any] = {c.value for c in enabled}

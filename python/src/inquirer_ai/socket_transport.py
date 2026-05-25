@@ -9,11 +9,15 @@ import socket
 import sys
 import types
 from collections.abc import Callable
-from typing import IO, Any, TypeVar, cast
+from typing import IO, Any, TypeGuard, TypeVar
 
 from inquirer_ai.exceptions import ValidationError
 
 T = TypeVar("T")
+
+
+def _is_json_dict(value: object) -> TypeGuard[dict[str, Any]]:
+    return isinstance(value, dict)
 
 _MAX_RETRIES = 3
 
@@ -124,7 +128,7 @@ class SocketTransport:
                         self._write(wfile, {"kind": "validation_error", "message": msg})
                         continue
 
-                    if isinstance(raw_parsed, dict) and cast(dict[str, Any], raw_parsed).get("kind") == "handshake_ack":
+                    if _is_json_dict(raw_parsed) and raw_parsed.get("kind") == "handshake_ack":
                         line = rfile.readline()
                         if not line or not line.strip():
                             break
@@ -140,7 +144,7 @@ class SocketTransport:
                             self._write(wfile, {"kind": "validation_error", "message": msg})
                             continue
 
-                    if not isinstance(raw_parsed, dict) or "answer" not in raw_parsed:
+                    if not _is_json_dict(raw_parsed) or "answer" not in raw_parsed:
                         retries_used += 1
                         msg = 'Response must be a JSON object with an "answer" key'
                         if retries_used >= _MAX_RETRIES:
@@ -149,8 +153,7 @@ class SocketTransport:
                         self._write(wfile, {"kind": "validation_error", "message": msg})
                         continue
 
-                    parsed = cast(dict[str, Any], raw_parsed)
-                    answer: Any = parsed["answer"]
+                    answer: Any = raw_parsed["answer"]
 
                     try:
                         result = validate(answer)
