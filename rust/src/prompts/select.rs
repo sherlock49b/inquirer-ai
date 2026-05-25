@@ -192,7 +192,10 @@ fn render_items(
                 let desc = c
                     .description
                     .as_ref()
-                    .map(|d| format!(" - {d}"))
+                    .map(|d| {
+                        let clean: String = d.chars().filter(|c| !matches!(c, '\n' | '\r')).collect();
+                        format!(" - {clean}")
+                    })
                     .unwrap_or_default();
                 items.push((hc, format!("{} {}{desc}", t.sym_pointer, c.name)));
             }

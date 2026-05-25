@@ -1,6 +1,7 @@
 use crate::theme::{ansi_color, BOLD, DEFAULT_THEME, RESET};
+use crossterm::cursor;
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyModifiers};
-use crossterm::terminal;
+use crossterm::{queue, terminal};
 use std::io::{self, BufRead, Write};
 
 pub fn read_line(prompt: &str) -> io::Result<String> {
@@ -79,31 +80,29 @@ impl ListRenderer {
     pub fn render(&mut self, header: &str, items: &[(String, String)]) {
         let mut stderr = io::stderr().lock();
         if self.rendered_lines > 0 {
-            let _ = write!(stderr, "\x1b[{}A", self.rendered_lines);
+            let _ = queue!(stderr, cursor::RestorePosition);
         }
-        let _ = writeln!(stderr, "\x1b[2K{header}");
+        let _ = queue!(
+            stderr,
+            cursor::SavePosition,
+            terminal::Clear(terminal::ClearType::FromCursorDown)
+        );
+        let _ = write!(stderr, "{header}");
         for (style, text) in items {
-            let _ = writeln!(stderr, "\x1b[2K{style}{text}{RESET}");
+            let _ = write!(stderr, "\r\n{style}{text}{RESET}");
         }
-        let total = 1 + items.len();
-        if self.rendered_lines > total {
-            for _ in total..self.rendered_lines {
-                let _ = writeln!(stderr, "\x1b[2K");
-            }
-            let _ = write!(stderr, "\x1b[{}A", self.rendered_lines - total);
-        }
-        self.rendered_lines = total;
+        self.rendered_lines = 1 + items.len();
         let _ = stderr.flush();
     }
 
     pub fn clear(&self) {
         let mut stderr = io::stderr().lock();
         if self.rendered_lines > 0 {
-            let _ = write!(stderr, "\x1b[{}A", self.rendered_lines);
-            for _ in 0..self.rendered_lines {
-                let _ = writeln!(stderr, "\x1b[2K");
-            }
-            let _ = write!(stderr, "\x1b[{}A", self.rendered_lines);
+            let _ = queue!(
+                stderr,
+                cursor::RestorePosition,
+                terminal::Clear(terminal::ClearType::FromCursorDown)
+            );
         }
         let _ = stderr.flush();
     }
