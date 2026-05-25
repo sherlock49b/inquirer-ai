@@ -1,5 +1,4 @@
-import { text, select, confirm } from "inquirer-ai";
-import wrap from "word-wrap";
+const wrap = require("word-wrap");
 
 const TYPES = {
   feat: { description: "A new feature" },
@@ -33,10 +32,11 @@ function filterSubject(subject) {
   return subject;
 }
 
-export default {
+module.exports = {
   prompter: async function (_cz, commit) {
     try {
-      const answers = await promptAll();
+      const { text, select, confirm } = await import("inquirer-ai");
+      const answers = await promptAll(text, select, confirm);
       const scope = answers.scope ? `(${answers.scope})` : "";
       const head = `${answers.type}${scope}: ${answers.subject}`;
       const wrapOpts = { trim: true, cut: false, newline: "\n", indent: "", width: MAX_LINE_WIDTH };
@@ -53,7 +53,7 @@ export default {
   },
 };
 
-async function promptAll() {
+async function promptAll(text, select, confirm) {
   const choices = Object.entries(TYPES).map(([key, val]) => ({
     name: `${key.padEnd(10)} ${val.description}`,
     value: key,

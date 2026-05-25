@@ -2,8 +2,7 @@
   "name": "cz-ai",
   "version": "0.1.0",
   "description": "Commitizen adapter that AI agents can drive — conventional commits over inquirer-ai protocol",
-  "type": "module",
-  "main": "index.js",
+  "main": "index.cjs",
   "keywords": [
     "commitizen",
     "cz",
