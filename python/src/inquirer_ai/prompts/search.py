@@ -34,6 +34,15 @@ class SearchPrompt(BasePrompt[Any]):
     def _call_source_sync(self, term: str) -> list[RawChoice]:
         """Call source synchronously. If source is async, run it in a new event loop."""
         if self._is_async_source:
+            try:
+                loop = asyncio.get_running_loop()
+            except RuntimeError:
+                loop = None
+            if loop and loop.is_running():
+                import concurrent.futures
+
+                with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                    return pool.submit(asyncio.run, self.source(term)).result()  # type: ignore[arg-type]
             return asyncio.run(self.source(term))  # type: ignore[arg-type]
         return self.source(term)  # type: ignore[return-value]
 
