@@ -51,13 +51,13 @@ fn text_agent(config: &TextConfig) -> Result<String> {
 
     agent_prompt_with_retry(&payload, |answer| {
         let mut result = validate_answer(&answer, &config.default);
-        if let Some(f) = &config.filter {
-            result = f(result);
-        }
         if let Some(v) = &config.validate {
             if let Err(msg) = v(&result) {
                 return Err(crate::errors::InquirerError::Validation(msg));
             }
+        }
+        if let Some(f) = &config.filter {
+            result = f(result);
         }
         Ok(result)
     })
@@ -82,9 +82,6 @@ fn text_terminal(config: &TextConfig) -> Result<String> {
         } else {
             raw.clone()
         };
-        if let Some(f) = &config.filter {
-            result = f(result);
-        }
         if let Some(v) = &config.validate {
             use std::panic::{catch_unwind, AssertUnwindSafe};
             let res_ref = &result;
@@ -108,6 +105,9 @@ fn text_terminal(config: &TextConfig) -> Result<String> {
                     return Err(crate::errors::InquirerError::Validation(msg));
                 }
             }
+        }
+        if let Some(f) = &config.filter {
+            result = f(result);
         }
         eprintln!("{}", format_success(&config.message, &result));
         return Ok(result);

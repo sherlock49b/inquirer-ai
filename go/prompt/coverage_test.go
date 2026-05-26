@@ -3,6 +3,7 @@ package prompt
 import (
 	"errors"
 	"fmt"
+	"strings"
 	"testing"
 )
 
@@ -98,10 +99,11 @@ func TestTextValidateAndFilter(t *testing.T) {
 	result, err := Text(TextConfig{
 		Message: "Q",
 		Filter: func(s string) string {
-			return s[2 : len(s)-2] // trim 2 chars each side
+			return strings.TrimSpace(s)
 		},
 		Validate: func(s string) error {
-			if s != "HELLO" {
+			// validate runs BEFORE filter, so sees raw input
+			if !strings.Contains(s, "HELLO") {
 				return fmt.Errorf("expected HELLO")
 			}
 			return nil
@@ -112,6 +114,7 @@ func TestTextValidateAndFilter(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+	// filter runs AFTER validate, so result is trimmed
 	if result != "HELLO" {
 		t.Fatalf("expected 'HELLO', got %q", result)
 	}

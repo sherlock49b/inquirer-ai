@@ -81,13 +81,13 @@ func textTerminal(cfg TextConfig) (string, error) {
 }
 
 func applyTextCallbacks(result string, cfg TextConfig) (string, error) {
-	if cfg.Filter != nil {
-		result = cfg.Filter(result)
-	}
 	if cfg.Validate != nil {
 		if err := cfg.Validate(result); err != nil {
 			return "", fmt.Errorf("%w: %v", ErrValidation, err)
 		}
+	}
+	if cfg.Filter != nil {
+		result = cfg.Filter(result)
 	}
 	return result, nil
 }
