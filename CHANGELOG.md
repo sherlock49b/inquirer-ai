@@ -82,6 +82,12 @@ All notable changes to this project will be documented in this file.
 
 - Add pyright type checking to CI pipeline
 
+## v0.3.1 (2026-05-26)
+
+### Fix
+
+- **ci**: push tag explicitly and read version dynamically in tests
+
 ## v0.3.0 (2026-05-26)
 
 ### Feat

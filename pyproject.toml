@@ -3,7 +3,7 @@ members = ["python"]
 
 [tool.commitizen]
 name = "cz_conventional_commits"
-version = "0.3.0"
+version = "0.3.1"
 version_files = [
     "python/pyproject.toml:version",
     "go/prompt/version.go:Version",
