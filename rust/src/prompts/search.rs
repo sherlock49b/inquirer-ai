@@ -6,6 +6,27 @@ use crate::terminal::{format_success, KeyInput, ListRenderer};
 use crate::theme::{ansi_color, BOLD, DEFAULT_THEME, RESET};
 use serde_json::{json, Value};
 
+/// A synchronous search source function that receives a search term and returns matching choices.
+///
+/// The source is intentionally synchronous to avoid requiring an async runtime dependency
+/// in the core library. Callers who need to query async data sources (e.g., HTTP APIs,
+/// databases) can bridge to async inside the closure using their runtime's `block_on`:
+///
+/// ```rust,ignore
+/// use inquirer_ai::prompts::search::{SearchConfig, SearchSource};
+///
+/// // Example with tokio
+/// let source: SearchSource = Box::new(|term: &str| {
+///     let term = term.to_string();
+///     tokio::runtime::Handle::current().block_on(async move {
+///         // your_async_search(&term).await
+///         vec![]
+///     })
+/// });
+/// ```
+///
+/// This mirrors the Go implementation's approach where concurrency is managed by the
+/// caller rather than the library.
 pub type SearchSource = Box<dyn Fn(&str) -> Vec<ChoiceItem>>;
 
 pub struct SearchConfig {
