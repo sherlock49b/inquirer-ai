@@ -221,3 +221,243 @@ fn render_items(
 
     items
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::choice::Separator;
+    use serde_json::json;
+
+    fn make_choices(names: &[&str]) -> Vec<ChoiceItem> {
+        names
+            .iter()
+            .map(|n| ChoiceItem::Choice(Choice::new(*n, json!(*n))))
+            .collect()
+    }
+
+    // -- selectable_indices --
+
+    #[test]
+    fn selectable_indices_all_enabled() {
+        let choices = make_choices(&["A", "B", "C"]);
+        assert_eq!(selectable_indices(&choices), vec![0, 1, 2]);
+    }
+
+    #[test]
+    fn selectable_indices_with_separator() {
+        let mut choices = make_choices(&["A", "B"]);
+        choices.insert(1, ChoiceItem::Separator(Separator::new("---")));
+        // indices: 0=A, 1=sep, 2=B
+        assert_eq!(selectable_indices(&choices), vec![0, 2]);
+    }
+
+    #[test]
+    fn selectable_indices_with_disabled() {
+        let mut choices = make_choices(&["A", "B", "C"]);
+        if let ChoiceItem::Choice(ref mut c) = choices[1] {
+            c.disabled = Some(json!(true));
+        }
+        assert_eq!(selectable_indices(&choices), vec![0, 2]);
+    }
+
+    #[test]
+    fn selectable_indices_empty() {
+        let choices: Vec<ChoiceItem> = vec![ChoiceItem::Separator(Separator::default())];
+        assert!(selectable_indices(&choices).is_empty());
+    }
+
+    // -- move_cursor --
+
+    #[test]
+    fn move_cursor_down_no_loop() {
+        let indices = vec![0, 1, 2];
+        assert_eq!(move_cursor(0, 1, &indices, false), 1);
+        assert_eq!(move_cursor(1, 1, &indices, false), 2);
+        // at end, clamp
+        assert_eq!(move_cursor(2, 1, &indices, false), 2);
+    }
+
+    #[test]
+    fn move_cursor_up_no_loop() {
+        let indices = vec![0, 1, 2];
+        assert_eq!(move_cursor(2, -1, &indices, false), 1);
+        assert_eq!(move_cursor(1, -1, &indices, false), 0);
+        // at start, clamp
+        assert_eq!(move_cursor(0, -1, &indices, false), 0);
+    }
+
+    #[test]
+    fn move_cursor_down_with_loop() {
+        let indices = vec![0, 1, 2];
+        assert_eq!(move_cursor(2, 1, &indices, true), 0);
+    }
+
+    #[test]
+    fn move_cursor_up_with_loop() {
+        let indices = vec![0, 1, 2];
+        assert_eq!(move_cursor(0, -1, &indices, true), 2);
+    }
+
+    #[test]
+    fn move_cursor_skips_gaps() {
+        // Indices with gaps (separator at 1)
+        let indices = vec![0, 2, 3];
+        assert_eq!(move_cursor(0, 1, &indices, false), 2);
+        assert_eq!(move_cursor(2, -1, &indices, false), 0);
+    }
+
+    #[test]
+    fn move_cursor_single_item() {
+        let indices = vec![0];
+        assert_eq!(move_cursor(0, 1, &indices, true), 0);
+        assert_eq!(move_cursor(0, -1, &indices, true), 0);
+        assert_eq!(move_cursor(0, 1, &indices, false), 0);
+        assert_eq!(move_cursor(0, -1, &indices, false), 0);
+    }
+
+    // -- render_items --
+
+    #[test]
+    fn render_items_basic() {
+        let choices = make_choices(&["Alpha", "Beta", "Gamma"]);
+        let t = &DEFAULT_THEME;
+        let items = render_items(&choices, 0, 10, t);
+        assert_eq!(items.len(), 3);
+        // First item is at cursor -> has pointer symbol
+        assert!(items[0].1.contains(t.sym_pointer));
+        assert!(items[0].1.contains("Alpha"));
+        // Others are plain
+        assert!(items[1].1.contains("Beta"));
+        assert!(!items[1].1.contains(t.sym_pointer));
+        assert!(items[2].1.contains("Gamma"));
+    }
+
+    #[test]
+    fn render_items_with_separator() {
+        let mut choices = make_choices(&["A"]);
+        choices.insert(0, ChoiceItem::Separator(Separator::new("Section")));
+        let t = &DEFAULT_THEME;
+        let items = render_items(&choices, 1, 10, t);
+        assert_eq!(items.len(), 2);
+        assert!(items[0].1.contains("Section"));
+        assert!(items[1].1.contains("A"));
+    }
+
+    #[test]
+    fn render_items_disabled_shows_disabled_text() {
+        let mut c = Choice::new("Premium", json!("premium"));
+        c.disabled = Some(json!("Paid only"));
+        let choices = vec![
+            ChoiceItem::Choice(Choice::new("Free", json!("free"))),
+            ChoiceItem::Choice(c),
+        ];
+        let t = &DEFAULT_THEME;
+        let items = render_items(&choices, 0, 10, t);
+        assert_eq!(items.len(), 2);
+        assert!(items[1].1.contains("disabled"));
+        assert!(items[1].1.contains("Paid only"));
+    }
+
+    #[test]
+    fn render_items_description_shown_at_cursor() {
+        let mut c = Choice::new("Deploy", json!("deploy"));
+        c.description = Some("Push to production".into());
+        let choices = vec![ChoiceItem::Choice(c)];
+        let t = &DEFAULT_THEME;
+        let items = render_items(&choices, 0, 10, t);
+        assert!(
+            items[0].1.contains("Push to production"),
+            "Description should appear at cursor: {:?}",
+            items[0].1
+        );
+    }
+
+    #[test]
+    fn render_items_description_newlines_stripped() {
+        let mut c = Choice::new("Item", json!("item"));
+        c.description = Some("line1\nline2\rline3".into());
+        let choices = vec![ChoiceItem::Choice(c)];
+        let t = &DEFAULT_THEME;
+        let items = render_items(&choices, 0, 10, t);
+        // Should not contain raw newlines in the rendered text
+        assert!(
+            !items[0].1.contains('\n'),
+            "Description newlines should be stripped"
+        );
+        assert!(
+            !items[0].1.contains('\r'),
+            "Description carriage returns should be stripped"
+        );
+        assert!(items[0].1.contains("line1line2line3"));
+    }
+
+    #[test]
+    fn render_items_pagination() {
+        let choices = make_choices(&["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L"]);
+        let t = &DEFAULT_THEME;
+        // page_size=3, cursor at middle
+        let items = render_items(&choices, 5, 3, t);
+        // Should show "(more above)" and "(more below)" plus 3 items = 5 total
+        let texts: Vec<&str> = items.iter().map(|(_, t)| t.as_str()).collect();
+        assert!(
+            texts.iter().any(|t| t.contains("more above")),
+            "Should show 'more above': {texts:?}"
+        );
+        assert!(
+            texts.iter().any(|t| t.contains("more below")),
+            "Should show 'more below': {texts:?}"
+        );
+    }
+
+    #[test]
+    fn render_items_first_page_no_more_above() {
+        let choices = make_choices(&["A", "B", "C", "D", "E"]);
+        let t = &DEFAULT_THEME;
+        let items = render_items(&choices, 0, 3, t);
+        let texts: Vec<&str> = items.iter().map(|(_, t)| t.as_str()).collect();
+        assert!(
+            !texts.iter().any(|t| t.contains("more above")),
+            "First page should not show 'more above': {texts:?}"
+        );
+    }
+
+    #[test]
+    fn render_items_last_page_no_more_below() {
+        let choices = make_choices(&["A", "B", "C", "D", "E"]);
+        let t = &DEFAULT_THEME;
+        let items = render_items(&choices, 4, 3, t);
+        let texts: Vec<&str> = items.iter().map(|(_, t)| t.as_str()).collect();
+        assert!(
+            !texts.iter().any(|t| t.contains("more below")),
+            "Last page should not show 'more below': {texts:?}"
+        );
+    }
+
+    #[test]
+    fn render_items_page_size_larger_than_list() {
+        let choices = make_choices(&["A", "B"]);
+        let t = &DEFAULT_THEME;
+        let items = render_items(&choices, 0, 100, t);
+        assert_eq!(items.len(), 2); // no pagination markers
+    }
+
+    #[test]
+    fn render_items_cursor_style_uses_highlight_colour() {
+        let choices = make_choices(&["X"]);
+        let t = &DEFAULT_THEME;
+        let items = render_items(&choices, 0, 10, t);
+        let highlight = ansi_color(t.highlight);
+        assert_eq!(
+            items[0].0, highlight,
+            "Cursor item should use highlight colour"
+        );
+    }
+
+    #[test]
+    fn render_items_non_cursor_has_empty_style() {
+        let choices = make_choices(&["A", "B"]);
+        let t = &DEFAULT_THEME;
+        let items = render_items(&choices, 0, 10, t);
+        assert_eq!(items[1].0, "", "Non-cursor item should have empty style");
+    }
+}

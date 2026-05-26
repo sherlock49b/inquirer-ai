@@ -33,7 +33,7 @@ pub const BOLD: &str = "\x1b[1m";
 
 pub fn ansi_color(hex: &str) -> String {
     let h = hex.trim_start_matches('#');
-    if h.len() < 6 {
+    if h.len() < 6 || !h.is_ascii() {
         return String::new();
     }
     let r = u8::from_str_radix(&h[0..2], 16).unwrap_or(0);

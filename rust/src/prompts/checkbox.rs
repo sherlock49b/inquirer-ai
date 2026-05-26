@@ -296,3 +296,151 @@ fn render_items(
 
     items
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::choice::Separator;
+    use serde_json::json;
+
+    fn make_choices(names: &[&str]) -> Vec<ChoiceItem> {
+        names
+            .iter()
+            .map(|n| ChoiceItem::Choice(Choice::new(*n, json!(*n))))
+            .collect()
+    }
+
+    // -- selectable_indices --
+
+    #[test]
+    fn selectable_indices_all_enabled() {
+        let choices = make_choices(&["A", "B", "C"]);
+        assert_eq!(selectable_indices(&choices), vec![0, 1, 2]);
+    }
+
+    #[test]
+    fn selectable_indices_with_separator_and_disabled() {
+        let mut choices = make_choices(&["A", "B", "C"]);
+        choices.insert(1, ChoiceItem::Separator(Separator::new("---")));
+        if let ChoiceItem::Choice(ref mut c) = choices[3] {
+            // "C" is now at index 3
+            c.disabled = Some(json!(true));
+        }
+        // 0=A(ok), 1=sep(skip), 2=B(ok), 3=C(disabled)
+        assert_eq!(selectable_indices(&choices), vec![0, 2]);
+    }
+
+    // -- move_cursor --
+
+    #[test]
+    fn move_cursor_wraps_with_loop() {
+        let indices = vec![0, 2, 4];
+        assert_eq!(move_cursor(4, 1, &indices, true), 0);
+        assert_eq!(move_cursor(0, -1, &indices, true), 4);
+    }
+
+    #[test]
+    fn move_cursor_clamps_without_loop() {
+        let indices = vec![0, 2, 4];
+        assert_eq!(move_cursor(4, 1, &indices, false), 4);
+        assert_eq!(move_cursor(0, -1, &indices, false), 0);
+    }
+
+    // -- render_items --
+
+    #[test]
+    fn render_items_unchecked_at_cursor() {
+        let choices = make_choices(&["A", "B"]);
+        let t = &DEFAULT_THEME;
+        let checked = BTreeSet::new();
+        let items = render_items(&choices, 0, &checked, 10, t);
+        // At cursor: should have pointer and unchecked symbol
+        assert!(items[0].1.contains(t.sym_pointer));
+        assert!(items[0].1.contains(t.sym_unchecked));
+        assert!(items[0].1.contains("A"));
+    }
+
+    #[test]
+    fn render_items_checked_at_cursor() {
+        let choices = make_choices(&["A", "B"]);
+        let t = &DEFAULT_THEME;
+        let mut checked = BTreeSet::new();
+        checked.insert(0);
+        let items = render_items(&choices, 0, &checked, 10, t);
+        assert!(items[0].1.contains(t.sym_pointer));
+        assert!(items[0].1.contains(t.sym_checked));
+    }
+
+    #[test]
+    fn render_items_checked_not_at_cursor() {
+        let choices = make_choices(&["A", "B"]);
+        let t = &DEFAULT_THEME;
+        let mut checked = BTreeSet::new();
+        checked.insert(1);
+        let items = render_items(&choices, 0, &checked, 10, t);
+        // B is checked but not at cursor
+        assert!(items[1].1.contains(t.sym_checked));
+        assert!(!items[1].1.contains(t.sym_pointer));
+        // Style should use selected colour
+        let selected_colour = ansi_color(t.selected);
+        assert_eq!(items[1].0, selected_colour);
+    }
+
+    #[test]
+    fn render_items_unchecked_not_at_cursor() {
+        let choices = make_choices(&["A", "B"]);
+        let t = &DEFAULT_THEME;
+        let checked = BTreeSet::new();
+        let items = render_items(&choices, 0, &checked, 10, t);
+        // B is unchecked and not at cursor
+        assert!(items[1].1.contains(t.sym_unchecked));
+        assert_eq!(items[1].0, "");
+    }
+
+    #[test]
+    fn render_items_disabled_shows_unchecked_and_disabled() {
+        let mut c = Choice::new("Off", json!("off"));
+        c.disabled = Some(json!("nope"));
+        let choices = vec![
+            ChoiceItem::Choice(Choice::new("On", json!("on"))),
+            ChoiceItem::Choice(c),
+        ];
+        let t = &DEFAULT_THEME;
+        let checked = BTreeSet::new();
+        let items = render_items(&choices, 0, &checked, 10, t);
+        assert!(items[1].1.contains("disabled"));
+        assert!(items[1].1.contains("nope"));
+        assert!(items[1].1.contains(t.sym_unchecked));
+    }
+
+    #[test]
+    fn render_items_separator() {
+        let mut choices = make_choices(&["A"]);
+        choices.insert(0, ChoiceItem::Separator(Separator::new("Group")));
+        let t = &DEFAULT_THEME;
+        let checked = BTreeSet::new();
+        let items = render_items(&choices, 1, &checked, 10, t);
+        assert!(items[0].1.contains("Group"));
+    }
+
+    #[test]
+    fn render_items_pagination_more_above_below() {
+        let choices = make_choices(&["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L"]);
+        let t = &DEFAULT_THEME;
+        let checked = BTreeSet::new();
+        let items = render_items(&choices, 5, &checked, 3, t);
+        let texts: Vec<&str> = items.iter().map(|(_, t)| t.as_str()).collect();
+        assert!(texts.iter().any(|t| t.contains("more above")));
+        assert!(texts.iter().any(|t| t.contains("more below")));
+    }
+
+    #[test]
+    fn render_items_cursor_uses_highlight() {
+        let choices = make_choices(&["X"]);
+        let t = &DEFAULT_THEME;
+        let checked = BTreeSet::new();
+        let items = render_items(&choices, 0, &checked, 10, t);
+        let highlight = ansi_color(t.highlight);
+        assert_eq!(items[0].0, highlight);
+    }
+}

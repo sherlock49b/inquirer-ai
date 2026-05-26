@@ -3,6 +3,10 @@ set -e
 
 ROOT="$(git rev-parse --show-toplevel)"
 
+# Ensure tests run in human/default mode, not agent mode
+# (cz commit sets INQUIRER_AI_MODE=agent which breaks socket tests)
+unset INQUIRER_AI_MODE INQUIRER_AI_TRANSPORT INQUIRER_AI_FD_IN INQUIRER_AI_FD_OUT
+
 # Detect which languages have staged changes
 CHANGED_FILES=$(git diff --cached --name-only --diff-filter=ACMR)
 RUN_PY=false; RUN_GO=false; RUN_TS=false; RUN_RS=false

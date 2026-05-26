@@ -156,3 +156,87 @@ impl ListRenderer {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn strip_ansi(s: &str) -> String {
+        let mut out = String::with_capacity(s.len());
+        let mut chars = s.chars().peekable();
+        while let Some(c) = chars.next() {
+            if c == '\x1b' {
+                // consume '[' then digits/semicolons then a letter
+                if chars.peek() == Some(&'[') {
+                    chars.next();
+                    while let Some(&ch) = chars.peek() {
+                        if ch.is_ascii_alphabetic() {
+                            chars.next();
+                            break;
+                        }
+                        chars.next();
+                    }
+                }
+            } else {
+                out.push(c);
+            }
+        }
+        out
+    }
+
+    #[test]
+    fn format_question_plain_text() {
+        let q = format_question("Enter name", "");
+        let plain = strip_ansi(&q);
+        assert_eq!(plain, "? Enter name: ");
+    }
+
+    #[test]
+    fn format_question_with_default_suffix() {
+        let q = format_question("Port", " (8080)");
+        let plain = strip_ansi(&q);
+        assert_eq!(plain, "? Port (8080): ");
+    }
+
+    #[test]
+    fn format_success_plain_text() {
+        let s = format_success("Pick colour", "blue");
+        let plain = strip_ansi(&s);
+        assert_eq!(plain, "\u{2713} Pick colour blue");
+    }
+
+    #[test]
+    fn format_error_plain_text() {
+        let e = format_error("bad input");
+        let plain = strip_ansi(&e);
+        assert_eq!(plain, "  bad input");
+    }
+
+    #[test]
+    fn format_question_has_colour_codes() {
+        let q = format_question("x", "");
+        assert!(q.contains("\x1b["));
+        assert!(q.contains(RESET));
+        assert!(q.contains(BOLD));
+    }
+
+    #[test]
+    fn format_success_has_colour_codes() {
+        let s = format_success("x", "y");
+        assert!(s.contains("\x1b["));
+        assert!(s.contains(RESET));
+    }
+
+    #[test]
+    fn format_error_has_colour_codes() {
+        let e = format_error("err");
+        assert!(e.contains("\x1b["));
+        assert!(e.contains(RESET));
+    }
+
+    #[test]
+    fn list_renderer_default_zero_lines() {
+        let r = ListRenderer::new();
+        assert_eq!(r.rendered_lines, 0);
+    }
+}
