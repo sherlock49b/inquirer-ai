@@ -40,7 +40,7 @@ jobs:
             VERSION=$(grep '^version' python/pyproject.toml | head -1 | sed 's/.*"\(.*\)"/\1/')
             echo "version=v${VERSION}" >> "$GITHUB_OUTPUT"
             echo "bumped=true" >> "$GITHUB_OUTPUT"
-            git push --follow-tags
+            git push && git push origin "v${VERSION}"
           else
             echo "No version bump needed (no feat/fix/breaking commits since last tag)"
             echo "bumped=false" >> "$GITHUB_OUTPUT"

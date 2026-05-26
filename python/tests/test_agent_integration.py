@@ -210,7 +210,9 @@ class TestHandshake:
         handshake = lines[0]
         assert handshake["kind"] == "handshake"
         assert handshake["protocol"] == "inquirer-ai"
-        assert handshake["version"] == "0.2.1"
+        from importlib.metadata import version
+
+        assert handshake["version"] == version("inquirer-ai")
         assert handshake["format"] == "jsonl"
         assert handshake["total"] is None
         assert "answer" in str(handshake["example_response"])

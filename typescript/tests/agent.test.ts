@@ -14,6 +14,7 @@ import { SearchPrompt } from "../src/prompts/search.js";
 import { SelectPrompt } from "../src/prompts/select.js";
 import { TextPrompt } from "../src/prompts/text.js";
 import { resetSocketTransport } from "../src/socket.js";
+import { VERSION } from "../src/version.js";
 
 const ACK = '{"kind":"handshake_ack"}';
 
@@ -61,7 +62,7 @@ describe("Agent mode prompts (mocked stdin/stdout)", () => {
       const handshake = JSON.parse(lines[0]!);
       expect(handshake.kind).toBe("handshake");
       expect(handshake.protocol).toBe("inquirer-ai");
-      expect(handshake.version).toBe("0.2.1");
+      expect(handshake.version).toBe(VERSION);
       expect(handshake.interaction).toBe("sequential");
       expect(handshake.total).toBeNull();
 

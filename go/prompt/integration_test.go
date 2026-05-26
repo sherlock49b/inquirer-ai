@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/sherlock49b/inquirer-ai/go/prompt"
 )
 
 // demoBinary is the path to the compiled demo binary, built once per test run.
@@ -124,8 +126,8 @@ func TestIntegrationHandshakeFirst(t *testing.T) {
 	if hs["protocol"] != "inquirer-ai" {
 		t.Fatalf("first line should be handshake, got %v", hs)
 	}
-	if hs["version"] != "0.2.1" {
-		t.Fatalf("expected version 0.2.1, got %v", hs["version"])
+	if hs["version"] != prompt.Version {
+		t.Fatalf("expected version %s, got %v", prompt.Version, hs["version"])
 	}
 	if hs["format"] != "jsonl" {
 		t.Fatalf("expected format jsonl, got %v", hs["format"])
