@@ -66,7 +66,7 @@ export class NumberPrompt extends BasePrompt<number> {
       min: this.min,
       max: this.max,
       float_allowed: this.floatAllowed,
-      step: this.step,
+      num_step: this.step,
     };
   }
 

@@ -463,6 +463,144 @@ describe("Socket transport", () => {
     expect(fs.existsSync(sockPath)).toBe(false);
   });
 
+  it("rapid reconnection", async () => {
+    const dir = tmpDir();
+    const sockPath = path.join(dir, "test.sock");
+    const proc = runScript(SCRIPT_TEXT, sockPath);
+    procs.push(proc);
+
+    await waitForSocket(sockPath);
+
+    // Peek: connect, read prompt, disconnect immediately
+    const sock1 = await connectSocket(sockPath);
+    await readUntilPrompt(sock1);
+    sock1.destroy();
+
+    // Immediately reconnect — no delay
+    const sock2 = await connectSocket(sockPath);
+    const msgs = await readUntilPrompt(sock2);
+    expect(msgs[0]!.kind).toBe("prompt");
+    expect(msgs[0]!.message).toBe("Name?");
+
+    const resp = await sendAnswer(sock2, "rapid");
+    expect(resp.status).toBe("accepted");
+    sock2.destroy();
+
+    const stderr = await waitForProc(proc);
+    expect(stderr).toContain("RESULT:rapid");
+  });
+
+  it("partial message - no newline then complete", async () => {
+    const dir = tmpDir();
+    const sockPath = path.join(dir, "test.sock");
+    const proc = runScript(SCRIPT_TEXT, sockPath);
+    procs.push(proc);
+
+    await waitForSocket(sockPath);
+
+    const sock = await connectSocket(sockPath);
+    await readUntilPrompt(sock);
+
+    // Send partial JSON without newline
+    sock.write('{"answer": "part');
+
+    // Small delay then complete the line
+    await new Promise((r) => setTimeout(r, 100));
+    sock.write('ial"}\n');
+
+    // Read response
+    const resp = await new Promise<ParsedMessage>((resolve, reject) => {
+      const rl = readline.createInterface({ input: sock, terminal: false });
+      const timeout = setTimeout(() => {
+        rl.close();
+        reject(new Error("Timeout waiting for response"));
+      }, 5000);
+      rl.on("line", (line) => {
+        const trimmed = line.trim();
+        if (!trimmed) return;
+        clearTimeout(timeout);
+        rl.close();
+        resolve(JSON.parse(trimmed) as ParsedMessage);
+      });
+    });
+
+    expect(resp.status).toBe("accepted");
+    sock.destroy();
+
+    const stderr = await waitForProc(proc);
+    expect(stderr).toContain("RESULT:partial");
+  });
+
+  it("multiple clients - second after first disconnects", async () => {
+    const dir = tmpDir();
+    const sockPath = path.join(dir, "test.sock");
+    const proc = runScript(SCRIPT_TEXT, sockPath);
+    procs.push(proc);
+
+    await waitForSocket(sockPath);
+
+    // Client 1: peek (read prompt, disconnect)
+    const sock1 = await connectSocket(sockPath);
+    const msgs1 = await readUntilPrompt(sock1);
+    expect(msgs1[msgs1.length - 1]!.kind).toBe("prompt");
+    sock1.destroy();
+    await new Promise((r) => setTimeout(r, 100));
+
+    // Client 2: answer
+    const sock2 = await connectSocket(sockPath);
+    const msgs2 = await readUntilPrompt(sock2);
+    expect(msgs2[0]!.kind).toBe("prompt");
+    expect(msgs2[0]!.message).toBe("Name?");
+
+    const resp = await sendAnswer(sock2, "client2");
+    expect(resp.status).toBe("accepted");
+    sock2.destroy();
+
+    const stderr = await waitForProc(proc);
+    expect(stderr).toContain("RESULT:client2");
+  });
+
+  it("socket cleanup on SIGTERM", async () => {
+    const dir = tmpDir();
+    const sockPath = path.join(dir, "test.sock");
+    const proc = runScript(SCRIPT_TEXT, sockPath);
+    procs.push(proc);
+
+    await waitForSocket(sockPath);
+    expect(fs.existsSync(sockPath)).toBe(true);
+
+    // Send SIGTERM instead of answering
+    proc.kill("SIGTERM");
+
+    await waitForProc(proc).catch(() => {
+      // Process may exit with non-zero code from signal
+    });
+    await new Promise((r) => setTimeout(r, 200));
+    expect(fs.existsSync(sockPath)).toBe(false);
+  });
+
+  it("large payload (100KB+)", async () => {
+    const dir = tmpDir();
+    const sockPath = path.join(dir, "test.sock");
+    const proc = runScript(SCRIPT_TEXT, sockPath);
+    procs.push(proc);
+
+    await waitForSocket(sockPath);
+
+    const sock = await connectSocket(sockPath);
+    await readUntilPrompt(sock);
+
+    // Build a 100 KB+ string
+    const largeValue = "x".repeat(100 * 1024);
+    const resp = await sendAnswer(sock, largeValue);
+    expect(resp.status).toBe("accepted");
+    sock.destroy();
+
+    const stderr = await waitForProc(proc, 15000);
+    expect(stderr).toContain("RESULT:");
+    expect(stderr).toContain(largeValue.substring(0, 20));
+  });
+
   it("auto socket in agent mode", async () => {
     const env: Record<string, string> = {
       ...process.env as Record<string, string>,

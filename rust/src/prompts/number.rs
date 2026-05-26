@@ -112,7 +112,7 @@ fn number_agent(config: &NumberConfig) -> Result<f64> {
         "default": config.default,
         "min": config.min,
         "max": config.max,
-        "step": config.step,
+        "num_step": config.step,
         "float_allowed": config.float_allowed,
     });
 

@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 )
@@ -478,6 +479,255 @@ func TestSocketHandshakeOnlyOnFirstConnection(t *testing.T) {
 	conn2.Close()
 
 	cmd.Wait()
+}
+
+// =========================================================================
+// Lifecycle edge-case tests
+// =========================================================================
+
+func TestSocketRapidReconnection(t *testing.T) {
+	bin := buildSocketTestProgram(t, "text")
+	sockPath := filepath.Join(t.TempDir(), "test.sock")
+
+	cmd := exec.Command(bin)
+	cmd.Env = []string{fmt.Sprintf("INQUIRER_AI_SOCKET=%s", sockPath)}
+	cmd.Stdout = &bytes.Buffer{}
+
+	var stderrBuf bytes.Buffer
+	cmd.Stderr = &stderrBuf
+
+	if err := cmd.Start(); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	defer func() {
+		cmd.Process.Kill()
+		cmd.Wait()
+	}()
+
+	waitForSocket(t, sockPath, 5*time.Second)
+
+	// Peek: connect, read prompt, disconnect immediately
+	conn1, reader1, _ := connectSocket(t, sockPath)
+	readUntilPrompt(t, reader1)
+	conn1.Close()
+
+	// Immediately reconnect — no sleep
+	conn2, reader2, writer2 := connectSocket(t, sockPath)
+	msgs := readUntilPrompt(t, reader2)
+	if msgs[0]["kind"] != "prompt" {
+		t.Fatalf("expected prompt on reconnect, got %v", msgs[0]["kind"])
+	}
+	if msgs[0]["message"] != "Name?" {
+		t.Fatalf("expected message=Name?, got %v", msgs[0]["message"])
+	}
+
+	resp := sendAnswer(t, writer2, reader2, "rapid")
+	if resp["status"] != "accepted" {
+		t.Fatalf("expected accepted, got %v", resp)
+	}
+	conn2.Close()
+
+	cmd.Wait()
+	if !strings.Contains(stderrBuf.String(), "RESULT:rapid") {
+		t.Fatalf("expected RESULT:rapid in stderr, got: %s", stderrBuf.String())
+	}
+}
+
+func TestSocketPartialMessageNoNewline(t *testing.T) {
+	bin := buildSocketTestProgram(t, "text")
+	sockPath := filepath.Join(t.TempDir(), "test.sock")
+
+	cmd := exec.Command(bin)
+	cmd.Env = []string{fmt.Sprintf("INQUIRER_AI_SOCKET=%s", sockPath)}
+	cmd.Stdout = &bytes.Buffer{}
+
+	var stderrBuf bytes.Buffer
+	cmd.Stderr = &stderrBuf
+
+	if err := cmd.Start(); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	defer func() {
+		cmd.Process.Kill()
+		cmd.Wait()
+	}()
+
+	waitForSocket(t, sockPath, 5*time.Second)
+
+	conn, reader, _ := connectSocket(t, sockPath)
+	readUntilPrompt(t, reader)
+
+	// Send partial JSON without newline
+	_, err := conn.Write([]byte(`{"answer": "part`))
+	if err != nil {
+		t.Fatalf("write partial: %v", err)
+	}
+
+	// Small delay, then complete the line
+	time.Sleep(100 * time.Millisecond)
+	_, err = conn.Write([]byte("ial\"}\n"))
+	if err != nil {
+		t.Fatalf("write rest: %v", err)
+	}
+
+	line, err := reader.ReadString('\n')
+	if err != nil {
+		t.Fatalf("read response: %v", err)
+	}
+	var resp map[string]any
+	if err := json.Unmarshal([]byte(strings.TrimSpace(line)), &resp); err != nil {
+		t.Fatalf("parse response: %v", err)
+	}
+	if resp["status"] != "accepted" {
+		t.Fatalf("expected accepted, got %v", resp)
+	}
+	conn.Close()
+
+	cmd.Wait()
+	if !strings.Contains(stderrBuf.String(), "RESULT:partial") {
+		t.Fatalf("expected RESULT:partial in stderr, got: %s", stderrBuf.String())
+	}
+}
+
+func TestSocketMultipleClientsSecondAfterFirst(t *testing.T) {
+	bin := buildSocketTestProgram(t, "text")
+	sockPath := filepath.Join(t.TempDir(), "test.sock")
+
+	cmd := exec.Command(bin)
+	cmd.Env = []string{fmt.Sprintf("INQUIRER_AI_SOCKET=%s", sockPath)}
+	cmd.Stdout = &bytes.Buffer{}
+
+	var stderrBuf bytes.Buffer
+	cmd.Stderr = &stderrBuf
+
+	if err := cmd.Start(); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	defer func() {
+		cmd.Process.Kill()
+		cmd.Wait()
+	}()
+
+	waitForSocket(t, sockPath, 5*time.Second)
+
+	// Client 1: connect, read prompt, disconnect (peek)
+	conn1, reader1, _ := connectSocket(t, sockPath)
+	msgs1 := readUntilPrompt(t, reader1)
+	if msgs1[len(msgs1)-1]["kind"] != "prompt" {
+		t.Fatalf("expected prompt, got %v", msgs1[len(msgs1)-1]["kind"])
+	}
+	conn1.Close()
+
+	// Client 2: connect, answer
+	conn2, reader2, writer2 := connectSocket(t, sockPath)
+	msgs2 := readUntilPrompt(t, reader2)
+	if msgs2[0]["kind"] != "prompt" {
+		t.Fatalf("expected prompt, got %v", msgs2[0]["kind"])
+	}
+	if msgs2[0]["message"] != "Name?" {
+		t.Fatalf("expected message=Name?, got %v", msgs2[0]["message"])
+	}
+
+	resp := sendAnswer(t, writer2, reader2, "client2")
+	if resp["status"] != "accepted" {
+		t.Fatalf("expected accepted, got %v", resp)
+	}
+	conn2.Close()
+
+	cmd.Wait()
+	if !strings.Contains(stderrBuf.String(), "RESULT:client2") {
+		t.Fatalf("expected RESULT:client2 in stderr, got: %s", stderrBuf.String())
+	}
+}
+
+func TestSocketCleanupOnSigterm(t *testing.T) {
+	bin := buildSocketTestProgram(t, "text")
+	sockPath := filepath.Join(t.TempDir(), "test.sock")
+
+	cmd := exec.Command(bin)
+	cmd.Env = []string{fmt.Sprintf("INQUIRER_AI_SOCKET=%s", sockPath)}
+	cmd.Stdout = &bytes.Buffer{}
+	cmd.Stderr = &bytes.Buffer{}
+
+	if err := cmd.Start(); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	defer func() {
+		cmd.Process.Kill()
+		cmd.Wait()
+	}()
+
+	waitForSocket(t, sockPath, 5*time.Second)
+
+	if _, err := os.Stat(sockPath); os.IsNotExist(err) {
+		t.Fatal("socket file should exist")
+	}
+
+	// Send SIGTERM instead of answering
+	cmd.Process.Signal(os.Signal(syscall.SIGTERM))
+	cmd.Wait()
+	time.Sleep(200 * time.Millisecond)
+
+	if _, err := os.Stat(sockPath); !os.IsNotExist(err) {
+		t.Fatal("socket file should be removed after SIGTERM")
+	}
+}
+
+func TestSocketLargePayload(t *testing.T) {
+	bin := buildSocketTestProgram(t, "text")
+	sockPath := filepath.Join(t.TempDir(), "test.sock")
+
+	cmd := exec.Command(bin)
+	cmd.Env = []string{fmt.Sprintf("INQUIRER_AI_SOCKET=%s", sockPath)}
+	cmd.Stdout = &bytes.Buffer{}
+
+	var stderrBuf bytes.Buffer
+	cmd.Stderr = &stderrBuf
+
+	if err := cmd.Start(); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	defer func() {
+		cmd.Process.Kill()
+		cmd.Wait()
+	}()
+
+	waitForSocket(t, sockPath, 5*time.Second)
+
+	conn, reader, _ := connectSocket(t, sockPath)
+	// Extend deadline for large payload
+	conn.SetDeadline(time.Now().Add(30 * time.Second))
+	readUntilPrompt(t, reader)
+
+	// Build a 100 KB+ string
+	large := strings.Repeat("x", 100*1024)
+	data, _ := json.Marshal(map[string]any{"answer": large})
+	_, err := conn.Write(append(data, '\n'))
+	if err != nil {
+		t.Fatalf("write large payload: %v", err)
+	}
+
+	line, err := reader.ReadString('\n')
+	if err != nil {
+		t.Fatalf("read response: %v", err)
+	}
+	var resp map[string]any
+	if err := json.Unmarshal([]byte(strings.TrimSpace(line)), &resp); err != nil {
+		t.Fatalf("parse response: %v", err)
+	}
+	if resp["status"] != "accepted" {
+		t.Fatalf("expected accepted, got %v", resp)
+	}
+	conn.Close()
+
+	cmd.Wait()
+	stderr := stderrBuf.String()
+	if !strings.Contains(stderr, "RESULT:") {
+		t.Fatalf("expected RESULT: in stderr, got: %s", stderr[:min(len(stderr), 200)])
+	}
+	if !strings.Contains(stderr, large[:20]) {
+		t.Fatalf("expected large payload in stderr")
+	}
 }
 
 func TestSocketSelectPrompt(t *testing.T) {

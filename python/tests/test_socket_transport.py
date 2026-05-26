@@ -395,3 +395,159 @@ import sys; print(f"RESULT:{name}", file=sys.stderr, flush=True)
         proc.wait(timeout=5)
         stdout = proc.stdout.read().decode().strip()  # type: ignore
         assert stdout == "False"
+
+    # ------------------------------------------------------------------ #
+    # Lifecycle edge-case tests
+    # ------------------------------------------------------------------ #
+
+    def test_rapid_reconnection(self, tmp_path):
+        """Close and immediately reconnect. No stale state carried over."""
+        sock_path = str(tmp_path / "test.sock")
+        proc = _run_script(SCRIPT_TEXT, sock_path)
+        try:
+            _wait_for_socket(sock_path)
+
+            # Connect, read prompt, disconnect immediately (peek)
+            s1, rf1, wf1 = _connect(sock_path)
+            _read_until_prompt(rf1)
+            _close(s1, rf1, wf1)
+
+            # Immediately reconnect — no sleep between
+            s2, rf2, wf2 = _connect(sock_path)
+            msgs = _read_until_prompt(rf2)
+            assert msgs[0]["kind"] == "prompt"
+            assert msgs[0]["message"] == "Name?"
+
+            resp = _send_answer(wf2, rf2, "rapid")
+            assert resp["status"] == "accepted"
+            _close(s2, rf2, wf2)
+
+            proc.wait(timeout=5)
+            stderr = proc.stderr.read().decode()  # type: ignore
+            assert "RESULT:rapid" in stderr
+        finally:
+            proc.kill()
+            proc.wait()
+
+    def test_partial_message_no_newline(self, tmp_path):
+        """Send incomplete JSON (no trailing newline). Server waits for newline;
+        completing the line later with valid JSON should succeed."""
+        sock_path = str(tmp_path / "test.sock")
+        proc = _run_script(SCRIPT_TEXT, sock_path)
+        try:
+            _wait_for_socket(sock_path)
+
+            s, rf, wf = _connect(sock_path)
+            _read_until_prompt(rf)
+
+            # Send partial — no newline
+            wf.write('{"answer": "part')
+            wf.flush()
+
+            # Small delay then complete the line
+            time.sleep(0.1)
+            wf.write('ial"}\n')
+            wf.flush()
+
+            resp_line = rf.readline().strip()
+            resp = json.loads(resp_line)
+            assert resp["status"] == "accepted"
+            _close(s, rf, wf)
+
+            proc.wait(timeout=5)
+            stderr = proc.stderr.read().decode()  # type: ignore
+            assert "RESULT:partial" in stderr
+        finally:
+            proc.kill()
+            proc.wait()
+
+    def test_multiple_clients_second_after_first(self, tmp_path):
+        """Two sequential connections for a single prompt. First peeks, second answers."""
+        sock_path = str(tmp_path / "test.sock")
+        proc = _run_script(SCRIPT_TEXT, sock_path)
+        try:
+            _wait_for_socket(sock_path)
+
+            # Client 1: connect, read prompt, disconnect (peek)
+            s1, rf1, wf1 = _connect(sock_path)
+            msgs1 = _read_until_prompt(rf1)
+            assert msgs1[-1]["kind"] == "prompt"
+            _close(s1, rf1, wf1)
+
+            # Client 2: connect, read re-queued prompt, answer
+            s2, rf2, wf2 = _connect(sock_path)
+            msgs2 = _read_until_prompt(rf2)
+            assert msgs2[0]["kind"] == "prompt"
+            assert msgs2[0]["message"] == "Name?"
+
+            resp = _send_answer(wf2, rf2, "client2")
+            assert resp["status"] == "accepted"
+            _close(s2, rf2, wf2)
+
+            proc.wait(timeout=5)
+            stderr = proc.stderr.read().decode()  # type: ignore
+            assert "RESULT:client2" in stderr
+        finally:
+            proc.kill()
+            proc.wait()
+
+    def test_socket_cleanup_on_sigterm(self, tmp_path):
+        """Socket file is removed when process receives SIGTERM."""
+        import signal as sig
+
+        sock_path = str(tmp_path / "test.sock")
+        proc = _run_script(SCRIPT_TEXT, sock_path)
+        try:
+            _wait_for_socket(sock_path)
+            assert os.path.exists(sock_path)
+
+            # Send SIGTERM instead of answering
+            proc.send_signal(sig.SIGTERM)
+            proc.wait(timeout=5)
+
+            time.sleep(0.2)
+            assert not os.path.exists(sock_path), "socket file should be removed after SIGTERM"
+        finally:
+            proc.kill()
+            proc.wait()
+
+    def test_large_payload(self, tmp_path):
+        """Send a very large answer (> 100 KB). Verify it is accepted without error."""
+        import threading
+
+        sock_path = str(tmp_path / "test.sock")
+        proc = _run_script(SCRIPT_TEXT, sock_path)
+        stderr_chunks: list[bytes] = []
+
+        # Read stderr in a background thread to prevent pipe buffer deadlock
+        def _drain_stderr():
+            while True:
+                chunk = proc.stderr.read(4096)  # type: ignore
+                if not chunk:
+                    break
+                stderr_chunks.append(chunk)
+
+        t = threading.Thread(target=_drain_stderr, daemon=True)
+        t.start()
+
+        try:
+            _wait_for_socket(sock_path)
+
+            s, rf, wf = _connect(sock_path)
+            _read_until_prompt(rf)
+
+            # Build a 100 KB+ string
+            large_value = "x" * (100 * 1024)
+            resp = _send_answer(wf, rf, large_value)
+            assert resp["status"] == "accepted"
+            _close(s, rf, wf)
+
+            proc.wait(timeout=15)
+            t.join(timeout=5)
+            stderr = b"".join(stderr_chunks).decode()
+            assert "RESULT:" in stderr
+            # The result should contain the large payload (or at least start with the right chars)
+            assert large_value[:20] in stderr
+        finally:
+            proc.kill()
+            proc.wait()

@@ -70,7 +70,7 @@ class NumberPrompt(BasePrompt[int | float]):
         d = super()._to_agent_dict()
         d["min"] = self.min
         d["max"] = self.max
-        d["step"] = self.step
+        d["num_step"] = self.step
         d["float_allowed"] = self.float_allowed
         return d
 

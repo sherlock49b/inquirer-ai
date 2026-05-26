@@ -395,6 +395,197 @@ fn socket_handshake_ack() {
 }
 
 // =========================================================================
+// Lifecycle edge-case tests
+// =========================================================================
+
+#[test]
+fn socket_rapid_reconnection() {
+    let sock_path = unique_socket_path("rapid");
+    let _ = std::fs::remove_file(&sock_path);
+
+    let mut child = launch_helper(&sock_path, "single_text");
+
+    let stdout = child.stdout.take().unwrap();
+    let mut stdout_reader = BufReader::new(stdout);
+    let _handshake = read_json_line(&mut stdout_reader);
+
+    wait_for_socket(&sock_path);
+
+    // Peek: connect, read prompt, disconnect immediately
+    {
+        let (stream, messages) = connect_and_read_prompt(&sock_path);
+        assert!(messages.iter().any(|m| m["kind"] == "prompt"));
+        drop(stream);
+    }
+
+    // Immediately reconnect — no sleep
+    {
+        let (mut stream, messages) = connect_and_read_prompt(&sock_path);
+        // Should not get handshake again
+        assert!(
+            !messages.iter().any(|m| m["kind"] == "handshake"),
+            "second connection should not get handshake"
+        );
+        let prompt = messages.last().unwrap();
+        assert_eq!(prompt["kind"], "prompt");
+
+        writeln!(stream, "{}", json!({"answer": "rapid"})).unwrap();
+        stream.flush().unwrap();
+
+        let mut reader = BufReader::new(stream.try_clone().unwrap());
+        let response = read_json_line(&mut reader);
+        assert_eq!(response["status"], "accepted");
+    }
+
+    let status = child.wait().unwrap();
+    assert!(status.success(), "child exited with: {status}");
+}
+
+#[test]
+fn socket_partial_message_no_newline() {
+    let sock_path = unique_socket_path("partial");
+    let _ = std::fs::remove_file(&sock_path);
+
+    let mut child = launch_helper(&sock_path, "single_text");
+
+    let stdout = child.stdout.take().unwrap();
+    let mut stdout_reader = BufReader::new(stdout);
+    let _handshake = read_json_line(&mut stdout_reader);
+
+    wait_for_socket(&sock_path);
+
+    let (mut stream, _messages) = connect_and_read_prompt(&sock_path);
+
+    // Send partial JSON without newline
+    stream.write_all(b"{\"answer\": \"part").unwrap();
+    stream.flush().unwrap();
+
+    // Small delay then complete the line
+    std::thread::sleep(Duration::from_millis(100));
+    stream.write_all(b"ial\"}\n").unwrap();
+    stream.flush().unwrap();
+
+    let mut reader = BufReader::new(stream.try_clone().unwrap());
+    let response = read_json_line(&mut reader);
+    assert_eq!(response["status"], "accepted");
+
+    let status = child.wait().unwrap();
+    assert!(status.success(), "child exited with: {status}");
+}
+
+#[test]
+fn socket_multiple_clients_second_after_first() {
+    let sock_path = unique_socket_path("multicli");
+    let _ = std::fs::remove_file(&sock_path);
+
+    let mut child = launch_helper(&sock_path, "single_text");
+
+    let stdout = child.stdout.take().unwrap();
+    let mut stdout_reader = BufReader::new(stdout);
+    let _handshake = read_json_line(&mut stdout_reader);
+
+    wait_for_socket(&sock_path);
+
+    // Client 1: peek
+    {
+        let (stream, messages) = connect_and_read_prompt(&sock_path);
+        assert!(messages.iter().any(|m| m["kind"] == "prompt"));
+        drop(stream);
+    }
+
+    // Client 2: answer
+    {
+        let (mut stream, messages) = connect_and_read_prompt(&sock_path);
+        let prompt = messages.last().unwrap();
+        assert_eq!(prompt["kind"], "prompt");
+
+        writeln!(stream, "{}", json!({"answer": "client2"})).unwrap();
+        stream.flush().unwrap();
+
+        let mut reader = BufReader::new(stream.try_clone().unwrap());
+        let response = read_json_line(&mut reader);
+        assert_eq!(response["status"], "accepted");
+    }
+
+    let status = child.wait().unwrap();
+    assert!(status.success(), "child exited with: {status}");
+}
+
+#[test]
+fn socket_cleanup_on_sigterm() {
+    let sock_path = unique_socket_path("sigterm");
+    let _ = std::fs::remove_file(&sock_path);
+
+    let mut child = launch_helper(&sock_path, "single_text");
+
+    let stdout = child.stdout.take().unwrap();
+    let mut stdout_reader = BufReader::new(stdout);
+    let _handshake = read_json_line(&mut stdout_reader);
+
+    wait_for_socket(&sock_path);
+    assert!(std::path::Path::new(&sock_path).exists());
+
+    // Send SIGTERM instead of answering
+    unsafe {
+        libc::kill(child.id() as i32, libc::SIGTERM);
+    }
+
+    let _ = child.wait();
+    std::thread::sleep(Duration::from_millis(200));
+
+    assert!(
+        !std::path::Path::new(&sock_path).exists(),
+        "socket file should be removed after SIGTERM"
+    );
+}
+
+#[test]
+fn socket_large_payload() {
+    let sock_path = unique_socket_path("large");
+    let _ = std::fs::remove_file(&sock_path);
+
+    let mut child = launch_helper(&sock_path, "single_text");
+
+    let stdout = child.stdout.take().unwrap();
+    let mut stdout_reader = BufReader::new(stdout);
+    let _handshake = read_json_line(&mut stdout_reader);
+
+    // Drain stderr in background thread to prevent pipe buffer deadlock
+    // (the child writes 100KB+ to stderr, which exceeds the OS pipe buffer)
+    let stderr = child.stderr.take().unwrap();
+    let stderr_handle = std::thread::spawn(move || {
+        let mut buf = Vec::new();
+        let mut reader = BufReader::new(stderr);
+        let _ = reader.read_to_end(&mut buf);
+        String::from_utf8_lossy(&buf).to_string()
+    });
+
+    wait_for_socket(&sock_path);
+
+    let (mut stream, _messages) = connect_and_read_prompt(&sock_path);
+
+    // Build a 100 KB+ string
+    let large_value: String = "x".repeat(100 * 1024);
+    let payload = json!({"answer": large_value});
+    writeln!(stream, "{}", payload).unwrap();
+    stream.flush().unwrap();
+
+    let mut reader = BufReader::new(stream.try_clone().unwrap());
+    let response = read_json_line(&mut reader);
+    assert_eq!(response["status"], "accepted");
+
+    let status = child.wait().unwrap();
+    assert!(status.success(), "child exited with: {status}");
+
+    let stderr_output = stderr_handle.join().unwrap();
+    assert!(stderr_output.contains("Got:"), "expected Got: in stderr");
+    assert!(
+        stderr_output.contains(&large_value[..20]),
+        "expected large payload in stderr"
+    );
+}
+
+// =========================================================================
 // Test: missing answer key triggers validation error
 // =========================================================================
 

@@ -29,13 +29,13 @@ func Number(cfg NumberConfig) (float64, error) {
 	if err != nil {
 		return 0, err
 	}
-	if cfg.Filter != nil {
-		result = cfg.Filter(result)
-	}
 	if cfg.Validate != nil {
 		if err := cfg.Validate(result); err != nil {
 			return 0, fmt.Errorf("%w: %v", ErrValidation, err)
 		}
+	}
+	if cfg.Filter != nil {
+		result = cfg.Filter(result)
 	}
 	return result, nil
 }
@@ -47,7 +47,7 @@ func numberAgent(cfg NumberConfig) (float64, error) {
 		"default":       cfg.Default,
 		"min":           cfg.Min,
 		"max":           cfg.Max,
-		"step":          cfg.Step,
+		"num_step":      cfg.Step,
 		"float_allowed": cfg.FloatAllowed,
 	}
 	raw, err := AgentPromptWithRetry(payload, func(answer any) (any, error) {
@@ -55,13 +55,13 @@ func numberAgent(cfg NumberConfig) (float64, error) {
 		if err != nil {
 			return nil, err
 		}
-		if cfg.Filter != nil {
-			result = cfg.Filter(result)
-		}
 		if cfg.Validate != nil {
 			if err := cfg.Validate(result); err != nil {
 				return nil, fmt.Errorf("%w: %v", ErrValidation, err)
 			}
+		}
+		if cfg.Filter != nil {
+			result = cfg.Filter(result)
 		}
 		return result, nil
 	})
