@@ -5,6 +5,16 @@ import (
 )
 
 // SearchConfig configures a searchable selection prompt with a dynamic source.
+//
+// The Source function is called asynchronously: each invocation runs in its own
+// goroutine via bubbletea's Cmd pattern, so it may safely perform blocking I/O
+// (HTTP requests, database queries, file-system walks, etc.) without freezing
+// the terminal UI.  Keystrokes are debounced so that a slow source is not
+// hammered on every character while the user is still typing.
+//
+// Because Go's concurrency model lets the caller do async work inside a
+// sync-looking function (e.g. using goroutines and channels internally), the
+// Source signature remains a plain func(string) []ChoiceItem.
 type SearchConfig struct {
 	Message  string
 	Source   func(term string) []ChoiceItem
@@ -58,55 +68,5 @@ func searchAgent(cfg SearchConfig) (any, error) {
 }
 
 func searchTerminal(cfg SearchConfig) (any, error) {
-	t := DefaultTheme
-	choices := parseChoices(cfg.Source(""))
-	selectable := selectableIndices(choices)
-	if len(selectable) == 0 {
-		return nil, fmt.Errorf("%w: no choices returned", ErrInvalidChoice)
-	}
-	cursor := selectable[0]
-
-	for {
-		fmt.Printf("\033[2J\033[H")
-		fmt.Printf("%s %s (type to search)\n", t.SymQuestion, cfg.Message)
-		end := len(choices)
-		if end > cfg.PageSize {
-			end = cfg.PageSize
-		}
-		for i := 0; i < end; i++ {
-			c := choices[i]
-			if c.isSeparator {
-				fmt.Printf("  %s\n", c.name)
-				continue
-			}
-			if !c.selectable {
-				continue
-			}
-			if i == cursor {
-				fmt.Printf("%s %s\n", t.SymPointer, c.name)
-			} else {
-				fmt.Printf("  %s\n", c.name)
-			}
-		}
-
-		key, err := readKey()
-		if err != nil {
-			return nil, ErrAborted
-		}
-		switch key {
-		case keyUp:
-			cursor = moveCursor(cursor, -1, selectable, true)
-		case keyDown:
-			cursor = moveCursor(cursor, 1, selectable, true)
-		case keyEnter:
-			if cursor < len(choices) {
-				c := choices[cursor]
-				fmt.Printf("\033[2J\033[H%s %s %s\n", t.SymSuccess, cfg.Message, c.name)
-				return c.value, nil
-			}
-			return nil, ErrAborted
-		case keyCtrlC:
-			return nil, ErrAborted
-		}
-	}
+	return runSearchTUI(cfg)
 }
