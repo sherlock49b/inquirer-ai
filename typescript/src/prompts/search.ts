@@ -95,24 +95,52 @@ export class SearchPrompt extends BasePrompt<unknown> {
 
   protected async executeTerminal(): Promise<unknown> {
     const t = getTheme();
-    const filtered = await this.callSource("");
+    let filtered = await this.callSource("");
     let cursor = 0;
+    let searchTerm = "";
+    let searching = false;
+    let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const refreshSource = (): void => {
+      if (debounceTimer) clearTimeout(debounceTimer);
+      searching = true;
+      debounceTimer = setTimeout(() => {
+        const result = this.source(searchTerm);
+        const resolve = (raw: RawChoice[]): void => {
+          filtered = raw
+            .map(parseChoice)
+            .filter((c): c is Choice => !isSeparator(c) && !c.disabled);
+          cursor = 0;
+          searching = false;
+        };
+        if (result instanceof Promise) {
+          result.then(resolve);
+        } else {
+          resolve(result);
+        }
+      }, 150);
+    };
 
     const getItems = (): ListItem[] => {
+      const items: ListItem[] = [];
+      items.push({ text: `  ${ansi(t.muted)}Search: ${RESET}${searchTerm}`, style: "" });
+      if (searching) {
+        items.push({ text: `  ${ansi(t.muted)}Searching...${RESET}`, style: "" });
+        return items;
+      }
       const end = Math.min(filtered.length, this.pageSize);
-      const result: ListItem[] = [];
       for (let i = 0; i < end; i++) {
         const c = filtered[i]!;
         if (i === cursor) {
-          result.push({ text: `${t.symPointer} ${c.name}`, style: ansi(t.highlight) });
+          items.push({ text: `${t.symPointer} ${c.name}`, style: ansi(t.highlight) });
         } else {
-          result.push({ text: `  ${c.name}`, style: "" });
+          items.push({ text: `  ${c.name}`, style: "" });
         }
       }
-      if (!filtered.length) {
-        result.push({ text: `  ${ansi(t.muted)}No matches${RESET}`, style: "" });
+      if (!filtered.length && !searching) {
+        items.push({ text: `  ${ansi(t.muted)}No matches${RESET}`, style: "" });
       }
-      return result;
+      return items;
     };
 
     const raw = await runListPrompt({
@@ -128,10 +156,26 @@ export class SearchPrompt extends BasePrompt<unknown> {
           return { done: false };
         }
         if (key === "enter") {
+          if (debounceTimer) clearTimeout(debounceTimer);
           if (filtered.length) return { done: true, result: filtered[cursor]?.value };
           return { done: true, result: null };
         }
-        if (key === "ctrl-c") return { done: true, result: null };
+        if (key === "ctrl-c") {
+          if (debounceTimer) clearTimeout(debounceTimer);
+          return { done: true, result: null };
+        }
+        if (key === "backspace") {
+          if (searchTerm.length > 0) {
+            searchTerm = searchTerm.slice(0, -1);
+            refreshSource();
+          }
+          return { done: false };
+        }
+        if (key.length === 1 && key >= " ") {
+          searchTerm += key;
+          refreshSource();
+          return { done: false };
+        }
         return { done: false };
       },
     });
