@@ -2,13 +2,6 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
-
-### Protocol
-
-- Add sequential interaction hint to handshake
-
-## [0.1.0] - 2026-05-23
 
 ### Bug Fixes
 
@@ -89,3 +82,123 @@ All notable changes to this project will be documented in this file.
 
 - Add pyright type checking to CI pipeline
 
+## v0.3.0 (2026-05-26)
+
+### Feat
+
+- **ts**: add live search with debounce to search prompt
+- **rust**: non-blocking search source via threads
+- **ts**: support async source in search prompt
+- **go**: support async source in search prompt
+- **python**: support async source in search prompt
+- **ts**: add select number jump, expand help toggle, validation keep mode
+- **go**: add select number jump, expand help toggle, validation keep mode
+- **rust**: add select number jump, expand help toggle, validation keep_input
+- **python**: add select number jump, expand help toggle, validation keep mode
+- **rust**: add number step constraint and checkbox required
+- **go**: add number step constraint and checkbox required
+- **ts**: add number step constraint and checkbox required
+- **python**: add number step constraint and checkbox required
+- **go**: add socket transport and update protocol docs
+- **rust**: add socket transport
+- **ts**: add Unix socket transport for agent interaction
+- **protocol**: add Unix socket transport for agent interaction
+
+### Fix
+
+- **ci**: use standard commitizen plugin in release workflow
+- **ci**: allow dirty Cargo.lock in crates.io publish
+- **all**: fix NumberPrompt step field collision and callback order
+- **go,rust**: fix text prompt filter-before-validate order
+- **python**: handle async source in nested event loops
+- **ts**: clamp select digit jump to last item instead of ignoring
+- **go**: move checkbox required check before filter
+- reorder filter to run only on accepted values
+- **python**: apply ruff format
+- **python**: merge nested if per ruff SIM102
+- **cz-ai**: convert to CJS for commitizen compatibility
+- **ci**: fix Rust/Go formatting and add TS build step
+- **cargo-deps**: strip newlines from crate descriptions
+- **rust**: fix raw mode TUI rendering and description newlines
+- harden boundary handling across all 4 languages
+
+### Refactor
+
+- replace cast with TypeGuard, fix CI failures
+- **python**: strengthen type system to static-language standards
+- **ts**: strengthen type system to static-language standards
+
+### Perf
+
+- **hooks**: parallelize pre-commit, skip redundant pre-push
+
+## v0.2.1 (2026-05-24)
+
+### Fix
+
+- reject NaN/Inf in coerce_bool and validate_number across all languages
+
+## v0.2.0 (2026-05-24)
+
+### Feat
+
+- **extensions**: add cz-inquirer-ai commitizen adapter for Node.js
+- **extensions**: add Yeoman generator with inquirer-ai prompts
+- **extensions**: add cargo-deps interactive dependency manager
+- **extensions**: add create-inquirer-app (TS) and iqai protocol tester (Rust)
+- **rust**: add Rust implementation with 12 prompt types
+- **typescript**: add TypeScript implementation with 12 prompt types
+- **python**: add cz-teamcz plugin and extensions README
+- **go**: add gh-contribute extension as showcase
+- add questionary compatibility layer for commitizen integration
+- **go**: add configurable loop option to Select and Checkbox
+- **go**: add validate/filter callbacks to all prompt types
+- **go**: add path, autocomplete, and search prompt types
+- add Go implementation of inquirer-ai
+- add async support, path prompt, and autocomplete prompt
+- add rawlist and expand prompt types
+- add editor prompt type for multi-line text input
+- add search prompt type with dynamic filtering
+- add transformer callback and when conditional for prompts
+- add Separator, disabled choices, short, description, and loop option
+- add password and number prompt types
+- add agent protocol handshake and improve error messages
+- export __version__ via importlib.metadata
+- add pagination for long choice lists in select and checkbox
+- add validate and filter callback support to all prompt types
+- add theme system, confirm validation, and display improvements
+- initial implementation of inquirer-ai Python package
+
+### Fix
+
+- **release**: use --out-dir for uv build to fix publish path
+- **ci**: bump minimum Rust version to 1.85 for edition2024 support
+- **protocol**: make handshake_ack non-blocking
+- **ci**: format test_edge_cases.py to pass CI
+- **go**: remove Claude Code branding from gh-contribute PR body
+- add unsafe_ask() and Choice description to questionary compat
+- **go**: align autocomplete agent dict with Python protocol
+- **python**: use get_running_loop() and shlex.split for editor command
+- **go**: share terminal scanner, remove dead code, fix double Source call
+- **go**: use json.Marshal in Separator.MarshalJSON to prevent injection
+- make theme storage thread-safe using contextvars
+- use None checks instead of truthiness for text prompt defaults
+- pin prompt-toolkit to <4.0 to prevent breaking changes
+- validate that choices list is non-empty in select and checkbox prompts
+
+### Refactor
+
+- fix code quality issues from audit
+- extract shared retry helper, remove dead code
+- **python**: replace Any with TextIO in agent fd helpers
+- **extensions**: remove generator-inquirer-app
+- **extensions**: remove create-inquirer-app and iqai
+- **go**: restructure error hierarchy with wrapping chain
+- **go**: upgrade terminal UI with bubbletea and lipgloss
+- **go**: add structured PromptError with type/message context
+- strengthen error hierarchy with specific exception types
+- tighten Any usage in checkbox signature and search state
+- add generic Choice[V] and overloaded select/checkbox for type inference
+- move UI symbols into Theme for customization
+- extract ChoiceBasePrompt to reduce select/checkbox duplication
+- tighten type system across the codebase
