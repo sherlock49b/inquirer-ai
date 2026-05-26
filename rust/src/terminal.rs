@@ -64,6 +64,7 @@ pub enum KeyInput {
     Down,
     Enter,
     Space,
+    Backspace,
     Char(char),
     CtrlC,
     Other,
@@ -82,11 +83,22 @@ pub fn read_key() -> io::Result<KeyInput> {
                 KeyCode::Up => KeyInput::Up,
                 KeyCode::Down => KeyInput::Down,
                 KeyCode::Enter => KeyInput::Enter,
+                KeyCode::Backspace => KeyInput::Backspace,
                 KeyCode::Char(' ') => KeyInput::Space,
                 KeyCode::Char(c) => KeyInput::Char(c),
                 _ => KeyInput::Other,
             });
         }
+    }
+}
+
+/// Poll for a key event with a timeout. Returns `None` if no event is
+/// available within `timeout`.
+pub fn poll_key(timeout: std::time::Duration) -> io::Result<Option<KeyInput>> {
+    if event::poll(timeout)? {
+        Ok(Some(read_key()?))
+    } else {
+        Ok(None)
     }
 }
 
