@@ -3,57 +3,92 @@ set -e
 
 ROOT="$(git rev-parse --show-toplevel)"
 
-# ── Python ──
-cd "$ROOT/python"
+# Detect which languages have staged changes
+CHANGED_FILES=$(git diff --cached --name-only --diff-filter=ACMR)
+RUN_PY=false; RUN_GO=false; RUN_TS=false; RUN_RS=false
 
-echo "pre-commit: [python] ruff check..."
-uv run ruff check src/ tests/
+for f in $CHANGED_FILES; do
+  case "$f" in
+    python/*) RUN_PY=true ;;
+    go/*)     RUN_GO=true ;;
+    typescript/*) RUN_TS=true ;;
+    rust/*)   RUN_RS=true ;;
+    spec/*|.githooks/*|.github/*) RUN_PY=true; RUN_GO=true; RUN_TS=true; RUN_RS=true ;;
+  esac
+done
 
-echo "pre-commit: [python] ruff format..."
-uv run ruff format --check src/ tests/
-
-echo "pre-commit: [python] pyright (strict)..."
-uv run pyright src/
-
-echo "pre-commit: [python] pytest..."
-uv run pytest tests/ -q
-
-# ── Go ──
-cd "$ROOT/go"
-
-echo "pre-commit: [go] gofmt..."
-UNFORMATTED=$(gofmt -l ./prompt/ ./examples/)
-if [ -n "$UNFORMATTED" ]; then
-  echo "Files need gofmt: $UNFORMATTED"
-  exit 1
+if ! $RUN_PY && ! $RUN_GO && ! $RUN_TS && ! $RUN_RS; then
+  echo "pre-commit: no language files changed, skipping checks"
+  exit 0
 fi
 
-echo "pre-commit: [go] vet..."
-go vet ./prompt/ ./examples/...
+PIDS=()
+LOGS=()
+NAMES=()
+FAIL=0
 
-echo "pre-commit: [go] test..."
-go test ./prompt/ -count=1 -short
+run_check() {
+  local name="$1" logfile="$2"
+  shift 2
+  "$@" >"$logfile" 2>&1 &
+  PIDS+=($!)
+  LOGS+=("$logfile")
+  NAMES+=("$name")
+}
 
-# ── TypeScript ──
-cd "$ROOT/typescript"
+TMPDIR=$(mktemp -d)
+trap 'rm -rf "$TMPDIR"' EXIT
 
-echo "pre-commit: [typescript] tsc..."
-npx tsc --noEmit
+# Launch checks in parallel — only for changed languages
+if $RUN_PY; then
+  run_check "python" "$TMPDIR/py.log" bash -c "
+    cd '$ROOT/python'
+    echo '=== ruff check ===' && uv run ruff check src/ tests/ &&
+    echo '=== ruff format ===' && uv run ruff format --check src/ tests/ &&
+    echo '=== pyright ===' && uv run pyright src/ &&
+    echo '=== pytest ===' && uv run pytest tests/ -q
+  "
+fi
 
-echo "pre-commit: [typescript] biome..."
-npx biome check src/ tests/
+if $RUN_GO; then
+  run_check "go" "$TMPDIR/go.log" bash -c "
+    cd '$ROOT/go'
+    UNFORMATTED=\$(gofmt -l ./prompt/ ./examples/)
+    if [ -n \"\$UNFORMATTED\" ]; then
+      echo \"Files need gofmt: \$UNFORMATTED\"; exit 1
+    fi
+    echo '=== vet ===' && go vet ./prompt/ ./examples/... &&
+    echo '=== test ===' && go test ./prompt/ -count=1 -short
+  "
+fi
 
-echo "pre-commit: [typescript] test..."
-npx vitest run
+if $RUN_TS; then
+  run_check "typescript" "$TMPDIR/ts.log" bash -c "
+    cd '$ROOT/typescript'
+    echo '=== tsc ===' && npx tsc --noEmit &&
+    echo '=== biome ===' && npx biome check src/ tests/ &&
+    echo '=== vitest ===' && npx vitest run
+  "
+fi
 
-# ── Rust ──
-cd "$ROOT/rust"
+if $RUN_RS; then
+  run_check "rust" "$TMPDIR/rs.log" bash -c "
+    cd '$ROOT/rust'
+    echo '=== fmt ===' && cargo fmt -- --check &&
+    echo '=== clippy ===' && cargo clippy -- -D warnings &&
+    echo '=== test ===' && cargo test --quiet
+  "
+fi
 
-echo "pre-commit: [rust] fmt..."
-cargo fmt -- --check
+# Wait for all and collect results
+for i in "${!PIDS[@]}"; do
+  if ! wait "${PIDS[$i]}"; then
+    FAIL=1
+    echo "pre-commit: [${NAMES[$i]}] FAILED"
+    cat "${LOGS[$i]}"
+  else
+    echo "pre-commit: [${NAMES[$i]}] OK"
+  fi
+done
 
-echo "pre-commit: [rust] clippy..."
-cargo clippy -- -D warnings
-
-echo "pre-commit: [rust] test..."
-cargo test --quiet
+exit $FAIL
