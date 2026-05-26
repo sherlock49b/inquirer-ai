@@ -34,6 +34,8 @@ jobs:
       - name: Bump version
         id: bump
         run: |
+          # Override teamcz plugin (not installed in CI) with standard conventional commits
+          sed -i 's/^name = "teamcz"/name = "cz_conventional_commits"/' pyproject.toml
           if cz bump --yes --changelog 2>&1 | tee /tmp/bump.log; then
             VERSION=$(grep '^version' python/pyproject.toml | head -1 | sed 's/.*"\(.*\)"/\1/')
             echo "version=v${VERSION}" >> "$GITHUB_OUTPUT"
