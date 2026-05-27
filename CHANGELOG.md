@@ -82,6 +82,12 @@ All notable changes to this project will be documented in this file.
 
 - Add pyright type checking to CI pipeline
 
+## v0.3.2 (2026-05-27)
+
+### Fix
+
+- **ci**: use pipefail to detect cz bump failure in release workflow
+
 ## v0.3.1 (2026-05-26)
 
 ### Fix

@@ -13,7 +13,7 @@ Every interactive CLI today is a black box to AI agents. When an agent encounter
 **inquirer-ai eliminates this entirely.** When an AI agent runs a CLI built with inquirer-ai, the tool creates a Unix socket and writes a handshake to stdout:
 
 ```json
-{"protocol": "inquirer-ai", "version": "0.3.1", "socket": "/tmp/inquirer-ai-29481.sock", "format": "jsonl", "example_response": {"answer": "<value>"}}
+{"protocol": "inquirer-ai", "version": "0.3.2", "socket": "/tmp/inquirer-ai-29481.sock", "format": "jsonl", "example_response": {"answer": "<value>"}}
 ```
 
 The agent reads the socket path, then drives the entire CLI with independent commands — one per prompt:

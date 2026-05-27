@@ -18,7 +18,7 @@ The handshake — the first line on stdout — includes a `socket` field:
 {
   "kind": "handshake",
   "protocol": "inquirer-ai",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "socket": "/tmp/inquirer-ai-29481.sock",
   "format": "jsonl",
   "interaction": "sequential",
