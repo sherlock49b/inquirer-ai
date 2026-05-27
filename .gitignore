@@ -21,3 +21,4 @@ target/
 go/prompt/socket_*
 !/go/prompt/socket_*.go
 .checklist.active
+coverage.out

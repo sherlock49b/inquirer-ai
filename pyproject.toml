@@ -2,13 +2,16 @@
 members = ["python"]
 
 [tool.commitizen]
-name = "cz_conventional_commits"
+name = "teamcz"
 version = "0.3.1"
 version_files = [
     "python/pyproject.toml:version",
     "go/prompt/version.go:Version",
     "typescript/package.json:version",
     "rust/Cargo.toml:version",
+    "README.md:\"version\"",
+    "spec/protocol.md:\"version\"",
+    "spec/socket-transport.md:\"version\"",
 ]
 tag_format = "v$version"
 update_changelog_on_bump = true

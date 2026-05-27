@@ -13,7 +13,7 @@ Every interactive CLI today is a black box to AI agents. When an agent encounter
 **inquirer-ai eliminates this entirely.** When an AI agent runs a CLI built with inquirer-ai, the tool creates a Unix socket and writes a handshake to stdout:
 
 ```json
-{"protocol": "inquirer-ai", "version": "0.2.1", "socket": "/tmp/inquirer-ai-29481.sock", "format": "jsonl", "example_response": {"answer": "<value>"}}
+{"protocol": "inquirer-ai", "version": "0.3.1", "socket": "/tmp/inquirer-ai-29481.sock", "format": "jsonl", "example_response": {"answer": "<value>"}}
 ```
 
 The agent reads the socket path, then drives the entire CLI with independent commands — one per prompt:
@@ -253,7 +253,7 @@ Each prompt is a separate socket connection. Agents interact with `nc -U` or `so
 | Prompt types | 12 | 12 | 12 | 12 |
 | Terminal UI | prompt_toolkit | bubbletea + lipgloss | ink | crossterm |
 | Agent protocol | JSONL | Same JSONL | Same JSONL | Same JSONL |
-| Tests | 321 | ~268 | 147 | 124 |
+| Tests | 473 | ~266 | 242 | 339 |
 | Async | `*_async()` | goroutines | native async/await | tokio |
 
 All implementations share the same protocol spec. An agent that learns from one can drive any of the others.
