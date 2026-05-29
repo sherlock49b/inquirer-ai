@@ -44,9 +44,11 @@ commit_parsers = [
 ]
 protect_breaking_commits = false
 filter_commits = false
-# Only match release tags of the form vX.Y.Z. NOTE: a stray `go/v0.2.1` tag
-# exists in history and does NOT match this pattern (good). It should be
-# deleted from the remote by a maintainer (`git push origin :go/v0.2.1`);
-# automation does not delete remote tags.
+# Only match the umbrella release tags of the form vX.Y.Z for the changelog.
+# NOTE: the `go/vX.Y.Z` tags (e.g. `go/v0.2.1`) are intentionally excluded here,
+# but they are NOT stray — they are the REQUIRED version tags for the Go
+# submodule `github.com/sherlock49b/inquirer-ai/go` (Go resolves subdirectory
+# modules via `<subdir>/vX.Y.Z` tags). Do not delete them. Excluding them here
+# is correct; the cz/cliff "tag does not match pattern" notice is cosmetic.
 tag_pattern = "v[0-9].*"
 sort_commits = "newest"

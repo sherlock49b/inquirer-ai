@@ -13,9 +13,11 @@ version_files = [
     "spec/protocol.md:\"version\"",
     "spec/socket-transport.md:\"version\"",
 ]
-# Release tags are vX.Y.Z. A stray `go/v0.2.1` tag exists in history and does
-# NOT match this format; a maintainer should delete it from the remote
-# (`git push origin :go/v0.2.1`). Do not automate remote tag deletion.
+# Umbrella release tags are vX.Y.Z. The `go/vX.Y.Z` tags (e.g. `go/v0.2.1`) are
+# NOT stray: Go resolves the subdirectory module
+# `github.com/sherlock49b/inquirer-ai/go` via `go/vX.Y.Z` tags, so they are
+# required for `go get` and must NOT be deleted. cz only manages the v$version
+# tags below; its "tag does not match format" notice for go/* tags is cosmetic.
 tag_format = "v$version"
 update_changelog_on_bump = true
 changelog_file = "CHANGELOG.md"
