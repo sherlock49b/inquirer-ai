@@ -32,28 +32,35 @@ class TestMalformedAgentInput:
             self._run(monkeypatch, TextPrompt("q"), "")
 
     def test_garbage_json_raises_validation(self, monkeypatch):
+        # Three invalid attempts exhaust the single unified budget (R1).
         with pytest.raises(ValidationError, match="Invalid JSON"):
-            self._run(monkeypatch, TextPrompt("q"), "not json\n")
+            self._run(monkeypatch, TextPrompt("q"), "not json\nnot json\nnot json\n")
 
     def test_json_array_instead_of_object(self, monkeypatch):
         with pytest.raises(ValidationError, match="answer"):
-            self._run(monkeypatch, TextPrompt("q"), "[1, 2, 3]\n")
+            self._run(monkeypatch, TextPrompt("q"), "[1, 2, 3]\n[1, 2, 3]\n[1, 2, 3]\n")
 
     def test_json_without_answer_key(self, monkeypatch):
+        bad = '{"value": "hello"}\n'
         with pytest.raises(ValidationError, match="answer"):
-            self._run(monkeypatch, TextPrompt("q"), '{"value": "hello"}\n')
+            self._run(monkeypatch, TextPrompt("q"), bad * 3)
 
     def test_json_null_top_level(self, monkeypatch):
         with pytest.raises(ValidationError, match="answer"):
-            self._run(monkeypatch, TextPrompt("q"), "null\n")
+            self._run(monkeypatch, TextPrompt("q"), "null\nnull\nnull\n")
 
     def test_json_number_top_level(self, monkeypatch):
         with pytest.raises(ValidationError, match="answer"):
-            self._run(monkeypatch, TextPrompt("q"), "42\n")
+            self._run(monkeypatch, TextPrompt("q"), "42\n42\n42\n")
 
     def test_json_string_top_level(self, monkeypatch):
         with pytest.raises(ValidationError, match="answer"):
-            self._run(monkeypatch, TextPrompt("q"), '"hello"\n')
+            self._run(monkeypatch, TextPrompt("q"), '"hello"\n"hello"\n"hello"\n')
+
+    def test_two_invalid_then_valid_succeeds(self, monkeypatch):
+        # Single unified budget: 2 invalid attempts then a valid answer succeeds (R1).
+        stdin = "not json\n[1,2,3]\n" + json.dumps({"answer": "ok"}) + "\n"
+        assert self._run(monkeypatch, TextPrompt("q"), stdin) == "ok"
 
 
 # ── Unicode edge cases ──

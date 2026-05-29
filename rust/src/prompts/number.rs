@@ -38,6 +38,59 @@ pub fn number(config: NumberConfig) -> Result<f64> {
     }
 }
 
+/// Returns true iff `s` fully matches the numeric-string grammar (R2):
+/// `^[+-]?\d+(\.\d+)?([eE][+-]?\d+)?$`
+/// (optional sign; required integer part; optional `.fraction`; optional
+/// exponent). Rejects "1_000", "3abc", "0x10", ".5", "5.", "", "+".
+fn matches_number_grammar(s: &str) -> bool {
+    let bytes = s.as_bytes();
+    let mut i = 0;
+    let n = bytes.len();
+
+    // optional sign
+    if i < n && (bytes[i] == b'+' || bytes[i] == b'-') {
+        i += 1;
+    }
+
+    // required integer part: one or more ASCII digits
+    let int_start = i;
+    while i < n && bytes[i].is_ascii_digit() {
+        i += 1;
+    }
+    if i == int_start {
+        return false;
+    }
+
+    // optional fraction: '.' followed by one or more digits
+    if i < n && bytes[i] == b'.' {
+        i += 1;
+        let frac_start = i;
+        while i < n && bytes[i].is_ascii_digit() {
+            i += 1;
+        }
+        if i == frac_start {
+            return false; // "5." not allowed
+        }
+    }
+
+    // optional exponent: [eE] [+-]? digits+
+    if i < n && (bytes[i] == b'e' || bytes[i] == b'E') {
+        i += 1;
+        if i < n && (bytes[i] == b'+' || bytes[i] == b'-') {
+            i += 1;
+        }
+        let exp_start = i;
+        while i < n && bytes[i].is_ascii_digit() {
+            i += 1;
+        }
+        if i == exp_start {
+            return false;
+        }
+    }
+
+    i == n
+}
+
 pub fn validate_number(value: &Value, config: &NumberConfig) -> Result<f64> {
     let num = match value {
         Value::Null => {
@@ -48,9 +101,19 @@ pub fn validate_number(value: &Value, config: &NumberConfig) -> Result<f64> {
         Value::Number(n) => n
             .as_f64()
             .ok_or_else(|| InquirerError::Validation("Not a valid number".into()))?,
-        Value::String(s) => s
-            .parse::<f64>()
-            .map_err(|_| InquirerError::Validation(format!("Not a valid number: {s:?}")))?,
+        Value::String(s) => {
+            // Trim leading/trailing ASCII whitespace, then require the
+            // remainder to fully match the numeric grammar (R2) before parsing.
+            let trimmed = s.trim_matches(|c: char| c.is_ascii_whitespace());
+            if !matches_number_grammar(trimmed) {
+                return Err(InquirerError::Validation(format!(
+                    "Not a valid number: {s:?}"
+                )));
+            }
+            trimmed
+                .parse::<f64>()
+                .map_err(|_| InquirerError::Validation(format!("Not a valid number: {s:?}")))?
+        }
         Value::Bool(_) => {
             return Err(InquirerError::Validation(
                 "Expected a number, got boolean".into(),

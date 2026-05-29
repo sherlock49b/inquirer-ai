@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+import json
 from typing import Any
 
 from prompt_toolkit import prompt as pt_prompt
 from prompt_toolkit.formatted_text import FormattedText
 
-from inquirer_ai.choice import Choice
+from inquirer_ai.choice import Choice, RawChoice, parse_choice, value_matches
 from inquirer_ai.exceptions import InvalidChoiceError, ValidationError
 from inquirer_ai.prompts.base import BasePrompt
 from inquirer_ai.theme import RESET, get_theme
@@ -16,25 +17,37 @@ class RawlistPrompt(BasePrompt[Any]):
         self,
         message: str,
         *,
-        choices: list[str | dict[str, Any] | Choice[Any]],
+        choices: list[RawChoice],
         **kwargs: Any,
     ) -> None:
         super().__init__(message, **kwargs)
         if not choices:
             raise InvalidChoiceError("choices cannot be empty")
-        self.choices: list[Choice[Any]] = [Choice.from_raw(c) for c in choices]
+        # The selectable list excludes separators AND disabled choices (R5).
+        # Indexing (1..n) and matching operate over this list only.
+        parsed = [parse_choice(c) for c in choices]
+        self.choices: list[Choice[Any]] = [c for c in parsed if isinstance(c, Choice) and not c.disabled]
+        if not self.choices:
+            raise InvalidChoiceError("choices must contain at least one selectable item")
 
     @property
     def prompt_type(self) -> str:
         return "rawlist"
 
     def _validate_answer(self, value: Any) -> Any:
-        if isinstance(value, int) and 1 <= value <= len(self.choices):
-            return self.choices[value - 1].value
+        # A 1-based integer index (but NOT a bool — JSON true/false is not an index).
+        if isinstance(value, int) and not isinstance(value, bool):
+            if 1 <= value <= len(self.choices):
+                return self.choices[value - 1].value
+            raise ValidationError(self._invalid_choice_message(value))
         for c in self.choices:
-            if value == c.value or value == c.name:
+            if value_matches(value, c.value) or (isinstance(value, str) and value == c.name):
                 return c.value
-        raise ValidationError(f"Invalid choice: {value!r}")
+        raise ValidationError(self._invalid_choice_message(value))
+
+    def _invalid_choice_message(self, value: Any) -> str:
+        valid_repr = ", ".join(json.dumps(c.value) for c in self.choices)
+        return f"Invalid choice: {json.dumps(value)}. Valid: [{valid_repr}]"
 
     def _format_answer(self, value: Any) -> str:
         for c in self.choices:
@@ -44,6 +57,7 @@ class RawlistPrompt(BasePrompt[Any]):
 
     def _to_agent_dict(self) -> dict[str, Any]:
         d = super()._to_agent_dict()
+        # Payload "choices" excludes separators + disabled, numbered 1..n (R5/R6).
         d["choices"] = [c.to_dict() for c in self.choices]
         return d
 

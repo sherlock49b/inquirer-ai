@@ -1,0 +1,62 @@
+name: Conformance
+
+# Cross-language conformance: drives all four implementations (Python, Rust, Go,
+# TypeScript) through one fixed scenario in STDIO agent mode and asserts they
+# emit a byte-identical protocol and identical results. See conformance/scenario.md.
+#
+# This is a separate workflow from ci.yml / release.yml on purpose; do not merge.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  conformance:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # --- Python (driver runs via `uv run`) ---
+      - uses: astral-sh/setup-uv@v6
+
+      - name: Install Python 3.12
+        run: uv python install 3.12
+
+      - name: Sync Python library deps
+        working-directory: python
+        run: uv sync --group dev
+
+      # --- Rust (driver is a path-dep cargo project under conformance/) ---
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Pre-build Rust conformance driver
+        run: cargo build --quiet --manifest-path conformance/drivers/rust/Cargo.toml
+
+      # --- Go (driver replaces ../../../go with the local module) ---
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.23"
+
+      - name: Pre-build Go conformance driver
+        working-directory: conformance/drivers/go
+        run: go build ./...
+
+      # --- Node / TypeScript (driver imports the built dist/) ---
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install TypeScript deps
+        working-directory: typescript
+        run: npm ci
+
+      - name: Build TypeScript library (driver imports dist/index.js)
+        working-directory: typescript
+        run: npm run build
+
+      # --- Run the cross-language conformance comparison ---
+      - name: Run conformance runner
+        run: python3 conformance/run.py

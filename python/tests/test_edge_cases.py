@@ -17,7 +17,8 @@ class TestMultiPromptErrorRecovery:
 
     def test_second_prompt_bad_json_doesnt_corrupt_first(self, monkeypatch):
         monkeypatch.setenv("INQUIRER_AI_MODE", "agent")
-        lines = json.dumps({"answer": "Alice"}) + "\n" + "not json\n"
+        # The second prompt exhausts its unified 3-attempt budget on bad JSON (R1).
+        lines = json.dumps({"answer": "Alice"}) + "\n" + "not json\n" * 3
         monkeypatch.setattr("sys.stdin", io.StringIO(lines))
         monkeypatch.setattr("sys.stdout", io.StringIO())
 

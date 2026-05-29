@@ -81,7 +81,7 @@ async function promptAll(text, select, confirm) {
     filter: filterSubject,
   });
 
-  const body = await text({
+  let body = await text({
     message: "Provide a longer description of the change (press enter to skip):",
   });
 
@@ -90,7 +90,7 @@ async function promptAll(text, select, confirm) {
   let breaking = "";
   if (isBreaking) {
     if (!body) {
-      await text({
+      body = await text({
         message: "A BREAKING CHANGE commit requires a body. Please enter a longer description:",
         validate: (s) => (s.trim() ? true : "Body is required for BREAKING CHANGE"),
       });
@@ -106,7 +106,7 @@ async function promptAll(text, select, confirm) {
   let issues = "";
   if (isIssueAffected) {
     if (!body && !breaking) {
-      await text({
+      body = await text({
         message: "The commit requires a body. Please enter a longer description:",
         validate: (s) => (s.trim() ? true : "Body is required"),
       });

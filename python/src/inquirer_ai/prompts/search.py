@@ -11,7 +11,7 @@ from prompt_toolkit.formatted_text import FormattedText
 from prompt_toolkit.key_binding import KeyBindings, KeyPressEvent
 from prompt_toolkit.layout import BufferControl, FormattedTextControl, HSplit, Layout, Window
 
-from inquirer_ai.choice import Choice, RawChoice, parse_choice
+from inquirer_ai.choice import Choice, RawChoice, parse_choice, value_matches
 from inquirer_ai.exceptions import PromptAbortedError
 from inquirer_ai.prompts.base import BasePrompt
 from inquirer_ai.theme import get_theme
@@ -57,15 +57,22 @@ class SearchPrompt(BasePrompt[Any]):
         return "search"
 
     def _validate_answer(self, value: Any) -> Any:
+        # Resolve against the advertised initial choices: if the answer matches
+        # an advertised choice (type-aware value match OR exact name match),
+        # return that choice's VALUE; otherwise return the answer verbatim so
+        # dynamic sources stay safe (R5).
+        for c in self._advertised_choices():
+            if value_matches(value, c.value) or (isinstance(value, str) and value == c.name):
+                return c.value
         return value
+
+    def _advertised_choices(self) -> list[Choice[Any]]:
+        return [c for raw in self._call_source_sync("") if isinstance((c := parse_choice(raw)), Choice)]
 
     def _to_agent_dict(self) -> dict[str, Any]:
         d = super()._to_agent_dict()
         d["searchable"] = True
-        initial: list[Choice[Any]] = [
-            c for raw in self._call_source_sync("") if isinstance((c := parse_choice(raw)), Choice)
-        ]
-        d["choices"] = [c.to_dict() for c in initial]
+        d["choices"] = [c.to_dict() for c in self._advertised_choices()]
         return d
 
     def _execute_terminal(self) -> Any:

@@ -218,11 +218,8 @@ proptest! {
         let source = make_source(vec![("Alpha", "a"), ("Beta", "b"), ("Charlie", "c")]);
         let results = source(&term);
         for item in &results {
-            match item {
-                ChoiceItem::Choice(c) => {
-                    prop_assert!(!c.name.is_empty());
-                }
-                _ => {}
+            if let ChoiceItem::Choice(c) = item {
+                prop_assert!(!c.name.is_empty());
             }
         }
     }

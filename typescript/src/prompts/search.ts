@@ -1,6 +1,5 @@
-import { agentReceive, agentSend, agentSendValidationError } from "../agent.js";
-import { type Choice, choiceToDict, isSeparator, parseChoice, type RawChoice } from "../choice.js";
-import { PromptAbortedError, ValidationError } from "../errors.js";
+import { type Choice, choiceToDict, isSeparator, parseChoice, type RawChoice, valuesMatch } from "../choice.js";
+import { PromptAbortedError } from "../errors.js";
 import { type ListItem, runListPrompt } from "../terminal.js";
 import { ansi, getTheme, RESET } from "../theme.js";
 import { type BaseConfig, BasePrompt } from "./base.js";
@@ -10,11 +9,11 @@ export interface SearchConfig extends BaseConfig<unknown> {
   pageSize?: number;
 }
 
-const MAX_AGENT_RETRIES = 3;
-
 export class SearchPrompt extends BasePrompt<unknown> {
   private source: (term: string) => RawChoice[] | Promise<RawChoice[]>;
   private pageSize: number;
+  // Choices advertised in the agent/socket payload, used to resolve answers (R5).
+  private advertisedChoices: Choice[] = [];
 
   constructor(config: SearchConfig) {
     super(config);
@@ -27,6 +26,17 @@ export class SearchPrompt extends BasePrompt<unknown> {
   }
 
   protected validateAnswer(value: unknown): unknown {
+    // If the answer matches an advertised choice (type-aware value match OR
+    // exact name match) return that choice's value; otherwise return the answer
+    // verbatim — this keeps dynamic search sources safe (R5).
+    if (typeof value === "string") {
+      for (const c of this.advertisedChoices) {
+        if (value === c.name) return c.value;
+      }
+    }
+    for (const c of this.advertisedChoices) {
+      if (valuesMatch(value, c.value)) return c.value;
+    }
     return value;
   }
 
@@ -38,59 +48,16 @@ export class SearchPrompt extends BasePrompt<unknown> {
       .filter((c): c is Choice => !isSeparator(c) && !c.disabled);
   }
 
-  protected override toAgentDict(): Record<string, unknown> {
-    // For sync sources, include initial choices; for async sources,
-    // the choices are populated in executeAgent instead.
-    const result = this.source("");
-    if (result instanceof Promise) {
-      return {
-        ...super.toAgentDict(),
-        searchable: true,
-        choices: [],
-      };
-    }
-    const initial = result
-      .map(parseChoice)
-      .filter((c): c is Choice => !isSeparator(c) && !c.disabled);
-    return {
-      ...super.toAgentDict(),
-      searchable: true,
-      choices: initial.map(choiceToDict),
-    };
-  }
-
-  private async toAgentDictAsync(): Promise<Record<string, unknown>> {
+  protected override async buildAgentDict(): Promise<Record<string, unknown>> {
+    // Resolve the initial choices (sync OR async source) so both the stdio and
+    // socket transports advertise the resolved set, never an empty array (R6).
     const initial = await this.callSource("");
+    this.advertisedChoices = initial;
     return {
       ...super.toAgentDict(),
       searchable: true,
       choices: initial.map(choiceToDict),
     };
-  }
-
-  protected override async executeAgent(): Promise<unknown> {
-    const dict = await this.toAgentDictAsync();
-    for (let attempt = 0; attempt <= MAX_AGENT_RETRIES; attempt++) {
-      await agentSend(dict);
-      let answer: unknown;
-      try {
-        answer = await agentReceive();
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        if (msg.includes("stdin closed")) throw new PromptAbortedError(msg);
-        throw new ValidationError(msg);
-      }
-      try {
-        return this.validateAnswer(answer);
-      } catch (err) {
-        if (err instanceof ValidationError && attempt < MAX_AGENT_RETRIES) {
-          agentSendValidationError(err.message);
-          continue;
-        }
-        throw err;
-      }
-    }
-    throw new ValidationError("Maximum validation retries exceeded");
   }
 
   protected async executeTerminal(): Promise<unknown> {

@@ -14,7 +14,8 @@ export function resetAgent(): void {
   handshakeSent = false;
   handshakeAck = null;
   agentStep = 0;
-  outputStream = null;
+  outputFd = null;
+  outputFdResolved = false;
   if (rl) {
     rl.removeAllListeners();
     rl.close();
@@ -25,27 +26,20 @@ export function resetAgent(): void {
   closed = false;
 }
 
-function getOutputStream(): NodeJS.WritableStream {
+// Resolve the configured output fd (INQUIRER_AI_FD_OUT) once. When set, output
+// is written synchronously with fs.writeSync so data is flushed to the OS before
+// the process can exit (R10); otherwise we fall back to process.stdout.
+function getOutputFd(): number | null {
   const fdOut = process.env.INQUIRER_AI_FD_OUT;
-  if (fdOut) {
-    const fd = parseInt(fdOut, 10);
-    if (Number.isNaN(fd)) {
-      process.stderr.write(
-        `[inquirer-ai] Warning: invalid INQUIRER_AI_FD_OUT="${fdOut}", falling back to stdout\n`,
-      );
-      return process.stdout;
-    }
-    try {
-      return fs.createWriteStream("", { fd });
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      process.stderr.write(
-        `[inquirer-ai] Warning: failed to open fd ${fd} for output: ${msg}, falling back to stdout\n`,
-      );
-      return process.stdout;
-    }
+  if (!fdOut) return null;
+  const fd = parseInt(fdOut, 10);
+  if (Number.isNaN(fd)) {
+    process.stderr.write(
+      `[inquirer-ai] Warning: invalid INQUIRER_AI_FD_OUT="${fdOut}", falling back to stdout\n`,
+    );
+    return null;
   }
-  return process.stdout;
+  return fd;
 }
 
 function getInputStream(): NodeJS.ReadableStream {
@@ -71,13 +65,29 @@ function getInputStream(): NodeJS.ReadableStream {
   return process.stdin;
 }
 
-let outputStream: NodeJS.WritableStream | null = null;
+let outputFd: number | null = null;
+let outputFdResolved = false;
 
-function getOutput(): NodeJS.WritableStream {
-  if (!outputStream) {
-    outputStream = getOutputStream();
+function writeOutput(text: string): void {
+  if (!outputFdResolved) {
+    outputFd = getOutputFd();
+    outputFdResolved = true;
   }
-  return outputStream;
+  if (outputFd !== null) {
+    // Synchronous write: guarantees the line reaches the OS before any exit so
+    // a buffered fd stream cannot drop the final message (R10).
+    try {
+      fs.writeSync(outputFd, text);
+      return;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      process.stderr.write(
+        `[inquirer-ai] Warning: failed to write to fd ${outputFd}: ${msg}, falling back to stdout\n`,
+      );
+      outputFd = null;
+    }
+  }
+  process.stdout.write(text);
 }
 
 function ensureRL(): void {
@@ -104,7 +114,7 @@ function ensureRL(): void {
 }
 
 function writeLine(data: Record<string, unknown>): void {
-  getOutput().write(`${JSON.stringify(data)}\n`);
+  writeOutput(`${JSON.stringify(data)}\n`);
 }
 
 function sendHandshake(): void {
@@ -137,14 +147,23 @@ function readLine(): Promise<string | null> {
   });
 }
 
+// Advance the logical prompt counter by one and return the new step value.
+// Called ONCE per logical prompt; validation re-sends reuse the returned value
+// by passing it to agentSend(), so a re-sent prompt keeps the same step (the
+// "step" must be identical for a prompt and all of its validation re-sends).
+export function agentNextStep(): number {
+  agentStep++;
+  return agentStep;
+}
+
 export async function agentSend(
   payload: Record<string, unknown>,
+  step: number,
 ): Promise<void> {
   if (!handshakeSent) {
     sendHandshake();
   }
-  agentStep++;
-  writeLine({ kind: "prompt", step: agentStep, total: null, ...payload });
+  writeLine({ kind: "prompt", step, total: null, ...payload });
 }
 
 export function agentSendValidationError(message: string): void {

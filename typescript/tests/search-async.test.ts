@@ -129,6 +129,32 @@ describe("SearchPrompt async and debounce tests", () => {
     }),
   );
 
+  // 2b. R5 answer resolution: name match -> value, non-match -> verbatim
+  it(
+    "resolves an exact name match to the choice value (R5)",
+    withMockedStdio([ACK, '{"answer": "Rust lang"}'], async () => {
+      const result = await new SearchPrompt({
+        message: "Pick?",
+        source: () => [
+          { name: "Rust lang", value: "rust" },
+          { name: "Go lang", value: "go" },
+        ],
+      }).execute();
+      expect(result).toBe("rust");
+    }),
+  );
+
+  it(
+    "returns a non-matching answer verbatim (dynamic-source-safe, R5)",
+    withMockedStdio([ACK, '{"answer": "something-not-listed"}'], async () => {
+      const result = await new SearchPrompt({
+        message: "Pick?",
+        source: () => [{ name: "Rust lang", value: "rust" }],
+      }).execute();
+      expect(result).toBe("something-not-listed");
+    }),
+  );
+
   // 3. Source with empty results
   it(
     "empty source results do not crash",

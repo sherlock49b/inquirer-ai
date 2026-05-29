@@ -13,12 +13,12 @@ use serde_json::{json, Value};
 // (the agent protocol writes to stdout when INQUIRER_AI_FD_OUT is unset).
 // =========================================================================
 
-/// Compile-and-run is too heavy for a unit-style test, so instead we invoke
-/// `cargo test` for a hidden binary test helper.  As a simpler alternative
-/// we can test the *shape* of the JSON that the code constructs by
-/// replicating the same `serde_json::json!` call and asserting on it.
-/// This is valid because `send_handshake` and `agent_send_validation_error`
-/// are thin wrappers around `serde_json::json!` + `write_line`.
+// Compile-and-run is too heavy for a unit-style test, so instead we invoke
+// `cargo test` for a hidden binary test helper.  As a simpler alternative
+// we can test the *shape* of the JSON that the code constructs by
+// replicating the same `serde_json::json!` call and asserting on it.
+// This is valid because `send_handshake` and `agent_send_validation_error`
+// are thin wrappers around `serde_json::json!` + `write_line`.
 
 // =========================================================================
 // 1. Handshake format
@@ -142,9 +142,9 @@ fn extract_answer_integer() {
 
 #[test]
 fn extract_answer_float() {
-    let resp = json!({"answer": 3.14});
+    let resp = json!({"answer": 3.25});
     let result = extract_answer(&resp).unwrap();
-    assert_eq!(result, json!(3.14));
+    assert_eq!(result, json!(3.25));
 }
 
 #[test]

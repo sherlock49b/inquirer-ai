@@ -65,7 +65,26 @@ ChoiceItem = Choice[Any] | Separator
 RawChoice = str | dict[str, Any] | Choice[Any] | Separator
 
 
+def value_matches(answer: Any, value: Any) -> bool:
+    """Type-aware JSON value equality (R4).
+
+    Two values match only if they share the same JSON type and value. In
+    particular bool and number never cross-match (``True != 1``, ``False != 0``)
+    and string never matches a number (``"42" != 42``). ``None`` matches only
+    ``None``.
+    """
+    if isinstance(answer, bool) or isinstance(value, bool):
+        return type(answer) is type(value) and answer == value
+    if isinstance(answer, (int, float)) and isinstance(value, (int, float)):
+        return answer == value
+    return type(answer) is type(value) and answer == value
+
+
 def parse_choice(raw: RawChoice) -> ChoiceItem:
     if isinstance(raw, Separator):
         return raw
+    # Accept dict-form separators: {"type": "separator", "text": ...}
+    if type(raw) is dict and raw.get("type") == "separator":
+        text = raw.get("text")
+        return Separator(text=text) if isinstance(text, str) else Separator()
     return Choice.from_raw(raw)

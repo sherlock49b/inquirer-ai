@@ -55,22 +55,35 @@ func expandAgent(cfg ExpandConfig) (any, error) {
 	payload := map[string]any{
 		"type":    "expand",
 		"message": cfg.Message,
+		"default": nil,
 		"choices": items,
 	}
+	validKeys := make([]any, len(cfg.Choices))
+	for i, c := range cfg.Choices {
+		validKeys[i] = strings.ToLower(c.Key)
+	}
+
 	return AgentPromptWithRetry(payload, func(answer any) (any, error) {
-		s := toString(answer)
-		lower := strings.ToLower(s)
 		var matched any
 		found := false
+		s, isStr := answer.(string)
+		lower := strings.ToLower(s)
 		for _, c := range cfg.Choices {
-			if lower == strings.ToLower(c.Key) || s == toString(c.Value) || s == c.Name {
+			// Key match is string-only and case-insensitive.
+			if isStr && lower == strings.ToLower(c.Key) {
+				matched = c.Value
+				found = true
+				break
+			}
+			// Type-aware value match, or exact name match for a string answer.
+			if answerMatchesValue(answer, c.Value) || (isStr && s == c.Name) {
 				matched = c.Value
 				found = true
 				break
 			}
 		}
 		if !found {
-			return nil, fmt.Errorf("%w: %q", ErrInvalidChoice, s)
+			return nil, newValidationError(ErrInvalidChoice, invalidChoiceMessage(answer, validKeys))
 		}
 		return applyCallbacks(matched, cfg.Validate, cfg.Filter)
 	})

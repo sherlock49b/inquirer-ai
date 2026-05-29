@@ -30,15 +30,25 @@ split_commits = false
 commit_parsers = [
     { message = "^feat", group = "Features" },
     { message = "^fix", group = "Bug Fixes" },
+    { message = "^protocol", group = "Protocol Changes" },
+    { message = "^compat", group = "Compatibility" },
     { message = "^doc", group = "Documentation" },
     { message = "^perf", group = "Performance" },
     { message = "^refactor", group = "Refactor" },
     { message = "^style", group = "Styling" },
     { message = "^test", group = "Testing" },
+    { message = "^ci", group = "CI/CD" },
     { message = "^chore\\(release\\)", skip = true },
+    { message = "^bump:", skip = true },
     { message = "^chore", group = "Miscellaneous" },
 ]
 protect_breaking_commits = false
 filter_commits = false
+# Only match the umbrella release tags of the form vX.Y.Z for the changelog.
+# NOTE: the `go/vX.Y.Z` tags (e.g. `go/v0.2.1`) are intentionally excluded here,
+# but they are NOT stray — they are the REQUIRED version tags for the Go
+# submodule `github.com/sherlock49b/inquirer-ai/go` (Go resolves subdirectory
+# modules via `<subdir>/vX.Y.Z` tags). Do not delete them. Excluding them here
+# is correct; the cz/cliff "tag does not match pattern" notice is cosmetic.
 tag_pattern = "v[0-9].*"
 sort_commits = "newest"

@@ -9,9 +9,222 @@ import (
 
 // ── Cross-language consistency tests ──
 //
-// These tests verify that Go behaves consistently with the Python and
-// TypeScript implementations of inquirer-ai.  Where the Go code currently
-// diverges, the test is expected to FAIL, documenting the bug.
+// These tests verify that Go behaves consistently with the Python, Rust and
+// TypeScript implementations of inquirer-ai per the shared parity contract.
+
+// ── R2: numeric-string grammar parity ──
+//
+// All four languages trim ASCII whitespace then require the answer string to
+// fully match ^[+-]?\d+(\.\d+)?([eE][+-]?\d+)?$ before parsing.
+
+func TestCrossLanguage_NumberGrammarParity(t *testing.T) {
+	cfg := NumberConfig{FloatAllowed: true}
+
+	accept := []string{"1e3", "  5  ", "3.5", "-2", "1E-3", "+7", "0", "42", "1.5e2"}
+	for _, in := range accept {
+		if _, err := validateNumber(in, cfg); err != nil {
+			t.Errorf("grammar must ACCEPT %q, got %v", in, err)
+		}
+	}
+
+	reject := []string{"1_000", "3abc", "0x10", ".5", "5.", "", "+", "-", "NaN", "Inf", "Infinity"}
+	for _, in := range reject {
+		if _, err := validateNumber(in, cfg); err == nil {
+			t.Errorf("grammar must REJECT %q", in)
+		}
+	}
+}
+
+// ── R4: type-aware value matching parity ──
+//
+// A JSON string never cross-matches a numeric value, and a bool never matches
+// a number, in any language.
+
+func TestCrossLanguage_TypeAwareValueMatching(t *testing.T) {
+	cases := []struct {
+		answer any
+		value  any
+		want   bool
+	}{
+		{"42", 42, false},          // string vs number
+		{float64(42), "42", false}, // number vs string
+		{true, float64(1), false},  // bool vs number
+		{float64(0), false, false}, // number vs bool
+		{float64(1), 1, true},      // numeric equality across int/float
+		{"x", "x", true},           // string equality
+		{true, true, true},         // bool equality
+	}
+	for _, c := range cases {
+		if got := answerMatchesValue(c.answer, c.value); got != c.want {
+			t.Errorf("answerMatchesValue(%#v, %#v) = %v, want %v", c.answer, c.value, got, c.want)
+		}
+	}
+}
+
+// ── R4: disabled "" means ENABLED parity ──
+//
+// A choice is disabled iff Disabled is the bool true OR a non-empty string.
+
+func TestCrossLanguage_DisabledSemantics(t *testing.T) {
+	cases := []struct {
+		val  any
+		want bool // want disabled?
+	}{
+		{nil, false},
+		{false, false},
+		{"", false},
+		{true, true},
+		{"reason", true},
+	}
+	for _, c := range cases {
+		if got := isDisabled(c.val); got != c.want {
+			t.Errorf("isDisabled(%#v) = %v, want %v", c.val, got, c.want)
+		}
+	}
+}
+
+// ── FIX B: canonical invalid-choice validation message parity ──
+//
+// The agent-facing message for an invalid choice must be byte-identical across
+// all four languages:
+//
+//	Invalid choice: <A>. Valid: [<V1>, <V2>, ...]
+//
+// where <A> is the rejected answer compact-JSON-encoded and each <Vi> is a
+// valid value compact-JSON-encoded, joined by ", ".
+
+func TestCrossLanguage_InvalidChoiceMessage(t *testing.T) {
+	cases := []struct {
+		answer any
+		valid  []any
+		want   string
+	}{
+		// Byte-exact examples from the conformance spec.
+		{"rs", []any{"py", "go"}, `Invalid choice: "rs". Valid: ["py", "go"]`},
+		{1.5, []any{"313", "311"}, `Invalid choice: 1.5. Valid: ["313", "311"]`},
+		// expand keys (lowercased) as the valid list.
+		{"x", []any{"y", "n"}, `Invalid choice: "x". Valid: ["y", "n"]`},
+	}
+	for _, c := range cases {
+		if got := invalidChoiceMessage(c.answer, c.valid); got != c.want {
+			t.Errorf("invalidChoiceMessage(%#v, %#v) = %q, want %q", c.answer, c.valid, got, c.want)
+		}
+	}
+}
+
+// AgentMessage must return the BARE validation text — never the
+// "prompt error: validation failed: ..." sentinel wrapper — for every kind of
+// validation error, including the already-canonical messages.
+
+func TestCrossLanguage_AgentMessageStripsWrapper(t *testing.T) {
+	cases := []struct {
+		err  error
+		want string
+	}{
+		{newValidationError(ErrInvalidChoice, `Invalid choice: "rs". Valid: ["py", "go"]`),
+			`Invalid choice: "rs". Valid: ["py", "go"]`},
+		// Plain wrapped sentinel errors get the framing prefix stripped.
+		{errors.New("prompt error: validation failed: Decimal numbers are not allowed"),
+			"Decimal numbers are not allowed"},
+		{errors.New("prompt error: validation failed: Not a valid number: \"x\""),
+			`Not a valid number: "x"`},
+		{errors.New("prompt error: validation failed: At least one choice is required"),
+			"At least one choice is required"},
+	}
+	for _, c := range cases {
+		if got := AgentMessage(c.err); got != c.want {
+			t.Errorf("AgentMessage(%v) = %q, want %q", c.err, got, c.want)
+		}
+	}
+}
+
+// End-to-end: a disabled/invalid select choice emits the canonical
+// validation_error message over the protocol, and the re-sent prompt reuses
+// the same logical step (FIX A + FIX B together), mirroring conformance P4.
+
+func TestCrossLanguage_SelectInvalidChoiceProtocol(t *testing.T) {
+	input := `{"answer":"rs"}` + "\n" + `{"answer":"go"}` + "\n"
+	r, w, cleanup := agentSetup(t, input)
+	defer cleanup()
+
+	got, err := Select(SelectConfig{
+		Message: "Lang",
+		Choices: []ChoiceItem{
+			Choice{Name: "Python", Value: "py"},
+			Choice{Name: "Go", Value: "go"},
+			Separator{Text: "--"},
+			Choice{Name: "Rust", Value: "rs", Disabled: "soon"},
+		},
+	})
+	lines := readOutput(r, w)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got != "go" {
+		t.Fatalf("expected \"go\", got %#v", got)
+	}
+
+	var verrMsg string
+	var promptSteps []float64
+	for _, l := range lines {
+		switch l["kind"] {
+		case "validation_error":
+			verrMsg, _ = l["message"].(string)
+		case "prompt":
+			if s, ok := l["step"].(float64); ok {
+				promptSteps = append(promptSteps, s)
+			}
+		}
+	}
+
+	want := `Invalid choice: "rs". Valid: ["py", "go"]`
+	if verrMsg != want {
+		t.Fatalf("validation_error message = %q, want %q", verrMsg, want)
+	}
+	if len(promptSteps) != 2 {
+		t.Fatalf("expected 2 prompt frames (original + re-send), got %d", len(promptSteps))
+	}
+	if promptSteps[0] != promptSteps[1] {
+		t.Fatalf("re-send reused step? got steps %v, want both equal", promptSteps)
+	}
+}
+
+// End-to-end: a non-integer rawlist index emits the canonical message
+// (replacing the old "index must be an integer, got 1.5"), mirroring P6.
+
+func TestCrossLanguage_RawlistInvalidChoiceProtocol(t *testing.T) {
+	input := `{"answer":1.5}` + "\n" + `{"answer":2}` + "\n"
+	r, w, cleanup := agentSetup(t, input)
+	defer cleanup()
+
+	got, err := Rawlist(RawlistConfig{
+		Message: "Ver",
+		Choices: []ChoiceItem{
+			Choice{Name: "3.13", Value: "313"},
+			Separator{Text: "-"},
+			Choice{Name: "3.12", Value: "312", Disabled: true},
+			Choice{Name: "3.11", Value: "311"},
+		},
+	})
+	lines := readOutput(r, w)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got != "311" {
+		t.Fatalf("expected \"311\", got %#v", got)
+	}
+
+	var verrMsg string
+	for _, l := range lines {
+		if l["kind"] == "validation_error" {
+			verrMsg, _ = l["message"].(string)
+		}
+	}
+	want := `Invalid choice: 1.5. Valid: ["313", "311"]`
+	if verrMsg != want {
+		t.Fatalf("validation_error message = %q, want %q", verrMsg, want)
+	}
+}
 
 // ── toBool: cross-language truth table ──
 

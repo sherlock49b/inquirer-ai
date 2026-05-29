@@ -64,7 +64,7 @@ class ChoiceBasePrompt(BasePrompt[T]):
         return [i for i in range(len(self.items)) if self._is_selectable(i)]
 
     def _init_cursor(self) -> int:
-        return 0
+        return self._selectable_indices()[0]
 
     def _move_cursor(self, current: int, direction: int) -> int:
         indices = self._selectable_indices()
