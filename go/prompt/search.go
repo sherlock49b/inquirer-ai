@@ -48,20 +48,20 @@ func searchAgent(cfg SearchConfig) (any, error) {
 	payload := map[string]any{
 		"type":       "search",
 		"message":    cfg.Message,
+		"default":    nil,
 		"searchable": true,
 		"choices":    marshalItems(items),
 	}
 	return AgentPromptWithRetry(payload, func(answer any) (any, error) {
-		s := toString(answer)
-		var matched any
+		// If the answer matches an advertised choice (type-aware value match
+		// OR exact name match) return that choice's value; otherwise return
+		// the answer verbatim as a string (dynamic-source-safe).
+		var matched any = toString(answer)
 		for _, c := range initial {
-			if c.selectable && (s == toString(c.value) || s == c.name) {
+			if c.selectable && matchesChoice(answer, c) {
 				matched = c.value
 				break
 			}
-		}
-		if matched == nil {
-			matched = s
 		}
 		return applyCallbacks(matched, cfg.Validate, cfg.Filter)
 	})

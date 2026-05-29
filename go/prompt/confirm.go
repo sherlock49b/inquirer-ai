@@ -24,14 +24,15 @@ func Confirm(cfg ConfirmConfig) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	if cfg.Filter != nil {
-		if v, ok := cfg.Filter(result).(bool); ok {
-			result = v
-		}
-	}
+	// validate() runs on the coerced value BEFORE filter().
 	if cfg.Validate != nil {
 		if err := cfg.Validate(result); err != nil {
 			return false, fmt.Errorf("%w: %v", ErrValidation, err)
+		}
+	}
+	if cfg.Filter != nil {
+		if v, ok := cfg.Filter(result).(bool); ok {
+			result = v
 		}
 	}
 	return result, nil
@@ -44,15 +45,22 @@ func confirmAgent(cfg ConfirmConfig) (bool, error) {
 		"default": cfg.Default,
 	}
 	raw, err := AgentPromptWithRetry(payload, func(answer any) (any, error) {
-		result := toBool(answer)
-		if cfg.Filter != nil {
-			if v, ok := cfg.Filter(result).(bool); ok {
-				result = v
-			}
+		// A null answer resolves to the prompt default (a bool).
+		var result bool
+		if answer == nil {
+			result = cfg.Default
+		} else {
+			result = toBool(answer)
 		}
+		// validate() runs on the coerced value BEFORE filter().
 		if cfg.Validate != nil {
 			if err := cfg.Validate(result); err != nil {
 				return nil, fmt.Errorf("%w: %v", ErrValidation, err)
+			}
+		}
+		if cfg.Filter != nil {
+			if v, ok := cfg.Filter(result).(bool); ok {
+				result = v
 			}
 		}
 		return result, nil

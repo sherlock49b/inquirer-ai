@@ -31,19 +31,20 @@ func editorAgent(cfg EditorConfig) (string, error) {
 		"default": nilIfEmpty(cfg.Default),
 		"postfix": cfg.Postfix,
 	}
-	if err := AgentSend(payload); err != nil {
-		return "", err
-	}
-	answer, err := AgentReceive()
+	// Route through the shared agent helper so the socket transport is used
+	// when active and the handshake/step counter is not desynced. Editor has
+	// no validate callback, so the closure only applies the default-on-nil rule.
+	raw, err := AgentPromptWithRetry(payload, func(answer any) (any, error) {
+		return resolveStringDefault(answer, cfg.Default), nil
+	})
 	if err != nil {
 		return "", err
 	}
-	result := toString(answer)
-	if result == "" && cfg.Default != "" {
-		result = cfg.Default
+	val, ok := raw.(string)
+	if !ok {
+		return "", fmt.Errorf("%w: expected string, got %T", ErrValidation, raw)
 	}
-	// Editor has no validate callback, so no retry loop needed
-	return result, nil
+	return val, nil
 }
 
 func editorTerminal(cfg EditorConfig) (string, error) {
@@ -55,19 +56,37 @@ func editorTerminal(cfg EditorConfig) (string, error) {
 		editor = "vi"
 	}
 
+	// Parse the editor command with quote-aware shell-word splitting so values
+	// like `code --wait` or `"/path with spaces/ed" -n` work, then exec argv
+	// WITHOUT a shell (no injection).
+	argv, err := splitShellWords(editor)
+	if err != nil {
+		return "", fmt.Errorf("%w: invalid editor command %q: %v", ErrEditor, editor, err)
+	}
+	if len(argv) == 0 {
+		return "", fmt.Errorf("%w: empty editor command", ErrEditor)
+	}
+
+	// os.CreateTemp creates a randomized name with O_EXCL and mode 0600.
 	f, err := os.CreateTemp("", "inquirer-*"+cfg.Postfix)
 	if err != nil {
 		return "", fmt.Errorf("failed to create temp file: %w", err)
 	}
 	tmpPath := f.Name()
-	defer os.Remove(tmpPath)
+	defer func() { _ = os.Remove(tmpPath) }() // removed on EVERY exit path
 
 	if cfg.Default != "" {
-		f.WriteString(cfg.Default)
+		if _, werr := f.WriteString(cfg.Default); werr != nil {
+			_ = f.Close()
+			return "", fmt.Errorf("failed to write temp file: %w", werr)
+		}
 	}
-	f.Close()
+	_ = f.Close()
 
-	cmd := exec.Command(editor, tmpPath)
+	args := make([]string, 0, len(argv))
+	args = append(args, argv[1:]...)
+	args = append(args, tmpPath)
+	cmd := exec.Command(argv[0], args...)
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
@@ -83,4 +102,72 @@ func editorTerminal(cfg EditorConfig) (string, error) {
 	t := DefaultTheme
 	fmt.Printf("%s %s (editor)\n", t.SymSuccess, cfg.Message)
 	return string(data), nil
+}
+
+// splitShellWords splits a command string into argv using POSIX-style
+// quote-aware rules: whitespace separates words, single quotes preserve their
+// contents literally, double quotes preserve contents allowing backslash
+// escapes of \", \\, and a backslash outside quotes escapes the next rune.
+// It returns an error on an unterminated quote.
+func splitShellWords(s string) ([]string, error) {
+	var (
+		args    []string
+		cur     []rune
+		inWord  bool
+		inS     bool // inside single quotes
+		inD     bool // inside double quotes
+		escaped bool
+	)
+	flush := func() {
+		if inWord {
+			args = append(args, string(cur))
+			cur = cur[:0]
+			inWord = false
+		}
+	}
+	for _, r := range s {
+		switch {
+		case escaped:
+			cur = append(cur, r)
+			escaped = false
+			inWord = true
+		case inS:
+			if r == '\'' {
+				inS = false
+			} else {
+				cur = append(cur, r)
+			}
+		case inD:
+			switch r {
+			case '\\':
+				escaped = true
+			case '"':
+				inD = false
+			default:
+				cur = append(cur, r)
+			}
+		case r == '\\':
+			escaped = true
+			inWord = true
+		case r == '\'':
+			inS = true
+			inWord = true
+		case r == '"':
+			inD = true
+			inWord = true
+		case r == ' ' || r == '\t' || r == '\n' || r == '\r':
+			flush()
+		default:
+			cur = append(cur, r)
+			inWord = true
+		}
+	}
+	if inS || inD {
+		return nil, fmt.Errorf("unterminated quote")
+	}
+	if escaped {
+		return nil, fmt.Errorf("trailing backslash")
+	}
+	flush()
+	return args, nil
 }
