@@ -393,9 +393,10 @@ class TestAnswerExtraction:
         assert result == "fallback"
 
     def test_malformed_json_raises_validation_error(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        # Single unified budget: 3 malformed lines -> fatal ValidationError (R1).
         _agent_env(monkeypatch)
         _capture_stdout(monkeypatch)
-        monkeypatch.setattr("sys.stdin", io.StringIO("not valid json\n"))
+        monkeypatch.setattr("sys.stdin", io.StringIO("not valid json\n" * 3))
 
         with pytest.raises(ValidationError, match="Invalid JSON"):
             TextPrompt("Q?").execute()
@@ -403,7 +404,7 @@ class TestAnswerExtraction:
     def test_missing_answer_key_raises_validation_error(self, monkeypatch: pytest.MonkeyPatch) -> None:
         _agent_env(monkeypatch)
         _capture_stdout(monkeypatch)
-        _feed_stdin(monkeypatch, [{"wrong_key": "x"}])
+        _feed_stdin(monkeypatch, [{"wrong_key": "x"}, {"wrong_key": "x"}, {"wrong_key": "x"}])
 
         with pytest.raises(ValidationError, match='"answer"'):
             TextPrompt("Q?").execute()
@@ -411,7 +412,7 @@ class TestAnswerExtraction:
     def test_non_dict_json_raises_validation_error(self, monkeypatch: pytest.MonkeyPatch) -> None:
         _agent_env(monkeypatch)
         _capture_stdout(monkeypatch)
-        monkeypatch.setattr("sys.stdin", io.StringIO('"just a string"\n'))
+        monkeypatch.setattr("sys.stdin", io.StringIO('"just a string"\n' * 3))
 
         with pytest.raises(ValidationError, match='"answer"'):
             TextPrompt("Q?").execute()

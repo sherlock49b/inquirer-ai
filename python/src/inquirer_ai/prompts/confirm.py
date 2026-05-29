@@ -19,10 +19,15 @@ class ConfirmPrompt(BasePrompt[bool]):
         return "confirm"
 
     def _validate_answer(self, value: Any) -> bool:
+        # null answer -> the prompt default (a bool; default itself defaults to false) (R5).
+        if value is None:
+            return bool(self.default) if self.default is not None else False
         if isinstance(value, bool):
             return value
         if isinstance(value, str):
-            return value.lower() in ("y", "yes", "true", "1")
+            # Truthy strings {y,yes,true,1} case-insensitively -> True; anything
+            # else (incl. the falsy set and unknown strings) -> False (R5).
+            return value.strip().lower() in ("y", "yes", "true", "1")
         if isinstance(value, float) and not math.isfinite(value):
             return False
         return bool(value)

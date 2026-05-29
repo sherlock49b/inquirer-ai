@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+import json
 from typing import Any
 
 from prompt_toolkit.key_binding import KeyBindings
 
-from inquirer_ai.choice import Choice, ChoiceItem, RawChoice, Separator
+from inquirer_ai.choice import Choice, ChoiceItem, RawChoice, Separator, value_matches
 from inquirer_ai.exceptions import ValidationError
 from inquirer_ai.prompts.choice_base import ChoiceBasePrompt, PromptState
 from inquirer_ai.theme import get_theme
@@ -31,10 +32,11 @@ class SelectPrompt(ChoiceBasePrompt[Any]):
         for c in self.choices:
             if c.disabled:
                 continue
-            if value == c.value or value == c.name:
+            if value_matches(value, c.value) or (isinstance(value, str) and value == c.name):
                 return c.value
             valid.append(c.value)
-        raise ValidationError(f"Invalid choice: {value!r}. Valid: {valid}")
+        valid_repr = ", ".join(json.dumps(v) for v in valid)
+        raise ValidationError(f"Invalid choice: {json.dumps(value)}. Valid: [{valid_repr}]")
 
     def _format_answer(self, value: Any) -> str:
         for c in self.choices:
@@ -48,7 +50,7 @@ class SelectPrompt(ChoiceBasePrompt[Any]):
                 if (
                     isinstance(item, Choice)
                     and not item.disabled
-                    and (item.value == self.default or item.name == self.default)
+                    and (value_matches(self.default, item.value) or item.name == self.default)
                 ):
                     return i
         return self._selectable_indices()[0]
