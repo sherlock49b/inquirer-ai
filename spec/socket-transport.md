@@ -32,12 +32,25 @@ The agent reads this single line from stdout and discovers the socket path. All 
 
 | Condition | Transport |
 |-----------|-----------|
-| `INQUIRER_AI_MODE=agent` | Socket auto-created at `/tmp/inquirer-ai-{pid}.sock` |
-| `INQUIRER_AI_SOCKET=/path` set | Socket created at specified path |
-| Non-TTY stdin (piped) | Stdin/stdout (backwards compatible) |
+| `INQUIRER_AI_MODE=agent` (case-insensitive) | Socket auto-created at `/tmp/inquirer-ai-{pid}.sock` |
+| `INQUIRER_AI_SOCKET=/path` set (non-empty) — **even on a TTY** | Socket created at the specified path |
+| Non-TTY stdin (piped), no MODE/SOCKET | Stdin/stdout (backwards compatible) |
 | `INQUIRER_AI_MODE=human` | Terminal mode, no socket |
+| `INQUIRER_AI_TRANSPORT=stdio` (with agent mode) | Forces stdin/stdout even when a socket is requested |
 
-Socket is auto-created when `INQUIRER_AI_MODE=agent` is explicitly set. Piped stdin (`echo '...' | my-cli`) keeps the old stdin/stdout behavior for backwards compatibility. `INQUIRER_AI_SOCKET` overrides the auto-generated path.
+The socket transport is used when **socket_requested** (`INQUIRER_AI_SOCKET` set
+and non-empty, **or** `INQUIRER_AI_MODE=agent`) is true, `INQUIRER_AI_TRANSPORT`
+is not `stdio`, and Unix sockets are available. Setting `INQUIRER_AI_SOCKET`
+activates the socket transport **even on a TTY**. Piped stdin
+(`echo '...' | my-cli`) with no `INQUIRER_AI_MODE`/`INQUIRER_AI_SOCKET` keeps the
+old stdin/stdout behavior for backwards compatibility. `INQUIRER_AI_SOCKET`
+overrides the auto-generated path.
+
+### `INQUIRER_AI_SOCKET` validation
+
+When `INQUIRER_AI_SOCKET` is set it must be a non-empty **absolute** path, shorter
+than 104 bytes (the `sun_path` limit), with an existing parent directory.
+Otherwise the program refuses to start with a clear error.
 
 ## Connection Model
 
@@ -59,12 +72,24 @@ Agent                              CLI (socket server)
 
 1. Accept connection
 2. Write buffered lines: handshake (on first connection only) + current prompt, each as `\n`-terminated JSON
-3. Read one line from the client (the answer)
-4. Validate:
-   - **Valid**: write `{"status":"accepted"}\n`, close connection, advance to next prompt
-   - **Invalid**: write `{"kind":"validation_error","message":"..."}\n`, read another line (retry, up to 3 total)
-   - **Max retries exceeded**: write `{"kind":"error","message":"..."}\n`, close, program exits
-5. If client disconnects before sending an answer: re-queue the prompt for the next connection (no error, no retry consumed)
+3. Read one line from the client (the answer). Each answer line is capped at
+   `1_048_576` bytes; exceeding the cap is treated as a `validation_error`
+   (consuming one attempt) and the server continues.
+4. Validate (a single **unified budget of exactly 3 attempts** shared by
+   type/coercion validation and any user `validate()` callback):
+   - **Valid**: compute the result, write `{"status":"accepted"}\n` (suppressing
+     a broken-pipe error on this write), close the connection, and advance to the
+     next prompt **returning the already-computed result** (a failed `accepted`
+     write must not lose the validated answer).
+   - **Invalid (attempt 1 or 2)**: write `{"kind":"validation_error","message":"..."}\n`, read another line.
+   - **Invalid (attempt 3)**: write `{"kind":"error","message":"..."}\n`, close, program exits non-zero.
+5. If the client disconnects before sending an answer: re-queue the prompt for the
+   next connection (no error, no retry consumed).
+
+Parsing untrusted answer JSON MUST never crash the server: every parse/decoding
+error (including recursion-depth and value errors) is caught and reported as a
+`validation_error`. A non-`ValidationError` raised by a user `validate()`
+callback is caught and reported as `{"kind":"error"}` before exit.
 
 ## Agent Usage
 
@@ -119,10 +144,19 @@ Sent by the server after a valid answer is received. Not present in the stdin/st
 
 ## Lifecycle
 
-1. **Startup**: CLI creates socket, writes handshake to stdout (with socket path), handshake also sent on first socket connection
-2. **Running**: Accept connections, one per prompt cycle
-3. **Shutdown**: Close socket, remove socket file. Handles SIGINT/SIGTERM gracefully (cleanup before exit)
-4. **Crash**: Socket file may remain as stale. Next invocation detects and removes stale socket before binding.
+1. **Startup**: Before binding, `lstat` the target path (do **not** follow
+   symlinks). If it exists and **is a socket**, unlink it (stale cleanup). If it
+   exists and is **not** a socket (regular file, directory, or symlink), refuse
+   to start with a clear error — never unlink a non-socket. A directory/permission
+   error during removal is reported as a clean handled error, not a crash. After
+   binding, `chmod` the socket to `0600`. Then write the handshake to stdout
+   (with the socket path); the handshake is also sent on the first socket
+   connection.
+2. **Running**: Accept connections, one per prompt cycle.
+3. **Shutdown**: Close the socket and remove the socket file on **SIGINT**,
+   **SIGTERM**, and **normal exit**.
+4. **Crash**: A socket file may remain stale. The next invocation detects it via
+   `lstat` and removes it (only if it is a socket) before binding.
 
 ## Implementation Notes
 
@@ -139,7 +173,24 @@ Each prompt function blocks on `accept()`. This naturally synchronizes prompt or
 
 ### Cleanup
 
-All 4 languages must implement: `atexit` handler + `SIGTERM` handler that remove the socket file.
+All 4 languages must remove the socket file on **SIGINT**, **SIGTERM**, and
+normal exit:
+
+- **Python**: `atexit` handler plus replaced SIGINT & SIGTERM handlers; resetting
+  the transport must `atexit.unregister` and restore the prior handlers, guarded
+  by an idempotent `_cleaned_up` flag.
+- **Rust**: SIGINT and SIGTERM handlers plus `atexit` (because `atexit` does not
+  run on a default SIGINT).
+- **TypeScript**: SIGINT and SIGTERM handlers plus the `'exit'` event (`'exit'`
+  is not emitted on a signal).
+- **Go**: handle both SIGINT and SIGTERM; `signal.Stop` the channel and stop the
+  goroutine on `Cleanup()`/reset. Go has no `atexit`, so it exposes `Cleanup()`,
+  which callers invoke via `defer`; normal-exit cleanup is the caller's
+  responsibility.
+
+The validation budget is a single unified counter of exactly 3 attempts per
+prompt (at most 2 `validation_error` messages, then 1 fatal `error`), identical
+to the stdio transport.
 
 ## NOT in scope
 
