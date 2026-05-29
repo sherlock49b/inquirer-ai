@@ -132,6 +132,9 @@ fn socket_basic_prompt() {
     assert_eq!(handshake["kind"], "handshake");
     assert_eq!(handshake["protocol"], "inquirer-ai");
     assert_eq!(handshake["socket"], sock_path);
+    // R8: the socket handshake version must come from the build version, not a
+    // hardcoded literal.
+    assert_eq!(handshake["version"], env!("CARGO_PKG_VERSION"));
 
     wait_for_socket(&sock_path);
 
@@ -583,6 +586,77 @@ fn socket_large_payload() {
         stderr_output.contains(&large_value[..20]),
         "expected large payload in stderr"
     );
+}
+
+// =========================================================================
+// R10 hardening: refuse to bind over a non-socket; validate explicit paths
+// =========================================================================
+
+#[test]
+fn socket_refuses_non_socket_file() {
+    use inquirer_ai::socket::SocketTransport;
+
+    let path = unique_socket_path("nonsocket");
+    let _ = std::fs::remove_file(&path);
+    // Create a regular file at the target path.
+    std::fs::write(&path, b"not a socket").unwrap();
+
+    let result = SocketTransport::new(Some(&path));
+    assert!(
+        result.is_err(),
+        "binding over an existing non-socket file must be refused"
+    );
+    // The regular file must NOT have been removed.
+    assert!(
+        std::path::Path::new(&path).exists(),
+        "non-socket file must not be unlinked"
+    );
+    let _ = std::fs::remove_file(&path);
+}
+
+#[test]
+fn socket_rejects_relative_path() {
+    use inquirer_ai::socket::SocketTransport;
+    let result = SocketTransport::new(Some("relative.sock"));
+    assert!(
+        result.is_err(),
+        "relative INQUIRER_AI_SOCKET must be rejected"
+    );
+}
+
+#[test]
+fn socket_rejects_too_long_path() {
+    use inquirer_ai::socket::SocketTransport;
+    let long = format!("/tmp/{}.sock", "a".repeat(200));
+    let result = SocketTransport::new(Some(&long));
+    assert!(
+        result.is_err(),
+        "over-long INQUIRER_AI_SOCKET must be rejected"
+    );
+}
+
+#[test]
+fn socket_cleans_up_stale_socket() {
+    use inquirer_ai::socket::SocketTransport;
+
+    let path = unique_socket_path("stale");
+    let _ = std::fs::remove_file(&path);
+
+    // Bind once, drop -> leaves nothing; then create a real stale socket by
+    // binding and forgetting to remove (simulate via a fresh bind we drop).
+    {
+        let t1 = SocketTransport::new(Some(&path)).expect("first bind ok");
+        // Leak the listener's socket file by mem::forget so the Drop does not
+        // remove it, leaving a genuine stale *socket* on disk.
+        std::mem::forget(t1);
+    }
+    assert!(std::path::Path::new(&path).exists());
+
+    // A second bind must succeed by unlinking the stale socket.
+    let t2 = SocketTransport::new(Some(&path)).expect("stale socket should be cleaned up");
+    assert_eq!(t2.path(), path);
+    drop(t2);
+    let _ = std::fs::remove_file(&path);
 }
 
 // =========================================================================

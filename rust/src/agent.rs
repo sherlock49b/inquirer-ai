@@ -2,7 +2,7 @@ use crate::errors::{InquirerError, Result};
 use serde_json::Value;
 use std::io::{self, BufRead, Write};
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::Once;
+use std::sync::{Mutex, Once, OnceLock};
 
 static HANDSHAKE: Once = Once::new();
 static STEP: AtomicUsize = AtomicUsize::new(0);
@@ -11,14 +11,31 @@ const VERSION: &str = env!("CARGO_PKG_VERSION");
 // ---------------------------------------------------------------------------
 // fd-based I/O helpers
 // ---------------------------------------------------------------------------
+//
+// The fd-backed channels (INQUIRER_AI_FD_OUT / INQUIRER_AI_FD_IN) must be
+// opened EXACTLY ONCE for the lifetime of the process. Re-opening a `File`
+// from the same raw fd on every call and then dropping it would close the
+// underlying descriptor, breaking subsequent reads/writes. We therefore wrap
+// each fd in a long-lived `File` stored in a `OnceLock` and never close it
+// (the `File` is leaked into the static, mirroring how the kernel owns the
+// inherited descriptor).
 
-/// Creates a File from a raw fd specified in an environment variable.
+#[cfg(unix)]
+struct FdChannels {
+    out: Option<Mutex<std::fs::File>>,
+    input: Option<Mutex<io::BufReader<std::fs::File>>>,
+}
+
+#[cfg(unix)]
+static FD_CHANNELS: OnceLock<FdChannels> = OnceLock::new();
+
+/// Opens a `File` from a raw fd specified in an environment variable, once.
 ///
 /// Validates that the fd is actually open before constructing the File.
 /// Returns `None` if the env var is missing, not a valid integer, or
 /// points to a closed/invalid file descriptor.
 #[cfg(unix)]
-fn file_from_env_fd(var: &str) -> Option<std::fs::File> {
+fn open_file_from_env_fd(var: &str) -> Option<std::fs::File> {
     use std::os::unix::io::FromRawFd;
     let fd: i32 = std::env::var(var).ok()?.parse().ok()?;
 
@@ -28,26 +45,26 @@ fn file_from_env_fd(var: &str) -> Option<std::fs::File> {
         return None;
     }
 
-    // SAFETY: We verified the fd is open above.
+    // SAFETY: We verified the fd is open above. The resulting File is stored
+    // in a process-lifetime static and is never dropped, so the fd is never
+    // closed out from under the inherited channel.
     Some(unsafe { std::fs::File::from_raw_fd(fd) })
 }
 
-#[cfg(not(unix))]
-fn file_from_env_fd(_var: &str) -> Option<std::fs::File> {
-    None
-}
-
-fn fd_out_file() -> Option<std::fs::File> {
-    file_from_env_fd("INQUIRER_AI_FD_OUT")
-}
-
-fn fd_in_file() -> Option<std::fs::File> {
-    file_from_env_fd("INQUIRER_AI_FD_IN")
+#[cfg(unix)]
+fn fd_channels() -> &'static FdChannels {
+    FD_CHANNELS.get_or_init(|| FdChannels {
+        out: open_file_from_env_fd("INQUIRER_AI_FD_OUT").map(Mutex::new),
+        input: open_file_from_env_fd("INQUIRER_AI_FD_IN")
+            .map(|f| Mutex::new(io::BufReader::new(f))),
+    })
 }
 
 /// Write a single JSON line to the agent output channel.
+#[cfg(unix)]
 fn write_line(line: &str) -> Result<()> {
-    if let Some(mut f) = fd_out_file() {
+    if let Some(out) = &fd_channels().out {
+        let mut f = out.lock().unwrap();
         writeln!(f, "{line}")?;
         f.flush()?;
     } else {
@@ -58,16 +75,38 @@ fn write_line(line: &str) -> Result<()> {
     Ok(())
 }
 
+#[cfg(not(unix))]
+fn write_line(line: &str) -> Result<()> {
+    let mut stdout = io::stdout().lock();
+    writeln!(stdout, "{line}")?;
+    stdout.flush()?;
+    Ok(())
+}
+
 /// Read a single line from the agent input channel.
+#[cfg(unix)]
 fn read_input_line() -> Result<String> {
     let mut line = String::new();
-    let bytes = if let Some(f) = fd_in_file() {
-        let mut reader = io::BufReader::new(f);
-        reader.read_line(&mut line)?
+    let bytes = if let Some(input) = &fd_channels().input {
+        input.lock().unwrap().read_line(&mut line)?
     } else {
         let stdin = io::stdin();
         stdin.lock().read_line(&mut line)?
     };
+    if bytes == 0 {
+        return Err(InquirerError::PromptAborted(
+            "No response received (input closed). Expected JSON like: {\"answer\": \"<value>\"}"
+                .to_string(),
+        ));
+    }
+    Ok(line)
+}
+
+#[cfg(not(unix))]
+fn read_input_line() -> Result<String> {
+    let mut line = String::new();
+    let stdin = io::stdin();
+    let bytes = stdin.lock().read_line(&mut line)?;
     if bytes == 0 {
         return Err(InquirerError::PromptAborted(
             "No response received (input closed). Expected JSON like: {\"answer\": \"<value>\"}"
@@ -106,9 +145,22 @@ fn send_handshake() {
 // Public API
 // ---------------------------------------------------------------------------
 
-pub fn agent_send(payload: &Value) -> Result<()> {
+/// Allocate the next 1-based logical prompt step.
+///
+/// The step is the position of a logical prompt within the run. It is paired
+/// with `total` and MUST stay constant across a prompt and all of its
+/// validation re-sends, so the counter advances exactly ONCE per logical
+/// prompt — not once per emitted frame.
+fn next_step() -> usize {
+    STEP.fetch_add(1, Ordering::SeqCst) + 1
+}
+
+/// Emit a prompt frame for a given logical `step`.
+///
+/// Re-sends of the same logical prompt (on validation retry) pass the SAME
+/// `step` so the agent sees a stable index.
+fn agent_send_with_step(payload: &Value, step: usize) -> Result<()> {
     send_handshake();
-    let step = STEP.fetch_add(1, Ordering::SeqCst) + 1;
 
     // Merge kind, step, total into the payload
     let mut obj = match payload {
@@ -123,15 +175,16 @@ pub fn agent_send(payload: &Value) -> Result<()> {
     write_line(&out.to_string())
 }
 
+pub fn agent_send(payload: &Value) -> Result<()> {
+    agent_send_with_step(payload, next_step())
+}
+
 pub fn agent_receive() -> Result<Value> {
     loop {
         let line = read_input_line()?;
 
-        let resp: Value = serde_json::from_str(line.trim()).map_err(|e| {
-            InquirerError::Validation(format!(
-                "Invalid JSON response: {e}. Expected JSON like: {{\"answer\": \"<value>\"}}"
-            ))
-        })?;
+        let resp: Value = serde_json::from_str(line.trim())
+            .map_err(|e| InquirerError::Validation(format!("Invalid JSON response: {e}")))?;
 
         if resp.get("kind").and_then(|v| v.as_str()) == Some("handshake_ack") {
             continue;
@@ -145,7 +198,7 @@ pub fn extract_answer(resp: &Value) -> Result<Value> {
     match resp.get("answer") {
         Some(answer) => Ok(answer.clone()),
         None => Err(InquirerError::Validation(
-            "Response must be a JSON object with an \"answer\" key".to_string(),
+            "Answer must be a JSON object with an \"answer\" field".to_string(),
         )),
     }
 }
@@ -186,8 +239,12 @@ pub fn agent_prompt_with_retry<T>(
     use std::panic::{catch_unwind, AssertUnwindSafe};
 
     const MAX_RETRIES: usize = 3;
+    // Allocate the logical step ONCE. Every re-send of this prompt (on a
+    // validation retry) reuses the same step value, so the agent observes a
+    // stable 1-based index that never exceeds `total`.
+    let step = next_step();
     for attempt in 0..MAX_RETRIES {
-        agent_send(payload)?;
+        agent_send_with_step(payload, step)?;
         let answer = agent_receive()?;
 
         let result = catch_unwind(AssertUnwindSafe(|| validate(answer)));

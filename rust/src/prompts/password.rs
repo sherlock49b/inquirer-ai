@@ -7,6 +7,8 @@ use serde_json::{json, Value};
 pub struct PasswordConfig {
     pub message: String,
     pub mask: Option<String>,
+    /// Value returned when the answer is null. Defaults to "" (empty string).
+    pub default: Option<String>,
 }
 
 impl PasswordConfig {
@@ -14,6 +16,7 @@ impl PasswordConfig {
         Self {
             message: message.into(),
             mask: Some("*".to_string()),
+            default: None,
         }
     }
 }
@@ -30,12 +33,14 @@ fn password_agent(config: &PasswordConfig) -> Result<String> {
     let payload = json!({
         "type": "password",
         "message": config.message,
-        "default": null,
+        "default": config.default,
         "mask": config.mask,
     });
 
-    agent_prompt_with_retry(&payload, |answer| match answer {
-        Value::Null => Ok(String::new()),
+    let default = config.default.clone();
+    agent_prompt_with_retry(&payload, move |answer| match answer {
+        // A null answer falls back to the configured default ("" if unset) (R5).
+        Value::Null => Ok(default.clone().unwrap_or_default()),
         Value::String(s) => Ok(s),
         other => Ok(other.to_string()),
     })

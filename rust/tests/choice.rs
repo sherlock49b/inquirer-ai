@@ -53,6 +53,50 @@ fn parse_value_choice_object() {
 }
 
 #[test]
+fn parse_value_choice_missing_value_defaults_to_name() {
+    // R4: a choice object without a `value` defaults value := name (it must
+    // NOT stringify the whole object).
+    let item = parse_choice_from_value(json!({"name": "Deploy"}));
+    match item {
+        ChoiceItem::Choice(c) => {
+            assert_eq!(c.name, "Deploy");
+            assert_eq!(c.value, json!("Deploy"));
+        }
+        _ => panic!("expected Choice"),
+    }
+}
+
+#[test]
+fn parse_value_choice_preserves_disabled_and_typed_value() {
+    let item = parse_choice_from_value(json!({
+        "name": "Forty-two",
+        "value": 42,
+        "disabled": "nope"
+    }));
+    match item {
+        ChoiceItem::Choice(c) => {
+            assert_eq!(c.name, "Forty-two");
+            assert_eq!(c.value, json!(42));
+            assert!(c.is_disabled());
+            assert_eq!(c.disabled_reason(), Some("nope"));
+        }
+        _ => panic!("expected Choice"),
+    }
+}
+
+#[test]
+fn choice_disabled_empty_string_is_enabled() {
+    // R4: disabled is active iff true OR a non-empty string. "" -> enabled.
+    let mut c = Choice::new("a", "a");
+    c.disabled = Some(Value::String(String::new()));
+    assert!(!c.is_disabled(), "empty-string disabled means enabled");
+
+    let mut c2 = Choice::new("b", "b");
+    c2.disabled = Some(Value::Bool(false));
+    assert!(!c2.is_disabled());
+}
+
+#[test]
 fn choice_disabled_states() {
     let c1 = Choice::new("a", "a");
     assert!(!c1.is_disabled());

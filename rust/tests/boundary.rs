@@ -40,7 +40,7 @@ fn invalid_fd_env_falls_back_gracefully() {
 
     // Check it didn't crash with a signal (which would indicate UB)
     assert!(
-        !matches!(output.status.code(), None),
+        output.status.code().is_some(),
         "Subprocess was killed by signal (likely UB). stderr: {stderr}"
     );
 

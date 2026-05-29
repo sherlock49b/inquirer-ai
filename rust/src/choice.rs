@@ -93,10 +93,32 @@ pub fn parse_choice_from_value(val: Value) -> ChoiceItem {
                     .unwrap_or("────────");
                 ChoiceItem::Separator(Separator::new(text))
             } else {
-                match serde_json::from_value::<Choice>(val.clone()) {
-                    Ok(c) => ChoiceItem::Choice(c),
-                    Err(_) => ChoiceItem::Choice(Choice::new(val.to_string(), val)),
-                }
+                // Build the choice field-by-field so that a missing `value`
+                // defaults to `name` (rather than stringifying the whole
+                // object, which would never match an answer).
+                let name = match map.get("name") {
+                    Some(Value::String(s)) => s.clone(),
+                    Some(other) => other.to_string(),
+                    None => match map.get("value") {
+                        Some(Value::String(s)) => s.clone(),
+                        Some(other) => other.to_string(),
+                        None => String::new(),
+                    },
+                };
+                let value = map
+                    .get("value")
+                    .cloned()
+                    .unwrap_or_else(|| Value::String(name.clone()));
+                ChoiceItem::Choice(Choice {
+                    name,
+                    value,
+                    disabled: map.get("disabled").cloned(),
+                    short: map.get("short").and_then(|v| v.as_str()).map(String::from),
+                    description: map
+                        .get("description")
+                        .and_then(|v| v.as_str())
+                        .map(String::from),
+                })
             }
         }
         _ => ChoiceItem::Choice(Choice::new(val.to_string(), val)),

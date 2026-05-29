@@ -560,7 +560,7 @@ fn duplicate_values_construction_accepted() {
 
 #[test]
 fn duplicate_names_different_values_construction() {
-    let choices = vec![
+    let choices = [
         ChoiceItem::Choice(Choice::new("Same Name", json!("val1"))),
         ChoiceItem::Choice(Choice::new("Same Name", json!("val2"))),
     ];
@@ -645,8 +645,8 @@ fn choice_value_integer() {
 
 #[test]
 fn choice_value_float() {
-    let c = Choice::new("Float val", json!(3.14));
-    assert_eq!(c.value, json!(3.14));
+    let c = Choice::new("Float val", json!(3.25));
+    assert_eq!(c.value, json!(3.25));
 }
 
 #[test]
