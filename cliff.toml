@@ -30,15 +30,23 @@ split_commits = false
 commit_parsers = [
     { message = "^feat", group = "Features" },
     { message = "^fix", group = "Bug Fixes" },
+    { message = "^protocol", group = "Protocol Changes" },
+    { message = "^compat", group = "Compatibility" },
     { message = "^doc", group = "Documentation" },
     { message = "^perf", group = "Performance" },
     { message = "^refactor", group = "Refactor" },
     { message = "^style", group = "Styling" },
     { message = "^test", group = "Testing" },
+    { message = "^ci", group = "CI/CD" },
     { message = "^chore\\(release\\)", skip = true },
+    { message = "^bump:", skip = true },
     { message = "^chore", group = "Miscellaneous" },
 ]
 protect_breaking_commits = false
 filter_commits = false
+# Only match release tags of the form vX.Y.Z. NOTE: a stray `go/v0.2.1` tag
+# exists in history and does NOT match this pattern (good). It should be
+# deleted from the remote by a maintainer (`git push origin :go/v0.2.1`);
+# automation does not delete remote tags.
 tag_pattern = "v[0-9].*"
 sort_commits = "newest"

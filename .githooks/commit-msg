@@ -1,5 +1,13 @@
 #!/usr/bin/env bash
 set -e
 
+# `cz bump` generates a "bump: version X → Y" release commit. That message is
+# not a conventional commit and must be allowed through (the bump step also
+# uses --no-verify, but skip it here too in case hooks run on the bump commit).
+if head -n1 "$1" | grep -qE '^bump:'; then
+  echo "commit-msg: skipping validation for release bump commit"
+  exit 0
+fi
+
 echo "commit-msg: validating commit message format..."
 cz check --commit-msg-file "$1" --allow-abort

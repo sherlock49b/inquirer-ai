@@ -20,10 +20,12 @@ def _parse_subject(text: str) -> str:
 
 
 class TeamCz(BaseCommitizen):
-    bump_pattern = r"^(feat|fix|hotfix|infra|data-migration|rollback|BREAKING CHANGE)"
+    bump_pattern = r"^(feat|fix|protocol|compat|hotfix|infra|data-migration|rollback|BREAKING CHANGE)"
     bump_map = {
         "feat": "MINOR",
         "fix": "PATCH",
+        "protocol": "MINOR",
+        "compat": "PATCH",
         "hotfix": "PATCH",
         "infra": "PATCH",
         "data-migration": "MINOR",
@@ -33,6 +35,8 @@ class TeamCz(BaseCommitizen):
     bump_map_major_version_zero = {
         "feat": "MINOR",
         "fix": "PATCH",
+        "protocol": "MINOR",
+        "compat": "PATCH",
         "hotfix": "PATCH",
         "infra": "PATCH",
         "data-migration": "MINOR",
