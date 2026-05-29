@@ -22,3 +22,10 @@ go/prompt/socket_*
 !/go/prompt/socket_*.go
 .checklist.active
 coverage.out
+
+# Local agent/worktree state
+.claude/
+
+# Compiled binaries (build artifacts, never commit)
+/go/demo
+/extensions/gh-contribute/gh-contribute
