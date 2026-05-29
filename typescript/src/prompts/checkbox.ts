@@ -1,4 +1,4 @@
-import { type Choice, type ChoiceItem, choiceToDict, isSeparator, parseChoice, type RawChoice } from "../choice.js";
+import { type Choice, type ChoiceItem, choiceToDict, invalidChoiceMessage, isSeparator, parseChoice, type RawChoice, valuesMatch } from "../choice.js";
 import { InvalidChoiceError, PromptAbortedError, ValidationError } from "../errors.js";
 import { type ListItem, runListPrompt } from "../terminal.js";
 import { ansi, getTheme, RESET } from "../theme.js";
@@ -38,17 +38,17 @@ export class CheckboxPrompt<V = unknown> extends BasePrompt<V[]> {
   protected validateAnswer(value: unknown): V[] {
     if (!Array.isArray(value)) throw new ValidationError(`Expected an array, got ${typeof value}`);
     const enabled = this.choices.filter((c) => !c.disabled);
-    const validValues = new Set(enabled.map((c) => c.value));
-    const validNames = new Set(enabled.map((c) => c.name));
+    const validValues = enabled.map((c) => c.value);
     const result: V[] = [];
     for (const v of value) {
-      if (validValues.has(v as V)) {
-        result.push(v as V);
-      } else if (validNames.has(String(v))) {
-        const match = enabled.find((c) => c.name === v);
-        if (match) result.push(match.value);
+      // Type-aware value match OR exact string-name match; never string-coerce (R4).
+      const match = enabled.find(
+        (c) => valuesMatch(v, c.value) || (typeof v === "string" && v === c.name),
+      );
+      if (match) {
+        result.push(match.value);
       } else {
-        throw new ValidationError(`Invalid choice: ${JSON.stringify(v)}. Valid: ${JSON.stringify([...validValues])}`);
+        throw new ValidationError(invalidChoiceMessage(v, validValues));
       }
     }
     if (this.required && result.length === 0) {

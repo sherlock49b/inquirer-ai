@@ -15,6 +15,9 @@ export class ConfirmPrompt extends BasePrompt<boolean> {
   }
 
   protected validateAnswer(value: unknown): boolean {
+    // A null answer falls back to the prompt default (which itself defaults to
+    // false). The default is normalized to a boolean in the constructor (R5).
+    if (value == null) return this.defaultValue ?? false;
     if (typeof value === "boolean") return value;
     if (typeof value === "string") {
       return ["y", "yes", "true", "1"].includes(value.toLowerCase());

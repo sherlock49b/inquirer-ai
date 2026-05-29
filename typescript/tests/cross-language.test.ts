@@ -186,6 +186,30 @@ describe("Cross-language: validateNumber", () => {
     expect(validateNumber("3.14")).toBeCloseTo(3.14);
   });
 
+  // -- R2 numeric-string grammar -------------------------------------------
+  it('"1e3" string → 1000 (exponent accepted)', () => {
+    expect(validateNumber("1e3")).toBe(1000);
+  });
+
+  it('"1E-3" string → 0.001', () => {
+    expect(validateNumber("1E-3")).toBeCloseTo(0.001);
+  });
+
+  it('"  5  " string → 5 (ASCII whitespace trimmed)', () => {
+    expect(validateNumber("  5  ")).toBe(5);
+  });
+
+  it('"-2" string → -2', () => {
+    expect(validateNumber("-2")).toBe(-2);
+  });
+
+  it.each(["1_000", "3abc", "0x10", ".5", "5.", "", "+", " ", "1,000"])(
+    "rejects ungrammatical numeric string %j",
+    (s) => {
+      expect(() => validateNumber(s)).toThrow(ValidationError);
+    },
+  );
+
   // -- Min/max bounds ------------------------------------------------------
   it("value below min → error", () => {
     expect(() => validateNumber(5, { min: 10 })).toThrow(ValidationError);

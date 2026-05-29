@@ -2,6 +2,11 @@ import { ValidationError } from "../errors.js";
 import { formatError, formatQuestion, readLine } from "../terminal.js";
 import { type BaseConfig, BasePrompt } from "./base.js";
 
+// R2 numeric-string grammar: optional sign; required integer part; optional
+// .fraction; optional exponent. Accepts "1e3", "3.5", "-2", "1E-3";
+// rejects "1_000", "3abc", "0x10", ".5", "5.", "", "+".
+const NUMBER_GRAMMAR = /^[+-]?\d+(\.\d+)?([eE][+-]?\d+)?$/;
+
 export interface NumberConfig extends BaseConfig<number> {
   min?: number | null;
   max?: number | null;
@@ -32,16 +37,30 @@ export class NumberPrompt extends BasePrompt<number> {
   }
 
   protected validateAnswer(value: unknown): number {
+    // R2 numeric-string grammar.
+    // 1) null + default present -> default.
     if (value == null && this.defaultValue != null) return this.defaultValue;
     let num: number;
-    if (typeof value === "number" && typeof value !== "boolean") {
+    if (typeof value === "boolean") {
+      // booleans are not numbers
+      throw new ValidationError(`Expected a number, got boolean`);
+    } else if (typeof value === "number") {
+      // 2) JSON number (not boolean) -> use it.
       num = value;
     } else if (typeof value === "string") {
-      num = value.includes(".") ? parseFloat(value) : parseInt(value, 10);
-      if (Number.isNaN(num)) throw new ValidationError(`Not a valid number: ${JSON.stringify(value)}`);
+      // 3) JSON string: trim leading/trailing ASCII whitespace, then the
+      //    remainder MUST fully match the grammar; parse with the native float
+      //    parser. Rejects "1_000", "3abc", "0x10", ".5", "5.", "", "+".
+      const trimmed = value.replace(/^[\t\n\v\f\r ]+|[\t\n\v\f\r ]+$/g, "");
+      if (!NUMBER_GRAMMAR.test(trimmed)) {
+        throw new ValidationError(`Not a valid number: ${JSON.stringify(value)}`);
+      }
+      num = Number.parseFloat(trimmed);
     } else {
+      // 4) other type -> "Expected a number, got <type>".
       throw new ValidationError(`Expected a number, got ${typeof value}`);
     }
+    // 5) reject non-finite (NaN/Inf).
     if (!Number.isFinite(num)) throw new ValidationError(`Not a valid number: ${JSON.stringify(value)}`);
     if (!this.floatAllowed && num !== Math.trunc(num)) {
       throw new ValidationError("Decimal numbers are not allowed");
