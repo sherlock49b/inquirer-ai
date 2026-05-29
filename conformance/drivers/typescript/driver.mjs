@@ -26,7 +26,7 @@ import {
   autocomplete,
   path,
   createSeparator,
-} from "/home/yinfeng/dev/inquirer-ai/typescript/dist/index.js";
+} from "../../../typescript/dist/index.js";
 
 async function main() {
   const resultsFile = process.argv[2];
