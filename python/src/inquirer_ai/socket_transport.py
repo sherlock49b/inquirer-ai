@@ -104,9 +104,7 @@ class SocketTransport:
         signal.signal(signal.SIGINT, self._make_signal_handler(self._prev_sigint))
         signal.signal(signal.SIGTERM, self._make_signal_handler(self._prev_sigterm))
 
-    def _make_signal_handler(
-        self, prev: Any
-    ) -> Callable[[int, types.FrameType | None], None]:
+    def _make_signal_handler(self, prev: Any) -> Callable[[int, types.FrameType | None], None]:
         def _handler(signo: int, frame: types.FrameType | None) -> None:
             self.cleanup()
             if callable(prev) and prev not in (signal.SIG_DFL, signal.SIG_IGN):

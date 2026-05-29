@@ -26,9 +26,7 @@ class RawlistPrompt(BasePrompt[Any]):
         # The selectable list excludes separators AND disabled choices (R5).
         # Indexing (1..n) and matching operate over this list only.
         parsed = [parse_choice(c) for c in choices]
-        self.choices: list[Choice[Any]] = [
-            c for c in parsed if isinstance(c, Choice) and not c.disabled
-        ]
+        self.choices: list[Choice[Any]] = [c for c in parsed if isinstance(c, Choice) and not c.disabled]
         if not self.choices:
             raise InvalidChoiceError("choices must contain at least one selectable item")
 
