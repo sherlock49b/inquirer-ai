@@ -227,8 +227,20 @@ fn cmd_add(initial_query: &str) {
         Err(_) => return,
     };
 
-    let crate_name = selected.as_str().unwrap_or("");
-    let crate_info = results.iter().find(|c| c.name == crate_name).unwrap();
+    let crate_name = match selected.as_str() {
+        Some(name) => name,
+        None => {
+            fatal("Unexpected selection: expected a crate name");
+            unreachable!()
+        }
+    };
+    let crate_info = match results.iter().find(|c| c.name == crate_name) {
+        Some(info) => info,
+        None => {
+            fatal(&format!("Selected crate \"{crate_name}\" not found in results"));
+            unreachable!()
+        }
+    };
 
     // Ask about features
     let features = get_crate_features(&crate_info.name, &crate_info.max_version);
@@ -483,11 +495,23 @@ fn format_downloads(n: u64) -> String {
     }
 }
 
+/// Encode a string for use as an `application/x-www-form-urlencoded` query
+/// value: unreserved characters pass through, space becomes `+`, and every
+/// other byte is percent-encoded. Operates on UTF-8 bytes so non-ASCII input
+/// is handled correctly.
 fn urlencoded(s: &str) -> String {
-    s.replace(' ', "+")
-        .replace('&', "%26")
-        .replace('?', "%3F")
-        .replace('#', "%23")
+    let mut out = String::with_capacity(s.len());
+    for &b in s.as_bytes() {
+        match b {
+            // RFC 3986 unreserved characters — safe to leave as-is.
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                out.push(b as char);
+            }
+            b' ' => out.push('+'),
+            _ => out.push_str(&format!("%{b:02X}")),
+        }
+    }
+    out
 }
 
 fn fatal(msg: &str) {
