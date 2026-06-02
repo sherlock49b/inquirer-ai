@@ -6,15 +6,28 @@ on:
   pull_request:
     branches: [main]
 
+# Use a short temp dir so Unix-socket paths stay under the macOS AF_UNIX
+# sun_path limit (104 bytes). The default macOS runner $TMPDIR
+# (/private/var/folders/.../T/) plus a test-named subdir overflows it; /tmp
+# keeps t.TempDir()/tmp_path-derived socket paths short. No-op on Linux.
+env:
+  TMPDIR: /tmp
+
 jobs:
   python:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     defaults:
       run:
         working-directory: python
     strategy:
       matrix:
+        os: [ubuntu-latest]
         python-version: ["3.10", "3.11", "3.12", "3.13"]
+        # One macOS job to catch OS-specific behavior (e.g. Unix-socket
+        # signal-cleanup) that ubuntu-only CI cannot.
+        include:
+          - os: macos-latest
+            python-version: "3.13"
 
     steps:
       - uses: actions/checkout@v5
@@ -40,13 +53,17 @@ jobs:
         run: uv run pytest -v --cov=inquirer_ai --cov-report=term-missing
 
   go:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     defaults:
       run:
         working-directory: go
     strategy:
       matrix:
+        os: [ubuntu-latest]
         go-version: ["1.22", "1.23"]
+        include:
+          - os: macos-latest
+            go-version: "1.23"
 
     steps:
       - uses: actions/checkout@v5
@@ -68,13 +85,17 @@ jobs:
         run: go build ./examples/demo/
 
   typescript:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     defaults:
       run:
         working-directory: typescript
     strategy:
       matrix:
+        os: [ubuntu-latest]
         node-version: ["18", "20", "22"]
+        include:
+          - os: macos-latest
+            node-version: "22"
 
     steps:
       - uses: actions/checkout@v5
@@ -99,13 +120,17 @@ jobs:
         run: npx vitest run
 
   rust:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     defaults:
       run:
         working-directory: rust
     strategy:
       matrix:
+        os: [ubuntu-latest]
         rust-version: ["stable", "1.85"]
+        include:
+          - os: macos-latest
+            rust-version: "stable"
 
     steps:
       - uses: actions/checkout@v5
