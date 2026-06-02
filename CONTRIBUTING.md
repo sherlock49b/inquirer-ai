@@ -189,7 +189,7 @@ If you change the agent JSON protocol (handshake format, prompt fields, response
 | Hook | Runs | Blocks on failure? |
 |------|------|:------------------------:|
 | `commit-msg` | `cz check` (message format); skips the `bump:` release commit | Yes |
-| `pre-commit` | Python lint + typecheck + tests, Go fmt + vet + tests, TS tsc + biome + tests, Rust fmt + clippy + tests (only for changed languages, in parallel) | Yes |
+| `pre-commit` | Python lint + typecheck + tests, Go fmt + vet + tests, TS tsc + biome + tests, Rust fmt + clippy + tests (only for changed languages, run sequentially) | Yes |
 | `pre-push` | No-op — `pre-commit` already covers the changed languages and CI runs the full matrix | No |
 
 ### Code style
