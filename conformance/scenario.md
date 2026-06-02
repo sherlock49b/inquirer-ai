@@ -113,10 +113,11 @@ four languages (Python is the reference, but all pairwise diffs are reported):
 3. **Each prompt payload** — deep structural compare by value (key order
    ignored, `100`==`100.0`): `type`, `message`, `default`, `choices`, `min`,
    `max`, `step`, `mask`, etc.
-4. **Each validation_error message** — compared by value. (Some libraries wrap
-   the contract message with a language-specific prefix, e.g. Go prepends
-   `prompt error: validation failed: `; the runner strips such known wrapper
-   prefixes before comparing the message text.)
+4. **Each validation_error message** — compared verbatim. The protocol message
+   MUST be byte-identical across languages, with no transport wrapper prefixes.
+   (An earlier Go-specific `prompt error: validation failed: ` prefix was once
+   tolerated here; that divergence has been fixed at the source, so the runner
+   now compares raw messages and flags any reintroduced wrapper as a divergence.)
 5. **Final results array** — byte-exact after numeric normalization.
 
 Any divergence prints the field, the prompt step, and the differing value per
