@@ -31,6 +31,23 @@ function waitForSocket(sockPath: string, timeout = 5000): Promise<void> {
   });
 }
 
+// --- Helper: wait for socket file to be removed (cleanup) ---
+function waitForNoSocket(sockPath: string, timeout = 5000): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const deadline = Date.now() + timeout;
+    const check = () => {
+      if (!fs.existsSync(sockPath)) {
+        resolve();
+      } else if (Date.now() > deadline) {
+        reject(new Error(`Socket ${sockPath} not removed within ${timeout}ms`));
+      } else {
+        setTimeout(check, 50);
+      }
+    };
+    check();
+  });
+}
+
 // --- Helper: connect to socket ---
 function connectSocket(sockPath: string): Promise<net.Socket> {
   return new Promise((resolve, reject) => {
@@ -851,7 +868,10 @@ process.stderr.write("RESULT:" + name + "\\n");
     await waitForProc(proc).catch(() => {
       // Process exits from signal handling.
     });
-    await new Promise((r) => setTimeout(r, 200));
+    // Poll for removal rather than asserting after a fixed delay: SIGINT
+    // delivery + handler execution timing varies across Node versions and
+    // under load, so a single fixed wait is flaky (ts-socket-3).
+    await waitForNoSocket(sockPath);
     expect(fs.existsSync(sockPath)).toBe(false);
   });
 }, 30000);
