@@ -1,5 +1,11 @@
 #!/usr/bin/env bash
-set -e
+# Language gates run SEQUENTIALLY, not in parallel. Running all four suites
+# (each an internally-parallel test runner) at once oversubscribes the CPU and
+# makes the socket integration tests' subprocess-spawn timeouts flaky on
+# commits that touch several languages (or spec/.githooks/.github, which run
+# all four). Sequential is a little slower for those rare multi-language
+# commits but reliable. Single-language commits — the common case — run exactly
+# one gate, so this costs nothing there.
 
 ROOT="$(git rev-parse --show-toplevel)"
 
@@ -26,26 +32,24 @@ if ! $RUN_PY && ! $RUN_GO && ! $RUN_TS && ! $RUN_RS; then
   exit 0
 fi
 
-PIDS=()
-LOGS=()
-NAMES=()
-FAIL=0
+FAILED=()
 
+# Run a check, streaming its output. On failure, record it and keep going so
+# the developer sees every failing language in one run rather than one at a time.
 run_check() {
-  local name="$1" logfile="$2"
-  shift 2
-  "$@" >"$logfile" 2>&1 &
-  PIDS+=($!)
-  LOGS+=("$logfile")
-  NAMES+=("$name")
+  local name="$1"
+  shift
+  echo "pre-commit: [$name] running..."
+  if "$@"; then
+    echo "pre-commit: [$name] OK"
+  else
+    echo "pre-commit: [$name] FAILED"
+    FAILED+=("$name")
+  fi
 }
 
-TMPDIR=$(mktemp -d)
-trap 'rm -rf "$TMPDIR"' EXIT
-
-# Launch checks in parallel — only for changed languages
 if $RUN_PY; then
-  run_check "python" "$TMPDIR/py.log" bash -c "
+  run_check "python" bash -c "
     cd '$ROOT/python'
     echo '=== ruff check ===' && uv run ruff check src/ tests/ &&
     echo '=== ruff format ===' && uv run ruff format --check src/ tests/ &&
@@ -55,7 +59,7 @@ if $RUN_PY; then
 fi
 
 if $RUN_GO; then
-  run_check "go" "$TMPDIR/go.log" bash -c "
+  run_check "go" bash -c "
     cd '$ROOT/go'
     UNFORMATTED=\$(gofmt -l ./prompt/ ./examples/)
     if [ -n \"\$UNFORMATTED\" ]; then
@@ -67,7 +71,7 @@ if $RUN_GO; then
 fi
 
 if $RUN_TS; then
-  run_check "typescript" "$TMPDIR/ts.log" bash -c "
+  run_check "typescript" bash -c "
     cd '$ROOT/typescript'
     echo '=== tsc ===' && npx tsc --noEmit &&
     echo '=== biome ===' && npx biome check src/ tests/ &&
@@ -76,7 +80,7 @@ if $RUN_TS; then
 fi
 
 if $RUN_RS; then
-  run_check "rust" "$TMPDIR/rs.log" bash -c "
+  run_check "rust" bash -c "
     cd '$ROOT/rust'
     echo '=== fmt ===' && cargo fmt -- --check &&
     echo '=== clippy ===' && cargo clippy -- -D warnings &&
@@ -84,15 +88,10 @@ if $RUN_RS; then
   "
 fi
 
-# Wait for all and collect results
-for i in "${!PIDS[@]}"; do
-  if ! wait "${PIDS[$i]}"; then
-    FAIL=1
-    echo "pre-commit: [${NAMES[$i]}] FAILED"
-    cat "${LOGS[$i]}"
-  else
-    echo "pre-commit: [${NAMES[$i]}] OK"
-  fi
-done
+if [ ${#FAILED[@]} -ne 0 ]; then
+  echo "pre-commit: FAILED: ${FAILED[*]}"
+  exit 1
+fi
 
-exit $FAIL
+echo "pre-commit: all checks passed"
+exit 0
