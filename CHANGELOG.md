@@ -82,6 +82,12 @@ All notable changes to this project will be documented in this file.
 
 - Add pyright type checking to CI pipeline
 
+## v0.4.1 (2026-06-02)
+
+### Bug Fixes
+
+- **all**: install socket cleanup handlers before stdout handshake
+
 ## v0.4.0 (2026-06-02)
 
 ### Bug Fixes
