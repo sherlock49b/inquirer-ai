@@ -18,13 +18,13 @@ import json
 import os
 import sys
 
-# Force STDIO agent transport regardless of how the process was launched. The
-# scenario explicitly requires INQUIRER_AI_MODE=agent and
-# INQUIRER_AI_TRANSPORT=stdio (NO socket). Setting these before importing the
-# library guarantees the stdio agent path is taken.
-os.environ["INQUIRER_AI_MODE"] = "agent"
-os.environ["INQUIRER_AI_TRANSPORT"] = "stdio"
-os.environ.pop("INQUIRER_AI_SOCKET", None)
+# Honor the transport chosen by the runner. The runner sets INQUIRER_AI_MODE,
+# INQUIRER_AI_TRANSPORT (stdio or socket) and, for the socket pass,
+# INQUIRER_AI_SOCKET, before launching this process; we must not override them.
+# Default to the stdio agent path when launched standalone. Read at import time,
+# so they must be set before importing the library.
+os.environ.setdefault("INQUIRER_AI_MODE", "agent")
+os.environ.setdefault("INQUIRER_AI_TRANSPORT", "stdio")
 
 import inquirer_ai  # noqa: E402
 
