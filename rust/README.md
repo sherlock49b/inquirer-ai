@@ -9,11 +9,16 @@ stdout/stdin so that AI agents can drive CLI tools programmatically.
 
 ## Install
 
-Not yet published to crates.io. Add it as a git dependency:
+```bash
+cargo add inquirer-ai
+```
+
+Or as a git dependency (Cargo resolves the crate by package name within the
+repo — there is no `subdirectory` key):
 
 ```toml
 [dependencies]
-inquirer-ai = { git = "https://github.com/sherlock49b/inquirer-ai", subdirectory = "rust" }
+inquirer-ai = { git = "https://github.com/sherlock49b/inquirer-ai" }
 ```
 
 Requires Rust 1.85+.
