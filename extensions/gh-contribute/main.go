@@ -149,13 +149,32 @@ func doCreatePR() {
 		breakingNote = fmt.Sprintf("\n\n## Breaking Changes\n- %s", note)
 	}
 
-	upstream := detectUpstream()
+	// Determine the PR target. If an upstream remote exists but we cannot
+	// resolve it to an "owner/repo" slug (e.g. a non-GitHub host, an SSH/
+	// enterprise URL we do not recognise), abort rather than silently opening
+	// the PR against the fork (origin).
+	upstream := ""
+	if hasRemote("upstream") {
+		upstream = detectUpstream()
+		if upstream == "" {
+			rawURL, _ := exec.Command("git", "remote", "get-url", "upstream").Output()
+			fatal(fmt.Sprintf(
+				"Could not derive an 'owner/repo' from the upstream remote (%s).\n"+
+					"Only github.com HTTPS/SSH URLs are supported. Set the PR target manually with:\n"+
+					"  gh pr create --repo <owner>/<repo>",
+				strings.TrimSpace(string(rawURL))))
+		}
+	}
 
 	body := fmt.Sprintf("## Summary\n- %s\n\n## Test plan\n- %s%s",
 		summary, testPlan, breakingNote)
 
+	target := upstream
+	if target == "" {
+		target = "origin (no upstream remote configured)"
+	}
 	proceed, err := prompt.Confirm(prompt.ConfirmConfig{
-		Message: fmt.Sprintf("Push to origin/%s and create PR to %s?", branch, upstream),
+		Message: fmt.Sprintf("Push to origin/%s and create PR to %s?", branch, target),
 		Default: true,
 	})
 	if err != nil {
@@ -182,8 +201,19 @@ func doSyncFork() {
 		fatal("No upstream remote configured. Run 'Start a new contribution' first.")
 	}
 
+	// Refuse to force-push if origin and upstream point at the same repo —
+	// otherwise we would be force-pushing main onto the upstream itself.
+	originURL := remoteURL("origin")
+	upstreamURL := remoteURL("upstream")
+	if originURL != "" && sameRepo(originURL, upstreamURL) {
+		fatal(fmt.Sprintf(
+			"origin and upstream point at the same repository (%s).\n"+
+				"Refusing to force-push main onto the upstream. Configure a separate fork as 'origin' first.",
+			originURL))
+	}
+
 	proceed, err := prompt.Confirm(prompt.ConfirmConfig{
-		Message: "This will reset your main branch to upstream/main. Continue?",
+		Message: "This will reset main to upstream/main and FORCE-PUSH it to origin (overwriting origin/main). Continue?",
 		Default: true,
 	})
 	if err != nil {
@@ -216,7 +246,11 @@ func doCleanup() {
 		if err != nil {
 			fatal(err.Error())
 		}
-		branch = selected.(string)
+		s, ok := selected.(string)
+		if !ok {
+			fatal(fmt.Sprintf("Unexpected selection type %T (expected a branch name string)", selected))
+		}
+		branch = s
 	}
 
 	deleteRemote, err := prompt.Confirm(prompt.ConfirmConfig{
@@ -231,9 +265,39 @@ func doCleanup() {
 	}
 
 	run("git", "checkout", "main")
-	runSilent("git", "branch", "-D", branch)
-	runSilent("git", "push", "origin", "--delete", branch)
-	fmt.Printf("\nBranch '%s' cleaned up.\n", branch)
+
+	// Use the merge-safe `git branch -d` first. If the branch is not fully
+	// merged, git refuses; offer an explicit force (`-D`) rather than silently
+	// destroying unmerged work.
+	if err := tryRun("git", "branch", "-d", branch); err != nil {
+		fmt.Printf("Local branch '%s' is not fully merged: %v\n", branch, err)
+		force, ferr := prompt.Confirm(prompt.ConfirmConfig{
+			Message: fmt.Sprintf("Force-delete unmerged local branch '%s'? (git branch -D)", branch),
+			Default: false,
+		})
+		if ferr != nil {
+			fatal(ferr.Error())
+		}
+		if force {
+			if err := tryRun("git", "branch", "-D", branch); err != nil {
+				fmt.Printf("Failed to force-delete local branch '%s': %v\n", branch, err)
+			} else {
+				fmt.Printf("Force-deleted local branch '%s'.\n", branch)
+			}
+		} else {
+			fmt.Printf("Kept local branch '%s'.\n", branch)
+		}
+	} else {
+		fmt.Printf("Deleted local branch '%s'.\n", branch)
+	}
+
+	if err := tryRun("git", "push", "origin", "--delete", branch); err != nil {
+		fmt.Printf("Could not delete remote branch 'origin/%s': %v\n", branch, err)
+	} else {
+		fmt.Printf("Deleted remote branch 'origin/%s'.\n", branch)
+	}
+
+	fmt.Printf("\nCleanup of '%s' complete.\n", branch)
 }
 
 // --- helpers ---
@@ -270,6 +334,35 @@ func detectUpstream() string {
 	return ""
 }
 
+// remoteURL returns the configured URL for a remote, or "" if it has none.
+func remoteURL(name string) string {
+	out, _ := exec.Command("git", "remote", "get-url", name).Output()
+	return strings.TrimSpace(string(out))
+}
+
+// normalizeRepoURL reduces a git remote URL to a comparable "host/owner/repo"
+// form so two URLs for the same repository (https vs ssh, trailing .git, etc.)
+// compare equal.
+func normalizeRepoURL(url string) string {
+	u := strings.TrimSpace(url)
+	u = strings.TrimSuffix(u, "/")
+	u = strings.TrimSuffix(u, ".git")
+	u = strings.TrimPrefix(u, "https://")
+	u = strings.TrimPrefix(u, "http://")
+	u = strings.TrimPrefix(u, "ssh://")
+	u = strings.TrimPrefix(u, "git@")
+	// scp-style "git@host:owner/repo" -> "host/owner/repo"
+	u = strings.Replace(u, ":", "/", 1)
+	return strings.ToLower(u)
+}
+
+func sameRepo(a, b string) bool {
+	if a == "" || b == "" {
+		return false
+	}
+	return normalizeRepoURL(a) == normalizeRepoURL(b)
+}
+
 func listBranches() []string {
 	out, _ := exec.Command("git", "branch", "--format=%(refname:short)").Output()
 	var branches []string
@@ -299,8 +392,14 @@ func run(name string, args ...string) {
 	}
 }
 
-func runSilent(name string, args ...string) {
-	exec.Command(name, args...).Run()
+// tryRun runs a command, forwarding output to stderr, and returns its error
+// (instead of aborting the whole program) so callers can report per-step
+// outcomes and continue.
+func tryRun(name string, args ...string) error {
+	cmd := exec.Command(name, args...)
+	cmd.Stdout = os.Stderr
+	cmd.Stderr = os.Stderr
+	return cmd.Run()
 }
 
 func runGH(args ...string) {

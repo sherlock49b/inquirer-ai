@@ -2,6 +2,7 @@ package prompt
 
 import (
 	"fmt"
+	"math"
 	"strconv"
 )
 
@@ -36,25 +37,38 @@ func rawlistAgent(cfg RawlistConfig, choices []resolvedChoice, selectable []int)
 	payload := map[string]any{
 		"type":    "rawlist",
 		"message": cfg.Message,
-		"choices": marshalItems(cfg.Choices),
+		"default": nil,
+		"choices": selectablePayload(choices, selectable),
 	}
+	validValues := make([]any, 0, len(selectable))
+	for _, idx := range selectable {
+		validValues = append(validValues, choices[idx].value)
+	}
+
 	return AgentPromptWithRetry(payload, func(answer any) (any, error) {
 		var matched any
 		found := false
 
+		// A JSON number must be a 1-based integer index over the selectable
+		// list. A non-integer number (e.g. 1.5) is rejected, not truncated.
 		if num, ok := answer.(float64); ok {
+			if num != math.Trunc(num) {
+				return nil, newValidationError(ErrInvalidChoice, invalidChoiceMessage(answer, validValues))
+			}
 			idx := int(num)
 			if idx >= 1 && idx <= len(selectable) {
 				matched = choices[selectable[idx-1]].value
 				found = true
+			} else {
+				return nil, newValidationError(ErrInvalidChoice, invalidChoiceMessage(answer, validValues))
 			}
 		}
 
+		// Otherwise match by value (type-aware) or name over the selectable list.
 		if !found {
-			s := toString(answer)
 			for _, idx := range selectable {
 				c := choices[idx]
-				if s == toString(c.value) || s == c.name {
+				if matchesChoice(answer, c) {
 					matched = c.value
 					found = true
 					break
@@ -63,11 +77,23 @@ func rawlistAgent(cfg RawlistConfig, choices []resolvedChoice, selectable []int)
 		}
 
 		if !found {
-			return nil, fmt.Errorf("%w: %q", ErrInvalidChoice, toString(answer))
+			return nil, newValidationError(ErrInvalidChoice, invalidChoiceMessage(answer, validValues))
 		}
 
 		return applyCallbacks(matched, cfg.Validate, cfg.Filter)
 	})
+}
+
+// selectablePayload builds the agent payload "choices" list for prompts that
+// advertise only the selectable (non-separator, non-disabled) items, numbered
+// implicitly 1..n by their order. Used by rawlist per the parity contract.
+func selectablePayload(choices []resolvedChoice, selectable []int) []any {
+	result := make([]any, 0, len(selectable))
+	for _, idx := range selectable {
+		c := choices[idx]
+		result = append(result, map[string]any{"name": c.name, "value": c.value})
+	}
+	return result
 }
 
 func rawlistTerminal(cfg RawlistConfig, choices []resolvedChoice, selectable []int) (any, error) {

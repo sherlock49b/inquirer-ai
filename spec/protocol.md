@@ -9,12 +9,35 @@ The inquirer-ai agent protocol enables AI agents to drive interactive CLI tools 
 
 ## Mode Detection
 
-Agent mode is activated when any of the following is true:
+Mode and transport are resolved with the following precise rules (all values
+of `INQUIRER_AI_MODE` are matched case-insensitively):
 
-1. Environment variable `INQUIRER_AI_MODE` is set to `agent` (case-insensitive)
-2. stdin is not a TTY (e.g., piped input)
+1. **is_human** = `INQUIRER_AI_MODE == "human"`. Terminal mode is forced.
+2. **socket_requested** = `INQUIRER_AI_SOCKET` is set and non-empty, **OR**
+   `INQUIRER_AI_MODE == "agent"`.
+3. **is_agent** = (NOT is_human) AND (socket_requested OR stdin is not a TTY).
+4. Otherwise → terminal mode.
 
-Terminal mode is forced when `INQUIRER_AI_MODE` is set to `human`.
+This means:
+
+- A plain piped, non-TTY invocation with no `INQUIRER_AI_MODE`/`INQUIRER_AI_SOCKET`
+  stays in **stdio** agent transport (backwards compatible).
+- Setting `INQUIRER_AI_SOCKET` (even on a TTY) activates the **socket** transport.
+- `INQUIRER_AI_MODE=human` always forces terminal mode regardless of TTY or
+  socket settings.
+
+### Transport selection (when is_agent)
+
+Use the **socket** transport if and only if:
+
+- socket_requested is true, AND
+- `INQUIRER_AI_TRANSPORT` is **not** `"stdio"`, AND
+- Unix domain sockets are available on the platform.
+
+The socket path is `INQUIRER_AI_SOCKET` if set, otherwise `/tmp/inquirer-ai-{pid}.sock`.
+
+Otherwise, use the **stdio** agent transport (honoring `INQUIRER_AI_FD` /
+`INQUIRER_AI_FD_OUT` / `INQUIRER_AI_FD_IN`).
 
 ## Transport
 
@@ -167,28 +190,51 @@ The value type depends on the prompt type. Sending `null` as the answer uses the
 
 ## Validation Error and Retry
 
-When the agent sends an invalid answer, the tool sends a `validation_error` message followed by the same prompt again. The agent SHOULD retry with a corrected answer.
+There is a single **unified budget of exactly 3 answer attempts per prompt**, on
+both the stdio and socket transports. This budget is shared between type/coercion
+validation and any user-supplied `validate()` callback — there is **one** counter,
+not two independent ones.
+
+- Attempt 1 invalid → send `{"kind":"validation_error","message":...}` and re-send the prompt.
+- Attempt 2 invalid → send `{"kind":"validation_error","message":...}` and re-send the prompt.
+- Attempt 3 invalid → send `{"kind":"error","message":...}` and exit with a non-zero status.
+
+So a prompt emits **at most 2 `validation_error` messages, then 1 fatal `error`**.
 
 ```json
-{"kind": "validation_error", "message": "Invalid choice: 'java'. Valid: [\"python\", \"go\"]"}
+{"kind": "validation_error", "message": "Invalid choice: \"java\". Valid: [\"python\", \"go\"]"}
 ```
 
-The tool retries up to 3 times. After 3 failed attempts, the tool exits with a non-zero status.
+An empty line, EOF, or closed stdin is **not** a retry — it is an immediate fatal
+abort (see Fatal Error below).
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `kind` | string | yes | Always `"validation_error"` |
 | `message` | string | yes | Human-readable error description |
 
+### Canonical error message strings
+
+These messages MUST be used verbatim across all implementations:
+
+| Condition | Message |
+|-----------|---------|
+| `checkbox` with no selection but required | `At least one choice is required` |
+| Answer line is not parseable as JSON | `Invalid JSON response: <detail>` |
+| Answer parsed but not an object, or missing the `"answer"` key | `Answer must be a JSON object with an "answer" field` |
+
 ## Fatal Error
 
-For unrecoverable errors (e.g., stdin closed mid-prompt):
+For unrecoverable errors (empty line / EOF / closed stdin, or the 3rd failed
+attempt):
 
 ```json
 {"kind": "error", "message": "stdin closed unexpectedly"}
 ```
 
-The program exits with a non-zero status after emitting this message.
+The program exits with a non-zero status after emitting this message. A
+non-`ValidationError` raised by a user `validate()` callback is caught and
+reported as `{"kind":"error",...}` before exit.
 
 ## Prompt Types
 
@@ -199,7 +245,8 @@ The program exits with a non-zero status after emitting this message.
 ```
 
 **Response**: `{"answer": "Alice"}` → returns `"Alice"`
-**Response**: `{"answer": null}` → returns default or `""`
+**Response**: `{"answer": null}` → returns the `default` (or `""` if unset)
+**Response**: `{"answer": ""}` → returns `""` verbatim (the default is applied **only** when the raw answer is `null`, never for an explicit empty string)
 
 ---
 
@@ -211,9 +258,11 @@ The program exits with a non-zero status after emitting this message.
 
 **Response**: `{"answer": true}` or `{"answer": false}`
 **Response**: `{"answer": "yes"}` → coerced to `true`
+**Response**: `{"answer": null}` → returns the prompt's `default` (a bool; the default itself defaults to `false`)
 
-Accepted truthy strings: `y`, `yes`, `true`, `1`
-Accepted falsy strings: `n`, `no`, `false`, `0`
+Accepted truthy strings (case-insensitive): `y`, `yes`, `true`, `1`
+Accepted falsy strings (case-insensitive): `n`, `no`, `false`, `0`
+Booleans are accepted as-is.
 
 ---
 
@@ -238,7 +287,11 @@ Accepted falsy strings: `n`, `no`, `false`, `0`
 
 **Response**: `{"answer": "python"}` — by value or by name
 
-Disabled choices are rejected. Separators are non-selectable display elements.
+Matching is **type-aware** (see [Value Matching](#value-matching)): the answer
+matches a choice's `value` only if it has the same JSON type and value, or it is a
+string exactly equal to the choice's `name`. Disabled choices are **rejected**
+(skipped from matching). Separators are non-selectable display elements (never
+matchable) and appear in the `choices` payload as separator objects.
 
 ---
 
@@ -262,7 +315,7 @@ Disabled choices are rejected. Separators are non-selectable display elements.
 }
 ```
 
-**Response**: `{"answer": ["docker", "tests"]}` — array of values or names
+**Response**: `{"answer": ["docker", "tests"]}` — array of values or names (type-aware match per element; disabled choices are rejected; separators are non-selectable and included in the payload). If a selection is required but none is given, the canonical error is `At least one choice is required`.
 
 ---
 
@@ -273,6 +326,7 @@ Disabled choices are rejected. Separators are non-selectable display elements.
 ```
 
 **Response**: `{"answer": "s3cret"}` → returns plain text
+**Response**: `{"answer": null}` → returns the prompt's `default` (`""` if unset)
 
 `mask` indicates the terminal display character. `null` means fully hidden. The agent receives and sends plain text regardless.
 
@@ -295,9 +349,33 @@ Disabled choices are rejected. Separators are non-selectable display elements.
 ```
 
 **Response**: `{"answer": 3000}` — integer or float
-**Response**: `{"answer": "3000"}` — string is parsed as number
+**Response**: `{"answer": "3000"}` — string is parsed as a number per the grammar below
 
-Validation enforces min/max bounds and float_allowed constraint.
+Coercion and validation proceed in this exact order:
+
+1. `null` and a `default` is present → use the default.
+2. JSON number (but **not** a boolean) → use it directly.
+3. JSON string → trim leading/trailing ASCII whitespace, then the remainder MUST
+   fully match the regex below, else `ValidationError: Not a valid number: <repr>`.
+   The validated string is parsed with the native float parser.
+
+   ```
+   ^[+-]?\d+(\.\d+)?([eE][+-]?\d+)?$
+   ```
+
+   (Optional sign; **required** integer part; optional `.fraction`; optional
+   exponent.) This **rejects** `"1_000"`, `"3abc"`, `"0x10"`, `".5"`, `"5."`,
+   `""`, `"+"`, and **accepts** `"1e3"` → 1000, `"  5  "` → 5, `"3.5"`, `"-2"`,
+   `"1E-3"`.
+4. Any other JSON type → `Expected a number, got <type>`.
+5. Non-finite values (NaN/Inf) are rejected → `Not a valid number`.
+6. If `float_allowed` is false: the value must be integral (`n == trunc(n)`),
+   else `Decimal numbers are not allowed`; it is then coerced to an integer.
+7. Finally, `min`/`max` bounds are enforced.
+
+The returned value may be language-idiomatic (e.g. a Python `int` for an integral
+result) as long as the accept/reject decision and the numeric value match across
+implementations.
 
 ---
 
@@ -308,8 +386,13 @@ Validation enforces min/max bounds and float_allowed constraint.
 ```
 
 **Response**: `{"answer": "Multi-line\ntext content"}` → returns text string
+**Response**: `{"answer": null}` → returns the `default` (an explicit `""` returns `""` verbatim)
 
-In terminal mode, opens `$VISUAL` or `$EDITOR`. In agent mode, the agent provides the text directly.
+In terminal mode, opens `$VISUAL` or `$EDITOR`. The editor command is split with
+quote-aware shell-word splitting and exec'd directly (no shell, no injection);
+the temp file is created with a randomized name, mode `0600`, `O_EXCL`/`create_new`
+(no clobber, no symlink follow), and removed on every exit path. In agent mode,
+the agent provides the text directly.
 
 ---
 
@@ -332,7 +415,14 @@ In terminal mode, opens `$VISUAL` or `$EDITOR`. In agent mode, the agent provide
 
 **Response**: `{"answer": "httpx"}` — by value or name
 
-The `choices` array contains the initial (unfiltered) results.
+Resolution: if the answer matches an advertised choice (type-aware `value` match
+**or** exact `name` match), return that choice's **value**; otherwise return the
+answer **verbatim** as a string. This keeps dynamic/async search sources safe —
+an answer that does not correspond to any advertised choice is still accepted.
+
+The `choices` array contains the initial (unfiltered) results. For an async/
+dynamic source, the socket transport advertises the resolved initial choices
+(never an empty array).
 
 ---
 
@@ -343,6 +433,7 @@ The `choices` array contains the initial (unfiltered) results.
   "kind": "prompt",
   "type": "rawlist",
   "message": "Pick a version",
+  "default": null,
   "step": 1,
   "total": 1,
   "choices": [
@@ -352,8 +443,15 @@ The `choices` array contains the initial (unfiltered) results.
 }
 ```
 
-**Response**: `{"answer": 1}` — by 1-based index
+**Response**: `{"answer": 1}` — by 1-based **integer** index
 **Response**: `{"answer": "3.13"}` — by value or name
+
+The index must be a 1-based **integer**; non-integer indices (e.g. `1.5`) are
+rejected (not truncated). The index range and value/name matching are over the
+**selectable** list only — that is, `choices` with separators and disabled
+choices removed. The `choices` array in the payload is exactly that selectable
+list, numbered `1..n` (separators and disabled choices are filtered out of both
+the payload and the indexing).
 
 ---
 
@@ -364,6 +462,7 @@ The `choices` array contains the initial (unfiltered) results.
   "kind": "prompt",
   "type": "expand",
   "message": "Conflict resolution",
+  "default": null,
   "step": 1,
   "total": 1,
   "choices": [
@@ -376,6 +475,9 @@ The `choices` array contains the initial (unfiltered) results.
 
 **Response**: `{"answer": "y"}` — by key, value, or name
 
+Keys are lowercased at construction, in the advertised payload, and when
+comparing the answer. A non-string `key` in a choice is an `InvalidChoiceError`.
+
 ---
 
 ### `path` — File/Directory Path
@@ -384,7 +486,12 @@ The `choices` array contains the initial (unfiltered) results.
 {"kind": "prompt", "type": "path", "message": "Output directory", "default": null, "only_directories": false, "step": 1, "total": 1}
 ```
 
-**Response**: `{"answer": "/home/user/project"}` → returns path string
+**Response**: `{"answer": "/home/user/project"}` → returns the path string **verbatim**
+**Response**: `{"answer": null}` → returns the `default` (an explicit `""` returns `""` verbatim)
+
+The returned value is returned exactly as given: no `~`/`$VAR` expansion, no
+`Clean`/normalization. In agent mode the path is **not** required to exist, and
+`only_directories` is advisory only.
 
 ---
 
@@ -402,7 +509,7 @@ The `choices` array contains the initial (unfiltered) results.
 }
 ```
 
-**Response**: `{"answer": "Python"}` — any string accepted, not constrained to choices
+**Response**: `{"answer": "Python"}` — any string is accepted and returned **verbatim** (unconstrained by `choices`); `null` returns the `default`
 
 ## Choice Object Schema
 
@@ -419,10 +526,28 @@ The `choices` array contains the initial (unfiltered) results.
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `name` | string | yes | Display text |
-| `value` | any | yes | Value returned when selected |
-| `disabled` | bool \| string | no | `true` or reason string to disable |
+| `value` | any | no | Value returned when selected; **defaults to `name`** if absent |
+| `disabled` | bool \| string | no | Disabled iff `true` **or** a non-empty string (see below) |
 | `short` | string | no | Abbreviated display after selection |
 | `description` | string | no | Context shown when choice is focused |
+
+### Disabled semantics
+
+A choice is **disabled** iff `disabled === true` **OR** `disabled` is a non-empty
+string. `false`, an absent field, and the empty string `""` all leave the choice
+**enabled**. Disabled choices are never matchable.
+
+### Value Matching
+
+Matching an agent answer against a choice is **type-aware**:
+
+- The answer matches a choice's `value` only if it has the **same JSON type and
+  value**. There is no string coercion: the string `"42"` does **not** match the
+  number `42`, and a boolean does **not** match a number (`true` ≠ `1`,
+  `false` ≠ `0`).
+- The answer **also** matches if it is a string **exactly equal** to the choice's
+  `name`.
+- Disabled choices and separators never match.
 
 ## Separator Object Schema
 
@@ -430,7 +555,10 @@ The `choices` array contains the initial (unfiltered) results.
 {"type": "separator", "text": "── Section ──"}
 ```
 
-Separators are non-selectable visual dividers in choice lists.
+Separators are non-selectable visual dividers in choice lists. They are accepted
+in this dict/object form at parse time everywhere, are never matchable, and are
+filtered out of the `rawlist` payload and indexing (but included as separator
+objects in `select`/`checkbox` payloads).
 
 ## Implementations
 

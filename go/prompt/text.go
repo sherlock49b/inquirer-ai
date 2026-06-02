@@ -26,10 +26,7 @@ func textAgent(cfg TextConfig) (string, error) {
 		"default": nilIfEmpty(cfg.Default),
 	}
 	raw, err := AgentPromptWithRetry(payload, func(answer any) (any, error) {
-		result := toString(answer)
-		if result == "" && cfg.Default != "" {
-			result = cfg.Default
-		}
+		result := resolveStringDefault(answer, cfg.Default)
 		return applyTextCallbacks(result, cfg)
 	})
 	if err != nil {
@@ -97,6 +94,15 @@ func toString(v any) string {
 		return ""
 	}
 	return fmt.Sprintf("%v", v)
+}
+
+// resolveStringDefault applies the default ONLY when the raw answer is nil
+// (absent). An explicit empty string answer is returned verbatim as "".
+func resolveStringDefault(answer any, def string) string {
+	if answer == nil {
+		return def
+	}
+	return toString(answer)
 }
 
 func nilIfEmpty(s string) any {

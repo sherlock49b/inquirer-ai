@@ -9,6 +9,11 @@ import (
 )
 
 func main() {
+	// Go has no atexit, so when running in agent/socket mode the socket file
+	// must be removed on normal exit explicitly. SIGINT and SIGTERM are
+	// handled automatically by the library; this defer covers normal returns.
+	defer prompt.Cleanup()
+
 	fmt.Println("\n  project-init (Go) v0.1.0")
 	fmt.Println("  Interactive project scaffolding")
 	fmt.Println()

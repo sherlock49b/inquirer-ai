@@ -64,10 +64,10 @@ fn select_agent(config: &SelectConfig, enabled: &[&Choice]) -> Result<Value> {
                 return Ok(c.value.clone());
             }
         }
-        let valid: Vec<&Value> = enabled.iter().map(|c| &c.value).collect();
-        Err(InquirerError::Validation(format!(
-            "Invalid choice: {answer}. Valid: {valid:?}"
-        )))
+        let valid = enabled.iter().map(|c| &c.value);
+        Err(InquirerError::Validation(
+            crate::prompts::invalid_choice_message(&answer, valid),
+        ))
     })
 }
 

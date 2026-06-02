@@ -79,7 +79,7 @@ fn text_filter_not_called_on_rejection() {
 
     // Simulate text_agent pattern: validate first, skip filter on error
     let result = "bad";
-    if let Err(_) = validate(result) {
+    if validate(result).is_err() {
         // Filter should NOT be called
     } else {
         let _ = filter(result.to_string());

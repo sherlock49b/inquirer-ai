@@ -1,4 +1,4 @@
-import { type Choice, type ChoiceItem, choiceToDict, isSeparator, parseChoice, type RawChoice } from "../choice.js";
+import { type Choice, type ChoiceItem, choiceToDict, invalidChoiceMessage, isSeparator, parseChoice, type RawChoice, valuesMatch } from "../choice.js";
 import { InvalidChoiceError, PromptAbortedError, ValidationError } from "../errors.js";
 import { type ListItem, runListPrompt } from "../terminal.js";
 import { ansi, getTheme, RESET } from "../theme.js";
@@ -33,12 +33,15 @@ export class SelectPrompt<V = unknown> extends BasePrompt<V> {
   }
 
   protected validateAnswer(value: unknown): V {
+    // Type-aware value match OR exact string-name match; disabled never match (R4).
     for (const c of this.choices) {
       if (c.disabled) continue;
-      if (value === c.value || value === c.name) return c.value;
+      if (valuesMatch(value, c.value) || (typeof value === "string" && value === c.name)) {
+        return c.value;
+      }
     }
     const valid = this.choices.filter((c) => !c.disabled).map((c) => c.value);
-    throw new ValidationError(`Invalid choice: ${JSON.stringify(value)}. Valid: ${JSON.stringify(valid)}`);
+    throw new ValidationError(invalidChoiceMessage(value, valid));
   }
 
   protected formatAnswer(value: V): string {

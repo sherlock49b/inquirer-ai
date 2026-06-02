@@ -22,7 +22,6 @@ def _is_json_dict(value: object) -> TypeGuard[dict[str, Any]]:
 _agent_handshake_sent = False
 _agent_handshake_ack: dict[str, Any] | None = None
 _agent_step = 0
-_agent_pushback_line: str | None = None
 
 
 class HandshakeMessage(TypedDict):
@@ -42,11 +41,10 @@ _MAX_VALIDATION_RETRIES = 3
 
 
 def _reset_agent_handshake() -> None:
-    global _agent_handshake_sent, _agent_handshake_ack, _agent_step, _agent_pushback_line
+    global _agent_handshake_sent, _agent_handshake_ack, _agent_step
     _agent_handshake_sent = False
     _agent_handshake_ack = None
     _agent_step = 0
-    _agent_pushback_line = None
 
 
 def _get_agent_out() -> TextIO:
@@ -76,16 +74,16 @@ def _get_agent_in() -> TextIO:
 
 
 def _send_agent_handshake() -> None:
-    global _agent_handshake_sent, _agent_handshake_ack, _agent_pushback_line
+    global _agent_handshake_sent
     if _agent_handshake_sent:
         return
     _agent_handshake_sent = True
-    from importlib.metadata import version
+    from inquirer_ai.version import get_version
 
     meta: HandshakeMessage = {
         "kind": "handshake",
         "protocol": "inquirer-ai",
-        "version": version("inquirer-ai"),
+        "version": get_version(),
         "format": "jsonl",
         "interaction": "sequential",
         "total": None,
@@ -142,11 +140,7 @@ class BasePrompt(ABC, Generic[T]):
         }
 
     def _read_agent_line(self) -> str:
-        global _agent_pushback_line, _agent_handshake_ack
-        if _agent_pushback_line is not None:
-            line = _agent_pushback_line
-            _agent_pushback_line = None
-            return line
+        global _agent_handshake_ack
         agent_in = _get_agent_in()
         line = agent_in.readline()
         line = line.strip()
@@ -168,38 +162,81 @@ class BasePrompt(ABC, Generic[T]):
         out.flush()
 
     def _execute_agent(self) -> T:
+        """Run one prompt over the stdio agent transport.
+
+        A single unified budget of ``_MAX_VALIDATION_RETRIES`` (3) total
+        attempts governs BOTH type-coercion failures and user ``validate()``
+        failures (mirroring the socket ``prompt_cycle`` path). The first two
+        invalid attempts emit ``validation_error``; the third emits a fatal
+        ``error`` and aborts. Filter runs only after validation succeeds.
+        """
         global _agent_step
         _send_agent_handshake()
+        # Advance the step ONCE per logical prompt; the retry loop below
+        # re-sends `_to_agent_dict()` (which reads `_agent_step`) on each
+        # validation retry, so every re-send reuses this same step value.
         _agent_step += 1
 
-        for attempt in range(_MAX_VALIDATION_RETRIES):
+        retries_used = 0
+        while retries_used < _MAX_VALIDATION_RETRIES:
             self._send_agent_json(self._to_agent_dict())
 
             line = self._read_agent_line()
             if not line:
+                # Empty line / EOF / closed stdin => immediate fatal abort (not a retry).
                 msg = 'No response received (stdin closed). Expected JSON like: {"answer": "<value>"}'
                 self._send_agent_json({"kind": "error", "message": msg})
                 raise PromptAbortedError(msg)
+
             try:
                 raw_response: Any = json.loads(line)
             except json.JSONDecodeError as e:
-                raise ValidationError(f'Invalid JSON response: {e}. Expected JSON like: {{"answer": "<value>"}}') from e
+                if not self._agent_retry(f"Invalid JSON response: {e}", retries_used):
+                    raise ValidationError(f"Invalid JSON response: {e}") from e
+                retries_used += 1
+                continue
+
             if not _is_json_dict(raw_response) or "answer" not in raw_response:
-                raise ValidationError(
-                    f'Response must be a JSON object with an "answer" key, '
-                    f'e.g. {{"answer": "<value>"}}. Got: {line.strip()}'
-                )
+                msg = 'Answer must be a JSON object with an "answer" field'
+                if not self._agent_retry(msg, retries_used):
+                    raise ValidationError(msg)
+                retries_used += 1
+                continue
+
             answer: Any = raw_response["answer"]
             try:
-                return self._validate_answer(answer)
+                result = self._validate_answer(answer)
+                error = self._run_user_validation(result)
             except ValidationError as e:
-                if attempt < _MAX_VALIDATION_RETRIES - 1:
-                    self._send_agent_json({"kind": "validation_error", "message": str(e)})
-                    continue
-                raise
+                if not self._agent_retry(str(e), retries_used):
+                    raise
+                retries_used += 1
+                continue
+            if error:
+                if not self._agent_retry(error, retries_used):
+                    raise ValidationError(error)
+                retries_used += 1
+                continue
+
+            if self.filter_fn:
+                result = self.filter_fn(result)
+            return result
 
         # Should not reach here, but satisfy type checker
         raise ValidationError("Maximum validation retries exceeded")  # pragma: no cover
+
+    def _agent_retry(self, message: str, retries_used: int) -> bool:
+        """Emit a validation_error and report whether a retry remains.
+
+        Returns True when another attempt is allowed (a ``validation_error``
+        was sent), or False when the budget is exhausted — in which case the
+        caller emits the fatal ``error`` and raises.
+        """
+        if retries_used + 1 >= _MAX_VALIDATION_RETRIES:
+            self._send_agent_json({"kind": "error", "message": message})
+            return False
+        self._send_agent_json({"kind": "validation_error", "message": message})
+        return True
 
     def _run_user_validation(self, value: T) -> str | None:
         if not self.validate_fn:
@@ -216,30 +253,37 @@ class BasePrompt(ABC, Generic[T]):
             return result
         return "Validation failed"
 
-    def _handle_validation_error_loop(self, error: str, is_agent: bool, retries: int) -> int:
-        """Handle a validation error during the execute loop.
-
-        Returns the updated retry count.  Raises ValidationError when
-        the agent-mode retry budget is exhausted.
-        """
-        from inquirer_ai.theme import RESET, get_theme
-
-        if is_agent:
-            retries += 1
-            if retries >= _MAX_VALIDATION_RETRIES:
-                raise ValidationError(error)
-            self._send_agent_json({"kind": "validation_error", "message": error})
-            return retries
-        t = get_theme()
-        print(f"{t.ansi(t.error)}  {error}{RESET}")
-        return retries
-
     def _print_success(self, result: T) -> None:
         from inquirer_ai.theme import RESET, get_theme
 
         t = get_theme()
         display = self.transformer(result) if self.transformer else self._format_answer(result)
         print(f"{t.ansi(t.success)}{t.sym_success}{RESET} {self.message} {t.ansi(t.answer)}{display}{RESET}")
+
+    def _terminal_result(self) -> T:
+        """Run a terminal prompt, applying user validate() then filter().
+
+        ``validate()`` runs on the coerced value BEFORE ``filter()`` (R11).
+        Prompts that implement their own retry loop already call
+        ``_run_user_validation`` themselves; re-running it here is idempotent
+        for an accepted value.
+        """
+        from inquirer_ai.theme import RESET, get_theme
+
+        while True:
+            try:
+                result = self._execute_terminal()
+            except EOFError:
+                raise PromptAbortedError("Prompt aborted (stdin closed)") from None
+            error = self._run_user_validation(result)
+            if error:
+                t = get_theme()
+                print(f"{t.ansi(t.error)}  {error}{RESET}")
+                continue
+            if self.filter_fn:
+                result = self.filter_fn(result)
+            self._print_success(result)
+            return result
 
     def execute(self) -> T:
         from inquirer_ai.socket_transport import get_socket_transport
@@ -253,27 +297,12 @@ class BasePrompt(ABC, Generic[T]):
                 user_validate=self._run_user_validation,
             )
 
-        agent = is_agent_mode()
+        if is_agent_mode():
+            # _execute_agent applies a single unified retry budget covering
+            # validate() and filter() — do not re-run them here.
+            return self._execute_agent()
 
-        retries = 0
-        while True:
-            try:
-                result = self._execute_agent() if agent else self._execute_terminal()
-            except EOFError:
-                raise PromptAbortedError("Prompt aborted (stdin closed)") from None
-
-            error = self._run_user_validation(result)
-            if error:
-                retries = self._handle_validation_error_loop(error, agent, retries)
-                continue
-
-            if self.filter_fn:
-                result = self.filter_fn(result)
-
-            if not agent:
-                self._print_success(result)
-
-            return result
+        return self._terminal_result()
 
     async def _read_agent_line_async(self) -> str:
         loop = asyncio.get_running_loop()
@@ -287,24 +316,26 @@ class BasePrompt(ABC, Generic[T]):
         return self._execute_terminal()
 
     async def execute_async(self) -> T:
-        agent = is_agent_mode()
+        if is_agent_mode():
+            return await self._execute_agent_async()
 
-        retries = 0
+        from inquirer_ai.theme import RESET, get_theme
+
         while True:
             try:
-                result = await self._execute_agent_async() if agent else await self._execute_terminal_async()
+                result = await self._execute_terminal_async()
             except EOFError:
                 raise PromptAbortedError("Prompt aborted (stdin closed)") from None
 
             error = self._run_user_validation(result)
             if error:
-                retries = self._handle_validation_error_loop(error, agent, retries)
+                t = get_theme()
+                print(f"{t.ansi(t.error)}  {error}{RESET}")
                 continue
 
             if self.filter_fn:
                 result = self.filter_fn(result)
 
-            if not agent:
-                self._print_success(result)
+            self._print_success(result)
 
             return result

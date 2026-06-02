@@ -3,7 +3,7 @@ use crate::errors::{InquirerError, Result};
 use crate::mode::is_agent_mode;
 use crate::terminal::format_success;
 use serde_json::{json, Value};
-use std::fs;
+use std::io::{Read, Write};
 use std::process::Command;
 
 pub struct EditorConfig {
@@ -51,23 +51,28 @@ fn editor_terminal(config: &EditorConfig) -> Result<String> {
         .or_else(|_| std::env::var("EDITOR"))
         .unwrap_or_else(|_| "vi".to_string());
 
-    let dir = std::env::temp_dir();
-    let tmp_path = dir.join(format!("inquirer-edit{}", config.postfix));
-
-    if let Some(d) = &config.default {
-        fs::write(&tmp_path, d)?;
-    } else {
-        fs::write(&tmp_path, "")?;
-    }
-
-    let parts: Vec<&str> = editor_cmd.split_whitespace().collect();
+    // Quote-aware shell-word split, then exec WITHOUT a shell (no injection).
+    let parts = shell_words::split(&editor_cmd)
+        .map_err(|e| InquirerError::Editor(format!("Invalid $EDITOR/$VISUAL: {e}")))?;
     let (cmd, args) = parts
         .split_first()
         .ok_or_else(|| InquirerError::Editor("Empty EDITOR command".into()))?;
 
+    // Secure temp file: randomized name, mode 0600, created with O_EXCL (no
+    // symlink follow, no clobber), removed on EVERY exit path via Drop.
+    let mut named = build_temp_file(&config.postfix)?;
+
+    if let Some(d) = &config.default {
+        named
+            .as_file_mut()
+            .write_all(d.as_bytes())
+            .map_err(InquirerError::Io)?;
+        named.as_file_mut().flush().map_err(InquirerError::Io)?;
+    }
+
     let status = Command::new(cmd)
         .args(args)
-        .arg(&tmp_path)
+        .arg(named.path())
         .status()
         .map_err(|_| {
             InquirerError::Editor(format!(
@@ -76,16 +81,43 @@ fn editor_terminal(config: &EditorConfig) -> Result<String> {
         })?;
 
     if !status.success() {
-        let _ = fs::remove_file(&tmp_path);
+        // `named` is dropped here, removing the temp file.
         return Err(InquirerError::Editor(format!(
             "Editor exited with code {}",
             status.code().unwrap_or(-1)
         )));
     }
 
-    let content = fs::read_to_string(&tmp_path)?;
-    let _ = fs::remove_file(&tmp_path);
+    // Re-read from the start: the editor may have rewritten the file.
+    let mut content = String::new();
+    {
+        let mut f = std::fs::File::open(named.path()).map_err(InquirerError::Io)?;
+        f.read_to_string(&mut content).map_err(InquirerError::Io)?;
+    }
+    // `named` is dropped at end of scope, removing the temp file on success too.
 
     eprintln!("{}", format_success(&config.message, "(editor)"));
     Ok(content)
+}
+
+/// Create a secure temporary file with a randomized name, mode 0600, created
+/// with O_EXCL (no clobber, no symlink follow), using the configured postfix
+/// as the file suffix.
+fn build_temp_file(postfix: &str) -> Result<tempfile::NamedTempFile> {
+    let mut builder = tempfile::Builder::new();
+    builder.prefix("inquirer-edit-").suffix(postfix);
+    let named = builder
+        .tempfile()
+        .map_err(|e| InquirerError::Editor(format!("Failed to create temp file: {e}")))?;
+    // tempfile creates with O_EXCL and 0600 on unix; set the mode explicitly
+    // to be robust against umask differences.
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        named
+            .as_file()
+            .set_permissions(std::fs::Permissions::from_mode(0o600))
+            .map_err(InquirerError::Io)?;
+    }
+    Ok(named)
 }

@@ -1,0 +1,5 @@
+# Build artifacts from the conformance driver projects — never commit these.
+drivers/rust/target/
+drivers/**/node_modules/
+drivers/**/dist/
+*.tmp

@@ -56,3 +56,18 @@ def test_terminal_mode(monkeypatch):
     )
     p = PathPrompt("Select a file")
     assert p.execute() == "/etc/hosts"
+
+
+def test_returned_verbatim_no_expansion():
+    # R5: the answer is returned verbatim — no ~/$VAR expansion, no normalize.
+    p = PathPrompt("Select a file")
+    assert p._validate_answer("~/foo/../bar") == "~/foo/../bar"
+    assert p._validate_answer("$HOME/x") == "$HOME/x"
+    assert p._validate_answer("./a//b/") == "./a//b/"
+
+
+def test_explicit_empty_string_verbatim_not_default():
+    # An explicit "" returns "" verbatim; default applies only on null (R5).
+    p = PathPrompt("Select a file", default="/tmp")
+    assert p._validate_answer("") == ""
+    assert p._validate_answer(None) == "/tmp"

@@ -1,0 +1,13 @@
+[package]
+name = "conformance-driver-rust"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[[bin]]
+name = "conformance-driver-rust"
+path = "src/main.rs"
+
+[dependencies]
+inquirer-ai = { path = "../../../rust" }
+serde_json = "1"

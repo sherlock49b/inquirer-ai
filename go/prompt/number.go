@@ -3,8 +3,16 @@ package prompt
 import (
 	"fmt"
 	"math"
+	"regexp"
 	"strconv"
+	"strings"
 )
+
+// numberGrammar is the strict numeric-string grammar shared across all
+// language implementations: optional sign, required integer part, optional
+// fraction, optional exponent. It rejects "1_000", "3abc", "0x10", ".5",
+// "5.", "", "+", and accepts "1e3", "  5  " (after trim), "3.5", "-2", "1E-3".
+var numberGrammar = regexp.MustCompile(`^[+-]?\d+(\.\d+)?([eE][+-]?\d+)?$`)
 
 // NumberConfig configures a numeric input prompt with optional bounds.
 type NumberConfig struct {
@@ -116,36 +124,50 @@ func numberTerminal(cfg NumberConfig) (float64, error) {
 	}
 }
 
+// isASCIISpace reports whether r is an ASCII whitespace character (space, tab,
+// newline, carriage return, vertical tab, form feed).
+func isASCIISpace(r rune) bool {
+	switch r {
+	case ' ', '\t', '\n', '\r', '\v', '\f':
+		return true
+	default:
+		return false
+	}
+}
+
 func validateNumber(v any, cfg NumberConfig) (float64, error) {
 	var num float64
 	switch val := v.(type) {
 	case float64:
 		if math.IsNaN(val) || math.IsInf(val, 0) {
-			return 0, fmt.Errorf("%w: not a valid number", ErrValidation)
+			return 0, fmt.Errorf("%w: Not a valid number", ErrValidation)
 		}
 		num = val
 	case int:
 		num = float64(val)
 	case string:
-		var err error
-		num, err = strconv.ParseFloat(val, 64)
-		if err != nil {
-			return 0, fmt.Errorf("%w: not a valid number: %q", ErrValidation, val)
+		// Trim leading/trailing ASCII whitespace, then the remainder MUST
+		// fully match the numeric grammar before parsing.
+		trimmed := strings.TrimFunc(val, isASCIISpace)
+		if !numberGrammar.MatchString(trimmed) {
+			return 0, fmt.Errorf("%w: Not a valid number: %q", ErrValidation, val)
 		}
-		if math.IsNaN(num) || math.IsInf(num, 0) {
-			return 0, fmt.Errorf("%w: not a valid number: %q", ErrValidation, val)
+		parsed, err := strconv.ParseFloat(trimmed, 64)
+		if err != nil || math.IsNaN(parsed) || math.IsInf(parsed, 0) {
+			return 0, fmt.Errorf("%w: Not a valid number: %q", ErrValidation, val)
 		}
+		num = parsed
 	case nil:
 		if cfg.Default != nil {
 			return *cfg.Default, nil
 		}
-		return 0, fmt.Errorf("%w: expected a number", ErrValidation)
+		return 0, fmt.Errorf("%w: Expected a number, got nil", ErrValidation)
 	default:
-		return 0, fmt.Errorf("%w: expected a number, got %T", ErrValidation, v)
+		return 0, fmt.Errorf("%w: Expected a number, got %T", ErrValidation, v)
 	}
 
 	if !cfg.FloatAllowed && num != math.Trunc(num) {
-		return 0, fmt.Errorf("%w: decimal numbers are not allowed", ErrValidation)
+		return 0, fmt.Errorf("%w: Decimal numbers are not allowed", ErrValidation)
 	}
 	if cfg.Min != nil && num < *cfg.Min {
 		return 0, fmt.Errorf("%w: must be at least %g", ErrValidation, *cfg.Min)

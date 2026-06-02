@@ -116,8 +116,9 @@ npm install inquirer-ai    # TypeScript / Node.js
 
 ```bash
 cargo add inquirer-ai      # Rust (crates.io)
-# or as a git dependency in Cargo.toml:
-# inquirer-ai = { git = "https://github.com/sherlock49b/inquirer-ai", subdirectory = "rust" }
+# or as a git dependency in Cargo.toml (Cargo locates the crate by package
+# name within the repo — there is no "subdirectory" key):
+# inquirer-ai = { git = "https://github.com/sherlock49b/inquirer-ai" }
 ```
 
 ## Quick Start
@@ -163,7 +164,7 @@ let proceed = confirm(ConfirmConfig { message: "Create project?".into(), ..Defau
 
 | Type | Human UI | Agent Response |
 |------|----------|----------------|
-| `text` | Free text input | `{"answer": "hello"}` |
+| `text` [^1] | Free text input | `{"answer": "hello"}` |
 | `confirm` | Y/n prompt | `{"answer": true}` |
 | `select` | Arrow-key list | `{"answer": "value"}` |
 | `checkbox` | Space to toggle | `{"answer": ["a","b"]}` |
@@ -175,6 +176,8 @@ let proceed = confirm(ConfirmConfig { message: "Create project?".into(), ..Defau
 | `expand` | Single key (y/n/a) | `{"answer": "y"}` |
 | `path` | Tab completion | `{"answer": "/home/user"}` |
 | `autocomplete` | Suggestions | `{"answer": "word"}` |
+
+[^1]: The `text` API name maps to the wire `type` `"input"` in the agent protocol (e.g. `{"kind":"prompt","type":"input",...}`).
 
 ## Rich Choices
 
@@ -251,7 +254,7 @@ Each prompt is a separate socket connection. Agents interact with `nc -U` or `so
 | | Python | Go | TypeScript | Rust |
 |---|---|---|---|---|
 | Prompt types | 12 | 12 | 12 | 12 |
-| Terminal UI | prompt_toolkit | bubbletea + lipgloss | ink | crossterm |
+| Terminal UI | prompt_toolkit | bubbletea + lipgloss | custom (readline + ANSI) | crossterm |
 | Agent protocol | JSONL | Same JSONL | Same JSONL | Same JSONL |
 | Tests | 473 | ~266 | 242 | 339 |
 | Async | `*_async()` | goroutines | native async/await | tokio |

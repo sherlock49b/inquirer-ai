@@ -387,7 +387,12 @@ import sys; print(f"RESULT:{name}", file=sys.stderr, flush=True)
         env["INQUIRER_AI_SOCKET"] = sock_path
         env["INQUIRER_AI_MODE"] = "human"
         proc = subprocess.Popen(
-            [PYTHON, "-c", "from inquirer_ai.mode import is_socket_mode; print(is_socket_mode())"],
+            [
+                PYTHON,
+                "-c",
+                "from inquirer_ai.socket_transport import get_socket_transport; "
+                "print(get_socket_transport() is not None)",
+            ],
             env=env,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,

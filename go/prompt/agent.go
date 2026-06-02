@@ -71,11 +71,23 @@ func getScanner() *bufio.Scanner {
 	return stdinScanner
 }
 
+// AgentSend advances the global logical-prompt step by one and emits the
+// prompt frame at that step. Use it for a brand-new logical prompt. Validation
+// re-sends of the SAME logical prompt must reuse the step value via
+// agentSendAtStep so the "step" field is identical across a prompt and all of
+// its retries (it must never exceed "total").
 func AgentSend(payload map[string]any) error {
-	sendHandshake()
 	agentStep++
+	return agentSendAtStep(payload, agentStep)
+}
+
+// agentSendAtStep emits a prompt frame at an explicit logical step without
+// advancing the global counter. It is used to re-send a prompt after a
+// validation error so the re-send keeps the original step value.
+func agentSendAtStep(payload map[string]any, step int) error {
+	sendHandshake()
 	payload["kind"] = "prompt"
-	payload["step"] = agentStep
+	payload["step"] = step
 	payload["total"] = nil
 	data, err := json.Marshal(payload)
 	if err != nil {
@@ -92,10 +104,17 @@ func AgentReceive() (any, error) {
 			if err := scanner.Err(); err != nil {
 				return nil, fmt.Errorf("%w: stdin: %v", ErrAborted, err)
 			}
+			// EOF / closed stdin is an immediate fatal abort, not a retry.
 			return nil, fmt.Errorf("%w: stdin closed", ErrAborted)
 		}
 
 		line := strings.TrimRight(scanner.Text(), "\r")
+		// An empty / blank line is treated as EOF: immediate fatal abort, not a
+		// retryable invalid-JSON error (R1).
+		if strings.TrimSpace(line) == "" {
+			return nil, fmt.Errorf("%w: empty answer line", ErrAborted)
+		}
+
 		var resp map[string]any
 		if err := json.Unmarshal([]byte(line), &resp); err != nil {
 			return nil, fmt.Errorf("%w: %v. Expected JSON like: {\"answer\": \"<value>\"}", ErrInvalidJSON, err)
@@ -121,26 +140,48 @@ func AgentReceive() (any, error) {
 // If socket transport is active, the prompt cycle is handled over the Unix
 // socket instead of stdin/stdout.
 func AgentPromptWithRetry(payload map[string]any, validate func(any) (any, error)) (any, error) {
-	// Check for socket transport first.
+	// Check for socket transport first. If socket init failed (e.g. a refused
+	// non-socket path or an invalid INQUIRER_AI_SOCKET), surface that error
+	// rather than silently falling back to stdio.
 	if st := GetSocketTransport(); st != nil {
 		return st.PromptCycle(payload, validate)
 	}
+	if err := SocketTransportError(); err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrPrompt, err)
+	}
 
+	// Single unified retry budget: 3 total answer attempts. Attempts 1 and 2
+	// failing validation emit a validation_error; attempt 3 (or any receive
+	// failure such as EOF / closed stdin / invalid JSON) emits a fatal
+	// {"kind":"error"} and returns a non-nil error (R1, go-prompts-8).
+	//
+	// "step" is the 1-based LOGICAL prompt index: it advances ONCE per logical
+	// prompt, and every validation re-send of that prompt reuses the same step
+	// value so it never exceeds "total".
 	const maxRetries = 3
+	sendHandshake()
+	agentStep++
+	step := agentStep
 	for attempt := 0; attempt < maxRetries; attempt++ {
-		if err := AgentSend(payload); err != nil {
+		if err := agentSendAtStep(payload, step); err != nil {
 			return nil, err
 		}
 		answer, err := AgentReceive()
 		if err != nil {
+			// EOF / closed stdin / malformed protocol line: immediate fatal
+			// abort with a {"kind":"error"} message.
+			_ = AgentSendError(AgentMessage(err))
 			return nil, err
 		}
 		result, err := safeCallValidate(validate, answer)
 		if err != nil {
+			// The agent-facing message is the bare validation text (no
+			// "prompt error: validation failed: " wrapper).
 			if attempt < maxRetries-1 {
-				AgentSendValidationError(err.Error())
+				_ = AgentSendValidationError(AgentMessage(err))
 				continue
 			}
+			_ = AgentSendError(AgentMessage(err))
 			return nil, err
 		}
 		return result, nil

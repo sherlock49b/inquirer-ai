@@ -28,16 +28,22 @@ impl ExpandConfig {
     }
 }
 
-pub fn expand(config: ExpandConfig) -> Result<Value> {
+pub fn expand(mut config: ExpandConfig) -> Result<Value> {
     if config.choices.is_empty() {
         return Err(InquirerError::InvalidChoice(
             "choices cannot be empty".into(),
         ));
     }
 
+    // Lowercase keys at construction so the advertised payload and answer
+    // comparison are all case-insensitive and consistent (R4).
+    for c in &mut config.choices {
+        c.key = c.key.to_lowercase();
+    }
+
     let mut seen = std::collections::HashSet::new();
     for c in &config.choices {
-        if !seen.insert(&c.key) {
+        if !seen.insert(c.key.clone()) {
             return Err(InquirerError::InvalidChoice(format!(
                 "Duplicate expand key: {}",
                 c.key
@@ -61,9 +67,14 @@ pub fn validate_expand(value: &Value, choices: &[ExpandChoice]) -> Result<Value>
             }
         }
     }
-    Err(InquirerError::Validation(format!(
-        "Invalid choice: {value}"
-    )))
+    // Valid options are the (lowercased) keys, each encoded as compact JSON.
+    let key_values: Vec<Value> = choices
+        .iter()
+        .map(|c| Value::String(c.key.clone()))
+        .collect();
+    Err(InquirerError::Validation(
+        crate::prompts::invalid_choice_message(value, &key_values),
+    ))
 }
 
 fn expand_agent(config: &ExpandConfig) -> Result<Value> {

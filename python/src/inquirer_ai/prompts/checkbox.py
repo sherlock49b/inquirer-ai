@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+import json
 from typing import Any, TypeGuard
 
 from prompt_toolkit.key_binding import KeyBindings, KeyPressEvent
 
-from inquirer_ai.choice import Choice, ChoiceItem, RawChoice, Separator
+from inquirer_ai.choice import Choice, ChoiceItem, RawChoice, Separator, value_matches
 from inquirer_ai.exceptions import ValidationError
 from inquirer_ai.prompts.choice_base import ChoiceBasePrompt, PromptState
 from inquirer_ai.theme import get_theme
@@ -29,7 +30,10 @@ class CheckboxPrompt(ChoiceBasePrompt[list[Any]]):
                 if (
                     isinstance(item, Choice)
                     and not item.disabled
-                    and (item.value in self.default or item.name in self.default)
+                    and (
+                        any(value_matches(d, item.value) for d in self.default)
+                        or any(isinstance(d, str) and d == item.name for d in self.default)
+                    )
                 ):
                     self._checked.add(i)
 
@@ -47,18 +51,17 @@ class CheckboxPrompt(ChoiceBasePrompt[list[Any]]):
         input_items = value
         result: list[Any] = []
         enabled = [c for c in self.choices if not c.disabled]
-        valid_values: set[Any] = {c.value for c in enabled}
-        valid_names: set[str] = {c.name for c in enabled}
+        valid_values: list[Any] = [c.value for c in enabled]
         for v in input_items:
-            if v in valid_values:
-                result.append(v)
-            elif v in valid_names:
-                for c in enabled:
-                    if c.name == v:
-                        result.append(c.value)
-                        break
-            else:
-                raise ValidationError(f"Invalid choice: {v!r}. Valid: {list(valid_values)}")
+            matched = False
+            for c in enabled:
+                if value_matches(v, c.value) or (isinstance(v, str) and v == c.name):
+                    result.append(c.value)
+                    matched = True
+                    break
+            if not matched:
+                valid_repr = ", ".join(json.dumps(val) for val in valid_values)
+                raise ValidationError(f"Invalid choice: {json.dumps(v)}. Valid: [{valid_repr}]")
         if self.required and not result:
             msg = self.required if isinstance(self.required, str) else "At least one choice is required"
             raise ValidationError(msg)

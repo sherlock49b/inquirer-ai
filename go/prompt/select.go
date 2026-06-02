@@ -50,21 +50,22 @@ func selectAgent(cfg SelectConfig, choices []resolvedChoice) (any, error) {
 		"choices": marshalItems(cfg.Choices),
 	}
 	return AgentPromptWithRetry(payload, func(answer any) (any, error) {
-		answerStr := toString(answer)
 		var matched any
 		found := false
+		var validValues []any
 		for _, c := range choices {
 			if !c.selectable {
 				continue
 			}
-			if answerStr == toString(c.value) || answerStr == c.name {
+			validValues = append(validValues, c.value)
+			if matchesChoice(answer, c) {
 				matched = c.value
 				found = true
 				break
 			}
 		}
 		if !found {
-			return nil, fmt.Errorf("%w: %q", ErrInvalidChoice, answerStr)
+			return nil, newValidationError(ErrInvalidChoice, invalidChoiceMessage(answer, validValues))
 		}
 		return applyCallbacks(matched, cfg.Validate, cfg.Filter)
 	})
@@ -111,7 +112,7 @@ func marshalItems(items []ChoiceItem) []any {
 		switch v := item.(type) {
 		case Choice:
 			m := map[string]any{"name": v.Name, "value": v.Value}
-			if v.Disabled != nil && v.Disabled != false {
+			if isDisabled(v.Disabled) {
 				m["disabled"] = v.Disabled
 			}
 			if v.Short != "" {

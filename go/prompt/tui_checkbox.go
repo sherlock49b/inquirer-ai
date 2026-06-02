@@ -29,7 +29,11 @@ func (m checkboxModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "down", "j":
 			m.cursor = moveCursor(m.cursor, 1, m.selectable, m.loop)
 		case " ":
-			m.checked[m.cursor] = !m.checked[m.cursor]
+			if m.checked[m.cursor] {
+				delete(m.checked, m.cursor)
+			} else {
+				m.checked[m.cursor] = true
+			}
 		case "a":
 			if len(m.checked) == len(m.selectable) {
 				m.checked = make(map[int]bool)
@@ -41,7 +45,7 @@ func (m checkboxModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "enter":
 			m.done = true
 			return m, tea.Quit
-		case "ctrl+c", "q":
+		case "ctrl+c":
 			m.aborted = true
 			return m, tea.Quit
 		}

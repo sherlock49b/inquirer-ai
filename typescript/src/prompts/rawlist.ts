@@ -1,4 +1,4 @@
-import { type Choice, choiceToDict, isSeparator, parseChoice, type RawChoice } from "../choice.js";
+import { type Choice, choiceToDict, invalidChoiceMessage, isSeparator, parseChoice, type RawChoice, valuesMatch } from "../choice.js";
 import { InvalidChoiceError, ValidationError } from "../errors.js";
 import { formatError, formatQuestion, readLine } from "../terminal.js";
 import { type BaseConfig, BasePrompt } from "./base.js";
@@ -8,6 +8,8 @@ export interface RawlistConfig extends BaseConfig<unknown> {
 }
 
 export class RawlistPrompt extends BasePrompt<unknown> {
+  // Selectable list = choices excluding separators AND disabled. Index range
+  // and matching operate over this list only (R5).
   private choices: Choice[];
 
   constructor(config: RawlistConfig) {
@@ -15,7 +17,7 @@ export class RawlistPrompt extends BasePrompt<unknown> {
     if (!config.choices.length) throw new InvalidChoiceError("choices cannot be empty");
     this.choices = config.choices
       .map(parseChoice)
-      .filter((c): c is Choice => !isSeparator(c));
+      .filter((c): c is Choice => !isSeparator(c) && !c.disabled);
     if (!this.choices.length) throw new InvalidChoiceError("choices cannot be empty");
   }
 
@@ -24,13 +26,24 @@ export class RawlistPrompt extends BasePrompt<unknown> {
   }
 
   protected validateAnswer(value: unknown): unknown {
-    if (typeof value === "number" && value >= 1 && value <= this.choices.length) {
-      return this.choices[value - 1]?.value;
+    const validValues = this.choices.map((c) => c.value);
+    // A numeric answer is a 1-based index over the selectable list. A
+    // non-integer index (e.g. 1.5) is rejected, not truncated (R5).
+    if (typeof value === "number") {
+      if (!Number.isInteger(value)) {
+        throw new ValidationError(invalidChoiceMessage(value, validValues));
+      }
+      if (value >= 1 && value <= this.choices.length) {
+        return this.choices[value - 1]?.value;
+      }
+      throw new ValidationError(invalidChoiceMessage(value, validValues));
     }
     for (const c of this.choices) {
-      if (value === c.value || value === c.name) return c.value;
+      if (valuesMatch(value, c.value) || (typeof value === "string" && value === c.name)) {
+        return c.value;
+      }
     }
-    throw new ValidationError(`Invalid choice: ${JSON.stringify(value)}`);
+    throw new ValidationError(invalidChoiceMessage(value, validValues));
   }
 
   protected formatAnswer(value: unknown): string {

@@ -43,7 +43,12 @@ fn confirm_agent(config: &ConfirmConfig) -> Result<bool> {
         "default": config.default,
     });
 
-    agent_prompt_with_retry(&payload, |answer| Ok(coerce_bool(&answer)))
+    let default = config.default;
+    agent_prompt_with_retry(&payload, move |answer| match answer {
+        // A null answer falls back to the prompt default (R5).
+        Value::Null => Ok(default),
+        other => Ok(coerce_bool(&other)),
+    })
 }
 
 fn confirm_terminal(config: &ConfirmConfig) -> Result<bool> {

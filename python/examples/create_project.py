@@ -1,6 +1,6 @@
 """A simple project scaffolding CLI built with inquirer-ai."""
 
-from inquirer_ai import checkbox, confirm, prompt, select, text
+from inquirer_ai import confirm, prompt, select
 
 
 def main() -> None:

@@ -12,9 +12,12 @@ import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
+from inquirer_ai.choice import Choice, value_matches
 from inquirer_ai.exceptions import ValidationError
 from inquirer_ai.prompts.confirm import ConfirmPrompt
 from inquirer_ai.prompts.number import NumberPrompt
+from inquirer_ai.prompts.rawlist import RawlistPrompt
+from inquirer_ai.prompts.select import SelectPrompt
 
 # ── Helpers ──
 
@@ -321,3 +324,50 @@ class TestValidateNumberProperties:
         result = validate_number(value)
         assert isinstance(result, (int, float))
         assert math.isfinite(result)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# 4. Numeric-string grammar (R2) — identical accept/reject across all 4 languages
+# ══════════════════════════════════════════════════════════════════════════════
+
+
+class TestNumberGrammarCrossLanguage:
+    """All four implementations apply the same numeric-string grammar (R2)."""
+
+    @pytest.mark.parametrize(
+        ("text", "expected"),
+        [("1e3", 1000), ("  5  ", 5), ("3.5", 3.5), ("-2", -2), ("1E-3", 0.001)],
+    )
+    def test_accepts(self, text, expected):
+        assert validate_number(text) == pytest.approx(expected)
+
+    @pytest.mark.parametrize("text", ["1_000", "3abc", "0x10", ".5", "5.", "", "+"])
+    def test_rejects(self, text):
+        with pytest.raises(ValidationError, match="Not a valid number"):
+            validate_number(text)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# 5. Type-aware value matching (R4) — string/number/bool never cross-match
+# ══════════════════════════════════════════════════════════════════════════════
+
+
+class TestTypedValueMatchingCrossLanguage:
+    def test_string_never_matches_number(self):
+        assert not value_matches("42", 42)
+
+    def test_bool_never_matches_number(self):
+        assert not value_matches(True, 1)
+        assert not value_matches(0, False)
+
+    def test_select_typed(self):
+        p = SelectPrompt("q", choices=[Choice(name="zero", value=0)])
+        assert p._validate_answer(0) == 0
+        with pytest.raises(ValidationError):
+            p._validate_answer(False)
+
+    def test_rawlist_index_not_bool(self):
+        p = RawlistPrompt("q", choices=["a", "b"])
+        assert p._validate_answer(1) == "a"
+        with pytest.raises(ValidationError):
+            p._validate_answer(True)

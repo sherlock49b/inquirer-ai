@@ -55,14 +55,19 @@ pub fn search(config: SearchConfig) -> Result<Value> {
 }
 
 fn search_agent(config: &SearchConfig) -> Result<Value> {
-    let initial: Vec<Value> = (config.source)("")
-        .iter()
+    // Resolve the initial (empty-term) choices once: these are advertised in
+    // the payload AND used to resolve the answer (match -> value).
+    let initial_choices: Vec<Choice> = (config.source)("")
+        .into_iter()
         .filter_map(|c| match c {
-            ChoiceItem::Choice(c) if !c.is_disabled() => {
-                Some(ChoiceItem::Choice(c.clone()).to_json())
-            }
+            ChoiceItem::Choice(c) if !c.is_disabled() => Some(c),
             _ => None,
         })
+        .collect();
+
+    let initial: Vec<Value> = initial_choices
+        .iter()
+        .map(|c| ChoiceItem::Choice(c.clone()).to_json())
         .collect();
 
     let payload = json!({
@@ -73,7 +78,17 @@ fn search_agent(config: &SearchConfig) -> Result<Value> {
         "choices": initial,
     });
 
-    agent_prompt_with_retry(&payload, Ok)
+    agent_prompt_with_retry(&payload, move |answer| {
+        // Type-aware value match OR exact name match against an advertised
+        // choice -> return that choice's value. Otherwise return the answer
+        // verbatim (dynamic-source-safe).
+        for c in &initial_choices {
+            if answer == c.value || answer.as_str() == Some(c.name.as_str()) {
+                return Ok(c.value.clone());
+            }
+        }
+        Ok(answer)
+    })
 }
 
 /// Message sent from a background search thread back to the render loop.

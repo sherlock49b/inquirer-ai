@@ -34,7 +34,9 @@ class TestValidatorExceptions:
 
     def _run(self, monkeypatch, validate_fn):
         monkeypatch.setenv("INQUIRER_AI_MODE", "agent")
-        monkeypatch.setattr("sys.stdin", io.StringIO(_HS_ACK + '{"answer": "x"}\n'))
+        # Supply enough answers to exhaust the unified retry budget so the
+        # converted validator error surfaces as the fatal ValidationError (R1).
+        monkeypatch.setattr("sys.stdin", io.StringIO(_HS_ACK + '{"answer": "x"}\n' * 3))
         monkeypatch.setattr("sys.stdout", io.StringIO())
         p = TextPrompt("q", validate=validate_fn)
         return p.execute()

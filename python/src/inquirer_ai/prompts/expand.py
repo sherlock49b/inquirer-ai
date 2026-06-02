@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from typing import Any
 
@@ -41,10 +42,13 @@ class ExpandPrompt(BasePrompt[Any]):
             return raw
         if "key" not in raw:
             raise InvalidChoiceError("ExpandChoice dict must have a 'key' field")
+        key = raw["key"]
+        if not isinstance(key, str):
+            raise InvalidChoiceError(f"ExpandChoice 'key' must be a string, got {type(key).__name__}")
         return ExpandChoice(
-            key=raw["key"].lower(),
-            name=raw.get("name", raw["key"]),
-            value=raw.get("value", raw["key"]),
+            key=key.lower(),
+            name=raw.get("name", key),
+            value=raw.get("value", key),
         )
 
     @property
@@ -57,7 +61,9 @@ class ExpandPrompt(BasePrompt[Any]):
             for c in self.expand_choices:
                 if lower == c.key or value == c.value or value == c.name:
                     return c.value
-        raise ValidationError(f"Invalid choice: {value!r}")
+        # Keys are already lowercased in _parse; advertise them as the valid set.
+        valid_repr = ", ".join(json.dumps(c.key) for c in self.expand_choices)
+        raise ValidationError(f"Invalid choice: {json.dumps(value)}. Valid: [{valid_repr}]")
 
     def _format_answer(self, value: Any) -> str:
         for c in self.expand_choices:

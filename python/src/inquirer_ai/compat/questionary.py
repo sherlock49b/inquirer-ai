@@ -18,6 +18,7 @@ All public questionary APIs used by commitizen are supported:
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Callable
 from typing import Any
 
@@ -74,10 +75,19 @@ class _LazyPrompt:
         return self._fn()
 
     async def ask_async(self) -> Any:
-        return self._fn()
+        try:
+            return await self._run_async()
+        except KeyboardInterrupt:
+            return None
 
     async def unsafe_ask_async(self) -> Any:
-        return self._fn()
+        return await self._run_async()
+
+    async def _run_async(self) -> Any:
+        # Do not block the event loop: run the (potentially blocking) prompt in
+        # an executor thread (pysock-7).
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(None, self._fn)
 
 
 def _convert_choices(raw_choices: list[Any]) -> list[Any]:
@@ -179,28 +189,39 @@ def prompt(
 ) -> dict[str, Any]:
     """questionary.prompt() compatible — processes a list of question dicts."""
     answers: dict[str, Any] = {}
-    for q in questions:
+    for idx, q in enumerate(questions):
         qtype = q.get("type", "input")
-        name = q.get("name", "")
+        # Unnamed questions must not collide on answers[""] — fall back to a
+        # positional key (pysock-6).
+        name = q.get("name") or str(idx)
         message = q.get("message", "")
 
+        # questionary's `when` is a predicate over the accumulated answers.
+        when_fn = q.get("when")
+        if when_fn is not None and not when_fn(answers):
+            continue
+
+        # Thread the standard callbacks to every branch (pysock-6).
+        common: dict[str, Any] = {}
+        if q.get("validate") is not None:
+            common["validate"] = q["validate"]
+        if q.get("filter") is not None:
+            common["filter"] = q["filter"]
+
         if qtype == "list":
-            raw_choices = q.get("choices", [])
-            converted = _convert_choices(raw_choices)
-            result = SelectPrompt(message, choices=converted).execute()
+            converted = _convert_choices(q.get("choices", []))
+            result = SelectPrompt(message, choices=converted, default=q.get("default"), **common).execute()
         elif qtype == "input":
-            filt = q.get("filter")
-            result = TextPrompt(message, filter=filt).execute()
+            result = TextPrompt(message, default=q.get("default") or None, **common).execute()
         elif qtype == "confirm":
-            default = q.get("default", True)
-            result = ConfirmPrompt(message, default=default).execute()
+            result = ConfirmPrompt(message, default=q.get("default", True), **common).execute()
         elif qtype == "checkbox":
             raw_choices = q.get("choices", [])
             converted = _convert_choices(raw_choices)
             defaults = _get_defaults(raw_choices)
-            result = CheckboxPrompt(message, choices=converted, default=defaults or None).execute()
+            result = CheckboxPrompt(message, choices=converted, default=defaults or None, **common).execute()
         else:
-            result = TextPrompt(message).execute()
+            result = TextPrompt(message, default=q.get("default") or None, **common).execute()
 
         answers[name] = result
 

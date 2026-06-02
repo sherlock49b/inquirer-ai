@@ -1,5 +1,4 @@
 from collections.abc import Awaitable, Callable, Sequence
-from importlib.metadata import version
 from typing import Any, TypeVar, overload
 
 from inquirer_ai.choice import Choice, RawChoice, Separator
@@ -19,8 +18,9 @@ from inquirer_ai.prompts.search import SearchPrompt
 from inquirer_ai.prompts.select import SelectPrompt
 from inquirer_ai.prompts.text import TextPrompt
 from inquirer_ai.theme import Theme, get_theme, set_theme
+from inquirer_ai.version import get_version
 
-__version__ = version("inquirer-ai")
+__version__ = get_version()
 
 V = TypeVar("V")
 

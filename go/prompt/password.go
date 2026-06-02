@@ -11,6 +11,7 @@ import (
 // PasswordConfig configures a masked password input prompt.
 type PasswordConfig struct {
 	Message  string
+	Default  string
 	Mask     string
 	Validate func(string) error
 }
@@ -30,10 +31,12 @@ func passwordAgent(cfg PasswordConfig) (string, error) {
 	payload := map[string]any{
 		"type":    "password",
 		"message": cfg.Message,
+		"default": nilIfEmpty(cfg.Default),
 		"mask":    cfg.Mask,
 	}
 	raw, err := AgentPromptWithRetry(payload, func(answer any) (any, error) {
-		result := toString(answer)
+		// A null answer resolves to the default (default "" if unset).
+		result := resolveStringDefault(answer, cfg.Default)
 		if cfg.Validate != nil {
 			if err := cfg.Validate(result); err != nil {
 				return nil, fmt.Errorf("%w: %v", ErrValidation, err)

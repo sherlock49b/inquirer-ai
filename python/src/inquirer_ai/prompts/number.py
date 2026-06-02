@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+import re
 from typing import Any
 
 from prompt_toolkit import prompt as pt_prompt
@@ -9,6 +10,13 @@ from prompt_toolkit.formatted_text import FormattedText
 from inquirer_ai.exceptions import ValidationError
 from inquirer_ai.prompts.base import BasePrompt
 from inquirer_ai.theme import RESET, get_theme
+
+# Numeric-string grammar (R2): optional sign; required integer part; optional
+# .fraction; optional exponent. Rejects "1_000", "3abc", "0x10", ".5", "5.",
+# "", "+". Accepts "1e3", "3.5", "-2", "1E-3".
+_NUMBER_RE = re.compile(r"^[+-]?\d+(\.\d+)?([eE][+-]?\d+)?$")
+# ASCII whitespace to strip (leading/trailing) before matching.
+_ASCII_WS = " \t\n\r\f\v"
 
 
 class NumberPrompt(BasePrompt[int | float]):
@@ -35,26 +43,36 @@ class NumberPrompt(BasePrompt[int | float]):
         return "number"
 
     def _validate_answer(self, value: Any) -> int | float:
+        # 1) null + default present -> default.
         if value is None and self.default is not None:
             return self.default
-        if isinstance(value, (int, float)) and not isinstance(value, bool):
-            if isinstance(value, float) and not math.isfinite(value):
-                raise ValidationError(f"Not a valid number: {value}")
+        num: int | float
+        if isinstance(value, bool):
+            # 4) bool is not a number.
+            raise ValidationError(f"Expected a number, got {type(value).__name__}")
+        elif isinstance(value, (int, float)):
+            # 2) JSON number (not boolean) -> use it.
             num = value
         elif isinstance(value, str):
-            try:
-                num = float(value) if "." in value else int(value)
-            except ValueError:
-                raise ValidationError(f"Not a valid number: {value!r}") from None
-            if isinstance(num, float) and not math.isfinite(num):
+            # 3) trim leading/trailing ASCII whitespace then enforce the grammar.
+            trimmed = value.strip(_ASCII_WS)
+            if not _NUMBER_RE.match(trimmed):
                 raise ValidationError(f"Not a valid number: {value!r}")
+            # Parse with the native float parser; return an int (language-idiomatic)
+            # for pure-integer forms (no fraction/exponent). Numeric value is
+            # identical across languages either way.
+            num = float(trimmed) if any(ch in trimmed for ch in ".eE") else int(trimmed)
         else:
+            # 4) other type.
             raise ValidationError(f"Expected a number, got {type(value).__name__}")
-        if not self.float_allowed and isinstance(num, float):
-            int_num = int(num)
-            if num != float(int_num):
+        # 5) reject non-finite (NaN/Inf).
+        if isinstance(num, float) and not math.isfinite(num):
+            raise ValidationError(f"Not a valid number: {value!r}")
+        # 6) if !float_allowed: require integral else error, then coerce to int.
+        if not self.float_allowed:
+            if isinstance(num, float) and not num.is_integer():
                 raise ValidationError("Decimal numbers are not allowed")
-            num = int_num
+            num = int(num)
         if self.min is not None and num < self.min:
             raise ValidationError(f"Must be at least {self.min}")
         if self.max is not None and num > self.max:

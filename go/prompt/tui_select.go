@@ -36,7 +36,7 @@ func (m selectModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "enter":
 			m.done = true
 			return m, tea.Quit
-		case "ctrl+c", "q":
+		case "ctrl+c":
 			m.aborted = true
 			return m, tea.Quit
 		}

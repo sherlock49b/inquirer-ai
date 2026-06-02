@@ -29,10 +29,7 @@ func autocompleteAgent(cfg AutocompleteConfig) (string, error) {
 		"choices": cfg.Choices,
 	}
 	raw, err := AgentPromptWithRetry(payload, func(answer any) (any, error) {
-		result := toString(answer)
-		if result == "" && cfg.Default != "" {
-			result = cfg.Default
-		}
+		result := resolveStringDefault(answer, cfg.Default)
 		if cfg.Validate != nil {
 			if err := cfg.Validate(result); err != nil {
 				return nil, fmt.Errorf("%w: %v", ErrValidation, err)

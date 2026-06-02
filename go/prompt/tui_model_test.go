@@ -300,17 +300,28 @@ func TestTuiModelSelectAbort(t *testing.T) {
 	}
 }
 
-func TestTuiModelSelectAbortQ(t *testing.T) {
+// 'q' must NOT abort (Ctrl-C only), per the spec-strict parity decision.
+func TestTuiModelSelectQDoesNotAbort(t *testing.T) {
 	m := makeSelectModel([]string{"Alpha", "Beta"}, true)
 
 	updated, cmd := m.Update(keyMsg("q"))
 	m2 := updated.(selectModel)
 
-	if !m2.aborted {
-		t.Fatal("expected aborted=true after 'q'")
+	if m2.aborted {
+		t.Fatal("'q' must not abort the select prompt")
+	}
+	if cmd != nil {
+		t.Fatal("'q' must not emit a quit command")
+	}
+
+	// Ctrl-C still aborts.
+	updated, cmd = m.Update(keyMsg("ctrl+c"))
+	m3 := updated.(selectModel)
+	if !m3.aborted {
+		t.Fatal("expected aborted=true after ctrl+c")
 	}
 	if cmd == nil {
-		t.Fatal("expected tea.Quit command after 'q'")
+		t.Fatal("expected tea.Quit command after ctrl+c")
 	}
 }
 
@@ -565,17 +576,28 @@ func TestTuiModelCheckboxAbort(t *testing.T) {
 	}
 }
 
-func TestTuiModelCheckboxAbortQ(t *testing.T) {
+// 'q' must NOT abort (Ctrl-C only), per the spec-strict parity decision.
+func TestTuiModelCheckboxQDoesNotAbort(t *testing.T) {
 	m := makeCheckboxModel([]string{"Alpha", "Beta"}, true)
 
 	updated, cmd := m.Update(keyMsg("q"))
 	m2 := updated.(checkboxModel)
 
-	if !m2.aborted {
-		t.Fatal("expected aborted=true after 'q'")
+	if m2.aborted {
+		t.Fatal("'q' must not abort the checkbox prompt")
+	}
+	if cmd != nil {
+		t.Fatal("'q' must not emit a quit command")
+	}
+
+	// Ctrl-C still aborts.
+	updated, cmd = m.Update(keyMsg("ctrl+c"))
+	m3 := updated.(checkboxModel)
+	if !m3.aborted {
+		t.Fatal("expected aborted=true after ctrl+c")
 	}
 	if cmd == nil {
-		t.Fatal("expected tea.Quit command")
+		t.Fatal("expected tea.Quit command after ctrl+c")
 	}
 }
 

@@ -5,7 +5,9 @@
 ### Prerequisites
 
 - Python 3.10+
-- Go 1.22+ (for Go library)
+- Go 1.22+ (for the Go library)
+- Node.js 18+ and npm (for the TypeScript library)
+- Rust (stable toolchain) with `clippy` and `rustfmt` (for the Rust library) — `rustup component add clippy rustfmt`
 - [uv](https://docs.astral.sh/uv/)
 - [commitizen](https://commitizen-tools.github.io/commitizen/) (`uv tool install commitizen --with ./python --with ./extensions/cz-teamcz`)
 
@@ -38,6 +40,23 @@ go vet ./prompt/ ./examples/...        # Vet
 gofmt -l ./prompt/ ./examples/         # Format check
 ```
 
+**TypeScript:**
+```bash
+cd typescript
+npm ci                                 # Install dependencies
+npx vitest run                         # Run tests
+npx tsc --noEmit                       # Type check
+npx biome check src/ tests/            # Lint + format check
+```
+
+**Rust:**
+```bash
+cd rust
+cargo test                             # Run tests
+cargo clippy -- -D warnings            # Lint
+cargo fmt -- --check                   # Format check
+```
+
 ### Committing
 
 Use `cz commit` instead of `git commit`. This project uses a custom commitizen plugin (`teamcz`) with project-specific types and scopes:
@@ -46,7 +65,7 @@ Use `cz commit` instead of `git commit`. This project uses a custom commitizen p
 cz commit
 ```
 
-Types: `feat`, `fix`, `protocol`, `compat`, `refactor`, `test`, `docs`, `chore`, `ci`
+Types: `feat`, `fix`, `protocol`, `compat`, `refactor`, `perf`, `test`, `docs`, `chore`, `ci`
 
 Scopes: `python`, `go`, `spec`, or a specific prompt type (`select`, `checkbox`, `compat`, etc.)
 
@@ -54,8 +73,14 @@ The `commit-msg` hook rejects malformed commit messages.
 
 ### Releasing
 
+Releases are normally automated: pushing to `main` runs the `auto-bump` job in
+`.github/workflows/release.yml`, which runs `cz bump` with the in-repo `teamcz`
+plugin, regenerates `rust/Cargo.lock`, and pushes the bump commit + tag. To bump
+manually (the `teamcz` plugin reads `[tool.commitizen]` in the root
+`pyproject.toml`):
+
 ```bash
-cz bump                # Auto-determine version from commit history
+cz bump --changelog     # Auto-determine version from commit history (feat/fix/protocol/compat/breaking)
 git push --follow-tags
 ```
 
@@ -126,6 +151,7 @@ Each `nc` call connects, receives the prompt, sends the answer, and gets `{"stat
 - `protocol` — change to the agent JSON protocol (handshake, prompt format, response schema). Use sparingly — this affects all consumers
 - `compat` — changes to the `questionary` compatibility layer
 - `refactor` — restructuring without behavior change
+- `perf` — performance improvement (no behavior change)
 - `test` — adding or improving tests
 - `docs` — documentation, README, protocol spec
 - `chore` — build, CI, tooling, dependencies
@@ -160,11 +186,11 @@ If you change the agent JSON protocol (handshake format, prompt fields, response
 
 ### Git hooks reference
 
-| Hook | Runs | Blocks commit on failure? |
+| Hook | Runs | Blocks on failure? |
 |------|------|:------------------------:|
-| `commit-msg` | `cz check` (message format) | Yes |
-| `pre-commit` | Python lint + typecheck + tests, Go fmt + vet + tests, TS tsc + biome + tests, Rust fmt + clippy + tests | Yes |
-| `pre-push` | Same as pre-commit + coverage report | Yes |
+| `commit-msg` | `cz check` (message format); skips the `bump:` release commit | Yes |
+| `pre-commit` | Python lint + typecheck + tests, Go fmt + vet + tests, TS tsc + biome + tests, Rust fmt + clippy + tests (only for changed languages, in parallel) | Yes |
+| `pre-push` | No-op — `pre-commit` already covers the changed languages and CI runs the full matrix | No |
 
 ### Code style
 

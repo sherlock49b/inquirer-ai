@@ -8,6 +8,10 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   auto-bump:
     if: github.ref_type == 'branch'
@@ -23,8 +27,11 @@ jobs:
 
       - uses: astral-sh/setup-uv@v6
 
-      - name: Install commitizen
-        run: uv tool install commitizen
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Install commitizen with the in-repo teamcz plugin
+        # The plugin drives bumps from feat/fix/protocol/compat commits.
+        run: uv tool install commitizen --with ./python --with ./extensions/cz-teamcz
 
       - name: Configure git
         run: |
@@ -34,15 +41,40 @@ jobs:
       - name: Bump version
         id: bump
         run: |
-          set -o pipefail
-          if cz -n cz_conventional_commits bump --yes --changelog 2>&1 | tee /tmp/bump.log; then
+          # Run cz bump (uses [tool.commitizen] name = "teamcz" from pyproject.toml).
+          # --no-verify so the generated "bump:" commit is not blocked by hooks.
+          set +e
+          cz bump --yes --changelog --no-verify 2>&1 | tee /tmp/bump.log
+          rc=${PIPESTATUS[0]}
+          set -e
+
+          if [ "$rc" -eq 0 ]; then
             VERSION=$(grep '^version' python/pyproject.toml | head -1 | sed 's/.*"\(.*\)"/\1/')
+
+            # Keep rust/Cargo.lock in sync with the new crate version and fold it
+            # into the bump commit so the lockfile and tag stay consistent.
+            ( cd rust && cargo update -p inquirer-ai --precise "${VERSION}" )
+            if ! git diff --quiet -- rust/Cargo.lock; then
+              git add rust/Cargo.lock
+              git commit --amend --no-edit --no-verify
+              # Re-point the tag at the amended commit.
+              git tag -f "v${VERSION}"
+            fi
+
+            # Push the branch and tag FIRST; only set outputs once both succeed.
+            git push origin "HEAD:${GITHUB_REF_NAME}"
+            git push origin "v${VERSION}"
+
             echo "version=v${VERSION}" >> "$GITHUB_OUTPUT"
             echo "bumped=true" >> "$GITHUB_OUTPUT"
-            git push && git push origin "v${VERSION}"
-          else
-            echo "No version bump needed (no feat/fix/breaking commits since last tag)"
+          elif [ "$rc" -eq 21 ]; then
+            # Exit code 21 == NoneIncrementExit: no feat/fix/protocol/compat/
+            # breaking commits since the last tag. Not an error.
+            echo "No version bump needed (nothing to bump since last tag)"
             echo "bumped=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "cz bump failed with exit code ${rc}" >&2
+            exit "$rc"
           fi
 
   release:

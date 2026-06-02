@@ -1,3 +1,4 @@
+import { invalidChoiceMessage } from "../choice.js";
 import { InvalidChoiceError, ValidationError } from "../errors.js";
 import { formatError, formatQuestion, readLine } from "../terminal.js";
 import { type BaseConfig, BasePrompt } from "./base.js";
@@ -46,7 +47,9 @@ export class ExpandPrompt extends BasePrompt<unknown> {
         if (lower === c.key || value === c.value || value === c.name) return c.value;
       }
     }
-    throw new ValidationError(`Invalid choice: ${JSON.stringify(value)}`);
+    // For expand, the valid options are the (lowercased) keys, e.g.
+    //   Invalid choice: "x". Valid: ["y", "n"]
+    throw new ValidationError(invalidChoiceMessage(value, this.expandChoices.map((c) => c.key)));
   }
 
   protected formatAnswer(value: unknown): string {

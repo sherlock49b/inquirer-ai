@@ -79,28 +79,27 @@ fn checkbox_agent(config: &CheckboxConfig, enabled: &[&Choice]) -> Result<Vec<Va
 
         let mut result = Vec::new();
         for v in arr {
+            // Type-aware value match (string "42" != number 42, etc.) OR an
+            // exact string match against a choice name.
             if valid_values.contains(v) {
                 result.push(v.clone());
-            } else if let Some(name) = v.as_str() {
-                if valid_names.contains(name) {
-                    let choice = enabled
-                        .iter()
-                        .find(|c| c.name == name)
-                        .ok_or_else(|| InquirerError::Validation(format!("Invalid choice: {v}")))?;
-                    result.push(choice.value.clone());
-                } else {
-                    return Err(InquirerError::Validation(format!(
-                        "Invalid choice: {v}. Valid: {valid_values:?}"
-                    )));
-                }
+            } else if let Some(name) = v.as_str().filter(|n| valid_names.contains(n)) {
+                let choice = enabled
+                    .iter()
+                    .find(|c| c.name == name)
+                    .expect("name is in valid_names");
+                result.push(choice.value.clone());
             } else {
-                return Err(InquirerError::Validation(format!("Invalid choice: {v}")));
+                let valid = enabled.iter().map(|c| &c.value);
+                return Err(InquirerError::Validation(
+                    crate::prompts::invalid_choice_message(v, valid),
+                ));
             }
         }
 
         if required && result.is_empty() {
             return Err(InquirerError::Validation(
-                "At least one choice must be selected".into(),
+                "At least one choice is required".into(),
             ));
         }
 

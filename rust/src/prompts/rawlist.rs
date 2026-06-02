@@ -12,10 +12,12 @@ pub struct RawlistConfig {
 
 impl RawlistConfig {
     pub fn new(message: impl Into<String>, choices: Vec<ChoiceItem>) -> Self {
+        // The selectable list excludes separators AND disabled choices; only
+        // these are numbered/advertised and matchable (R5/R6).
         let choices: Vec<Choice> = choices
             .into_iter()
             .filter_map(|c| match c {
-                ChoiceItem::Choice(c) => Some(c),
+                ChoiceItem::Choice(c) if !c.is_disabled() => Some(c),
                 _ => None,
             })
             .collect();
@@ -41,10 +43,17 @@ pub fn rawlist(config: RawlistConfig) -> Result<Value> {
 }
 
 pub fn validate_rawlist(value: &Value, choices: &[Choice]) -> Result<Value> {
-    if let Some(idx) = value.as_u64() {
-        let idx = idx as usize;
-        if idx >= 1 && idx <= choices.len() {
-            return Ok(choices[idx - 1].value.clone());
+    // 1-based integer index over the selectable list. A JSON number is treated
+    // as an index ONLY if it is an integer; non-integer numbers (e.g. 1.5) are
+    // rejected rather than matched as a value.
+    if let Value::Number(n) = value {
+        match integer_index(n) {
+            Some(idx) if idx >= 1 && idx <= choices.len() => {
+                return Ok(choices[idx - 1].value.clone());
+            }
+            // Numeric but out of range or non-integer: fall through to value
+            // matching (a number could still equal a choice value).
+            _ => {}
         }
     }
 
@@ -54,9 +63,25 @@ pub fn validate_rawlist(value: &Value, choices: &[Choice]) -> Result<Value> {
         }
     }
 
-    Err(InquirerError::Validation(format!(
-        "Invalid choice: {value}"
-    )))
+    let valid = choices.iter().map(|c| &c.value);
+    Err(InquirerError::Validation(
+        crate::prompts::invalid_choice_message(value, valid),
+    ))
+}
+
+/// Interpret a JSON number as a 1-based index, returning `Some(idx)` only when
+/// it is a non-negative integer value.
+fn integer_index(n: &serde_json::Number) -> Option<usize> {
+    if let Some(u) = n.as_u64() {
+        return usize::try_from(u).ok();
+    }
+    // Integer-valued float (e.g. 2.0) counts; 1.5 does not.
+    if let Some(f) = n.as_f64() {
+        if f.fract() == 0.0 && f >= 0.0 {
+            return Some(f as usize);
+        }
+    }
+    None
 }
 
 fn rawlist_agent(config: &RawlistConfig) -> Result<Value> {

@@ -3,7 +3,6 @@ package prompt
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 )
 
 // PathConfig configures a file/directory path input prompt.
@@ -30,10 +29,9 @@ func pathAgent(cfg PathConfig) (string, error) {
 		"only_directories": cfg.OnlyDirectories,
 	}
 	raw, err := AgentPromptWithRetry(payload, func(answer any) (any, error) {
-		result := toString(answer)
-		if result == "" && cfg.Default != "" {
-			result = cfg.Default
-		}
+		// Apply default only when the raw answer is nil; return the answer
+		// VERBATIM otherwise (no expansion, Clean, or existence check).
+		result := resolveStringDefault(answer, cfg.Default)
 		if cfg.Validate != nil {
 			if err := cfg.Validate(result); err != nil {
 				return nil, fmt.Errorf("%w: %v", ErrValidation, err)
@@ -76,7 +74,7 @@ func pathTerminal(cfg PathConfig) (string, error) {
 			}
 		}
 
-		result = filepath.Clean(result)
+		// Return the path VERBATIM — no Clean/normalize of the returned value.
 		if cfg.Validate != nil {
 			if err := cfg.Validate(result); err != nil {
 				fmt.Printf("  %s\n", err)

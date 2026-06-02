@@ -62,22 +62,28 @@ func checkboxAgent(cfg CheckboxConfig, choices []resolvedChoice) ([]any, error) 
 			return nil, fmt.Errorf("%w: expected a list", ErrValidation)
 		}
 
+		var validValues []any
+		for _, c := range choices {
+			if c.selectable {
+				validValues = append(validValues, c.value)
+			}
+		}
+
 		var result []any
 		for _, v := range list {
-			s := toString(v)
 			found := false
 			for _, c := range choices {
 				if !c.selectable {
 					continue
 				}
-				if s == toString(c.value) || s == c.name {
+				if matchesChoice(v, c) {
 					result = append(result, c.value)
 					found = true
 					break
 				}
 			}
 			if !found {
-				return nil, fmt.Errorf("%w: %q", ErrInvalidChoice, s)
+				return nil, newValidationError(ErrInvalidChoice, invalidChoiceMessage(v, validValues))
 			}
 		}
 		if cfg.Required && len(result) == 0 {

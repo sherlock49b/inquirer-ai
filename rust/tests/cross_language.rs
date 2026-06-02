@@ -323,3 +323,37 @@ fn validate_number_float_not_allowed_string_fractional_rejected() {
         "\"3.5\" should be rejected when float_allowed=false"
     );
 }
+
+// =========================================================================
+// R2 — numeric-string grammar (accept/reject must match all 4 languages)
+// =========================================================================
+
+#[test]
+fn number_grammar_accepts() {
+    let config = NumberConfig::new("x");
+    // "1e3" -> 1000
+    assert_eq!(validate_number(&json!("1e3"), &config).unwrap(), 1000.0);
+    // "  5  " -> 5 (whitespace trimmed)
+    assert_eq!(validate_number(&json!("  5  "), &config).unwrap(), 5.0);
+    // "3.5"
+    assert!((validate_number(&json!("3.5"), &config).unwrap() - 3.5).abs() < f64::EPSILON);
+    // "-2"
+    assert_eq!(validate_number(&json!("-2"), &config).unwrap(), -2.0);
+    // "1E-3" -> 0.001
+    assert!((validate_number(&json!("1E-3"), &config).unwrap() - 0.001).abs() < f64::EPSILON);
+    // "+5"
+    assert_eq!(validate_number(&json!("+5"), &config).unwrap(), 5.0);
+}
+
+#[test]
+fn number_grammar_rejects() {
+    let config = NumberConfig::new("x");
+    for bad in [
+        "1_000", "3abc", "0x10", ".5", "5.", "", "+", "  ", "1.2.3", "e3",
+    ] {
+        assert!(
+            validate_number(&json!(bad), &config).is_err(),
+            "grammar should reject {bad:?}"
+        );
+    }
+}

@@ -137,6 +137,41 @@ fn rawlist_rejects_invalid() {
 }
 
 #[test]
+fn rawlist_rejects_non_integer_index() {
+    // R5: a non-integer index (1.5) must be rejected, not truncated to 1.
+    let choices = vec![Choice::new("a", json!("a")), Choice::new("b", json!("b"))];
+    assert!(
+        validate_rawlist(&json!(1.5), &choices).is_err(),
+        "1.5 must not be coerced to index 1"
+    );
+    // 2.0 is integer-valued and selects the 2nd item.
+    assert_eq!(validate_rawlist(&json!(2.0), &choices).unwrap(), json!("b"));
+}
+
+#[test]
+fn rawlist_config_excludes_separators_and_disabled() {
+    use inquirer_ai::choice::{ChoiceItem, Separator};
+    use inquirer_ai::prompts::rawlist::RawlistConfig;
+
+    let mut disabled = Choice::new("Disabled", json!("d"));
+    disabled.disabled = Some(json!(true));
+
+    let items = vec![
+        ChoiceItem::Choice(Choice::new("First", json!("f"))),
+        ChoiceItem::Separator(Separator::new("---")),
+        ChoiceItem::Choice(disabled),
+        ChoiceItem::Choice(Choice::new("Last", json!("l"))),
+    ];
+    let config = RawlistConfig::new("pick", items);
+    // Selectable list is only [First, Last]; index 2 -> Last.
+    assert_eq!(config.choices.len(), 2);
+    assert_eq!(
+        validate_rawlist(&json!(2), &config.choices).unwrap(),
+        json!("l")
+    );
+}
+
+#[test]
 fn expand_accepts_key() {
     let choices = vec![
         ExpandChoice {
@@ -168,4 +203,19 @@ fn expand_rejects_invalid() {
         value: json!("yes"),
     }];
     assert!(validate_expand(&json!("z"), &choices).is_err());
+}
+
+#[test]
+fn expand_comparison_is_case_insensitive() {
+    // R4: keys are lowercased at construction; the answer comparison lowercases
+    // too, so an uppercase answer matches a lowercase key.
+    let choices = vec![ExpandChoice {
+        key: "y".into(),
+        name: "Overwrite".into(),
+        value: json!("overwrite"),
+    }];
+    assert_eq!(
+        validate_expand(&json!("Y"), &choices).unwrap(),
+        json!("overwrite")
+    );
 }

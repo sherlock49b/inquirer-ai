@@ -17,14 +17,27 @@ import { resetSocketTransport } from "../src/socket.js";
 
 const ACK = '{"kind":"handshake_ack"}';
 
+// Captured output chunks from the most recent setup() call.
+let lastChunks: string[] = [];
+
+function outputLines(): Array<Record<string, unknown>> {
+  return lastChunks
+    .join("")
+    .split("\n")
+    .filter((l) => l.trim() !== "")
+    .map((l) => JSON.parse(l) as Record<string, unknown>);
+}
+
 function setup(answers: string[]) {
   resetAgent();
   resetSocketTransport();
   vi.stubEnv("INQUIRER_AI_MODE", "agent");
   vi.stubEnv("INQUIRER_AI_TRANSPORT", "stdio");
   const stdin = Readable.from(answers.map((a) => `${a}\n`).join(""));
+  const chunks: string[] = [];
+  lastChunks = chunks;
   const writable = new Writable({
-    write(_c: Buffer, _e: string, cb: () => void) { cb(); },
+    write(c: Buffer, _e: string, cb: () => void) { chunks.push(c.toString()); cb(); },
   });
   const origStdin = process.stdin;
   const origStdout = process.stdout;
@@ -73,10 +86,20 @@ describe("Prompt validation", () => {
     }
   });
 
-  it("ConfirmPrompt default", async () => {
+  it("ConfirmPrompt null answer honors default (R5)", async () => {
     const restore = setup([ACK, '{"answer": null}']);
     try {
-      expect(await new ConfirmPrompt({ message: "x", default: true }).execute()).toBe(false);
+      // null answer -> the prompt default (a bool), not a hardcoded false.
+      expect(await new ConfirmPrompt({ message: "x", default: true }).execute()).toBe(true);
+    } finally {
+      restore();
+    }
+  });
+
+  it("ConfirmPrompt null answer with default false -> false", async () => {
+    const restore = setup([ACK, '{"answer": null}']);
+    try {
+      expect(await new ConfirmPrompt({ message: "x", default: false }).execute()).toBe(false);
     } finally {
       restore();
     }
@@ -95,11 +118,11 @@ describe("Prompt validation", () => {
     }
   });
 
-  it("SelectPrompt rejects disabled choice", async () => {
-    // 4 attempts total (1 initial + 3 retries) to exhaust retries
+  it("SelectPrompt rejects disabled choice after 3-attempt budget (R1)", async () => {
+    // Unified budget = 3 total attempts: 3 prompt sends, 2 validation_errors,
+    // then 1 fatal error.
     const restore = setup([
       ACK,
-      '{"answer": "go"}',
       '{"answer": "go"}',
       '{"answer": "go"}',
       '{"answer": "go"}',
@@ -114,6 +137,16 @@ describe("Prompt validation", () => {
           ],
         }).execute(),
       ).rejects.toThrow("Invalid choice");
+      const lines = outputLines();
+      const prompts = lines.filter((l) => l.kind === "prompt");
+      expect(prompts.length).toBe(3);
+      // A prompt and ALL of its validation re-sends keep the SAME step (FIX A).
+      expect(prompts.map((p) => p.step)).toEqual([1, 1, 1]);
+      expect(lines.filter((l) => l.kind === "validation_error").length).toBe(2);
+      expect(lines.filter((l) => l.kind === "error").length).toBe(1);
+      // Canonical invalid-choice message, byte-identical across languages (FIX B).
+      const verr = lines.find((l) => l.kind === "validation_error");
+      expect(verr?.message).toBe('Invalid choice: "go". Valid: ["rust"]');
     } finally {
       restore();
     }
@@ -356,12 +389,11 @@ describe("Prompt validation", () => {
     }
   });
 
-  it("validate function rejects after retries", async () => {
-    // User validation retries: 3 retries in execute() loop, so 4 answers needed
-    // But executeAgent also re-sends the prompt each time, so we need 4 answers
+  it("validate function rejects after the unified 3-attempt budget (R1)", async () => {
+    // user validate() failures share the SAME budget as type coercion: 3 sends,
+    // 2 validation_errors, then 1 fatal error.
     const restore = setup([
       ACK,
-      '{"answer": "ab"}',
       '{"answer": "ab"}',
       '{"answer": "ab"}',
       '{"answer": "ab"}',
@@ -373,6 +405,10 @@ describe("Prompt validation", () => {
           validate: (s) => (s.length >= 3 ? true : "Too short"),
         }).execute(),
       ).rejects.toThrow(ValidationError);
+      const lines = outputLines();
+      expect(lines.filter((l) => l.kind === "prompt").length).toBe(3);
+      expect(lines.filter((l) => l.kind === "validation_error").length).toBe(2);
+      expect(lines.filter((l) => l.kind === "error").length).toBe(1);
     } finally {
       restore();
     }

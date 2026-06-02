@@ -222,6 +222,30 @@ const email = await text({
 process.stderr.write("RESULT:" + email + "\\n");
 `;
 
+const SCRIPT_VALIDATE_THROWS = `
+import { text } from "${DIST}/index.js";
+const v = await text({
+  message: "X?",
+  validate: () => { throw new Error("boom-non-validation"); },
+});
+process.stderr.write("RESULT:" + v + "\\n");
+`;
+
+const SCRIPT_SEARCH_ASYNC = `
+import { search } from "${DIST}/index.js";
+const pkg = await search({
+  message: "Package?",
+  source: async () => {
+    await new Promise((r) => setTimeout(r, 10));
+    return [
+      { name: "requests", value: "requests" },
+      { name: "httpx", value: "httpx" },
+    ];
+  },
+});
+process.stderr.write("RESULT:" + pkg + "\\n");
+`;
+
 // Track processes for cleanup
 const procs: ChildProcess[] = [];
 
@@ -473,14 +497,17 @@ describe("Socket transport", () => {
 
     // Peek: connect, read prompt, disconnect immediately
     const sock1 = await connectSocket(sockPath);
-    await readUntilPrompt(sock1);
+    const msgs1 = await readUntilPrompt(sock1);
+    expect(msgs1[msgs1.length - 1]!.step).toBe(1);
     sock1.destroy();
 
-    // Immediately reconnect — no delay
+    // Immediately reconnect — no delay. The re-sent prompt is the SAME logical
+    // prompt, so it must keep the same step (FIX A: re-sends reuse the step).
     const sock2 = await connectSocket(sockPath);
     const msgs = await readUntilPrompt(sock2);
     expect(msgs[0]!.kind).toBe("prompt");
     expect(msgs[0]!.message).toBe("Name?");
+    expect(msgs[0]!.step).toBe(1);
 
     const resp = await sendAnswer(sock2, "rapid");
     expect(resp.status).toBe("accepted");
@@ -635,5 +662,196 @@ process.stderr.write("RESULT:" + name + "\\n");
 
     const stderr = await waitForProc(proc);
     expect(stderr).toContain("RESULT:auto-test");
+  });
+
+  it("batched input: ack + answer sent in one write (ts-socket-1)", async () => {
+    const dir = tmpDir();
+    const sockPath = path.join(dir, "test.sock");
+    const proc = runScript(SCRIPT_TEXT, sockPath);
+    procs.push(proc);
+
+    await waitForSocket(sockPath);
+
+    const sock = await connectSocket(sockPath);
+    await readUntilPrompt(sock);
+
+    // Write handshake_ack AND the answer as a single batched chunk. The
+    // transport must buffer raw bytes, split on \n, and process both lines.
+    const resp = await new Promise<ParsedMessage>((resolve, reject) => {
+      const rl = readline.createInterface({ input: sock, terminal: false });
+      const timeout = setTimeout(() => {
+        rl.close();
+        reject(new Error("Timeout"));
+      }, 5000);
+      rl.on("line", (line) => {
+        const trimmed = line.trim();
+        if (!trimmed) return;
+        clearTimeout(timeout);
+        rl.close();
+        resolve(JSON.parse(trimmed) as ParsedMessage);
+      });
+      sock.write(`${JSON.stringify({ kind: "handshake_ack" })}\n${JSON.stringify({ answer: "batched" })}\n`);
+    });
+
+    expect(resp.status).toBe("accepted");
+    sock.destroy();
+
+    const stderr = await waitForProc(proc);
+    expect(stderr).toContain("RESULT:batched");
+  });
+
+  it("invalid JSON yields validation_error then accepts (R7)", async () => {
+    const dir = tmpDir();
+    const sockPath = path.join(dir, "test.sock");
+    const proc = runScript(SCRIPT_TEXT, sockPath);
+    procs.push(proc);
+
+    await waitForSocket(sockPath);
+
+    const sock = await connectSocket(sockPath);
+    await readUntilPrompt(sock);
+
+    // Send a non-JSON line; expect a validation_error with the canonical prefix.
+    const resp1 = await new Promise<ParsedMessage>((resolve, reject) => {
+      const rl = readline.createInterface({ input: sock, terminal: false });
+      const timeout = setTimeout(() => { rl.close(); reject(new Error("Timeout")); }, 5000);
+      rl.on("line", (line) => {
+        const trimmed = line.trim();
+        if (!trimmed) return;
+        clearTimeout(timeout);
+        rl.close();
+        resolve(JSON.parse(trimmed) as ParsedMessage);
+      });
+      sock.write("not-json\n");
+    });
+    expect(resp1.kind).toBe("validation_error");
+    expect(resp1.message as string).toContain("Invalid JSON response");
+
+    const resp2 = await sendAnswer(sock, "recovered");
+    expect(resp2.status).toBe("accepted");
+    sock.destroy();
+
+    const stderr = await waitForProc(proc);
+    expect(stderr).toContain("RESULT:recovered");
+  });
+
+  it("async search source advertises resolved choices on the socket (R6)", async () => {
+    const dir = tmpDir();
+    const sockPath = path.join(dir, "test.sock");
+    const proc = runScript(SCRIPT_SEARCH_ASYNC, sockPath);
+    procs.push(proc);
+
+    await waitForSocket(sockPath);
+
+    const sock = await connectSocket(sockPath);
+    const msgs = await readUntilPrompt(sock);
+    const prompt = msgs[msgs.length - 1]!;
+    expect(prompt.type).toBe("search");
+    expect(prompt.searchable).toBe(true);
+    // The async source must be resolved and advertised, NOT an empty array.
+    expect(prompt.choices).toEqual([
+      { name: "requests", value: "requests" },
+      { name: "httpx", value: "httpx" },
+    ]);
+
+    const resp = await sendAnswer(sock, "httpx");
+    expect(resp.status).toBe("accepted");
+    sock.destroy();
+
+    const stderr = await waitForProc(proc);
+    expect(stderr).toContain("RESULT:httpx");
+  });
+
+  it("refuses to bind when the socket path is a non-socket file (R10)", async () => {
+    const dir = tmpDir();
+    const sockPath = path.join(dir, "regular-file");
+    // Pre-create a regular file at the target path.
+    fs.writeFileSync(sockPath, "i am not a socket");
+
+    const proc = runScript(SCRIPT_TEXT, sockPath);
+    procs.push(proc);
+
+    // The process must exit non-zero with a clear error and must NOT unlink
+    // the non-socket file.
+    let exitCode: number | null = null;
+    let stderr = "";
+    await new Promise<void>((resolve) => {
+      if (proc.stderr) proc.stderr.on("data", (c: Buffer) => { stderr += c.toString(); });
+      proc.on("exit", (code) => { exitCode = code; resolve(); });
+    });
+    expect(exitCode).not.toBe(0);
+    expect(stderr.toLowerCase()).toContain("not a socket");
+    // The pre-existing file must be untouched.
+    expect(fs.existsSync(sockPath)).toBe(true);
+    expect(fs.readFileSync(sockPath, "utf8")).toBe("i am not a socket");
+  });
+
+  it("rejects a relative INQUIRER_AI_SOCKET path (R10)", async () => {
+    const proc = spawn(NODE, ["--input-type=module", "-e", SCRIPT_TEXT], {
+      env: { ...(process.env as Record<string, string>), INQUIRER_AI_SOCKET: "relative.sock" },
+      stdio: ["pipe", "pipe", "pipe"],
+    });
+    procs.push(proc);
+
+    let exitCode: number | null = null;
+    let stderr = "";
+    await new Promise<void>((resolve) => {
+      if (proc.stderr) proc.stderr.on("data", (c: Buffer) => { stderr += c.toString(); });
+      proc.on("exit", (code) => { exitCode = code; resolve(); });
+    });
+    expect(exitCode).not.toBe(0);
+    expect(stderr.toLowerCase()).toContain("absolute");
+  });
+
+  it("non-ValidationError from validate() -> {kind:error} and non-zero exit (R10)", async () => {
+    const dir = tmpDir();
+    const sockPath = path.join(dir, "test.sock");
+    const proc = runScript(SCRIPT_VALIDATE_THROWS, sockPath);
+    procs.push(proc);
+
+    await waitForSocket(sockPath);
+
+    const sock = await connectSocket(sockPath);
+    await readUntilPrompt(sock);
+
+    const resp = await new Promise<ParsedMessage>((resolve, reject) => {
+      const rl = readline.createInterface({ input: sock, terminal: false });
+      const timeout = setTimeout(() => { rl.close(); reject(new Error("Timeout")); }, 5000);
+      rl.on("line", (line) => {
+        const trimmed = line.trim();
+        if (!trimmed) return;
+        clearTimeout(timeout);
+        rl.close();
+        resolve(JSON.parse(trimmed) as ParsedMessage);
+      });
+      sock.write(`${JSON.stringify({ answer: "anything" })}\n`);
+    });
+    // Reported as a fatal error frame, not a validation_error.
+    expect(resp.kind).toBe("error");
+    expect(resp.message as string).toContain("boom-non-validation");
+    sock.destroy();
+
+    let exitCode: number | null = null;
+    await new Promise<void>((resolve) => {
+      proc.on("exit", (code) => { exitCode = code; resolve(); });
+    });
+    expect(exitCode).not.toBe(0);
+  });
+
+  it("socket cleanup on SIGINT (ts-socket-3)", async () => {
+    const dir = tmpDir();
+    const sockPath = path.join(dir, "test.sock");
+    const proc = runScript(SCRIPT_TEXT, sockPath);
+    procs.push(proc);
+
+    await waitForSocket(sockPath);
+    expect(fs.existsSync(sockPath)).toBe(true);
+
+    proc.kill("SIGINT");
+    await waitForProc(proc).catch(() => {
+      // Process exits from signal handling.
+    });
+    await new Promise((r) => setTimeout(r, 200));
+    expect(fs.existsSync(sockPath)).toBe(false);
   });
 }, 30000);
