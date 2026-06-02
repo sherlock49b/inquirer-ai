@@ -256,7 +256,7 @@ Each prompt is a separate socket connection. Agents interact with `nc -U` or `so
 | Prompt types | 12 | 12 | 12 | 12 |
 | Terminal UI | prompt_toolkit | bubbletea + lipgloss | custom (readline + ANSI) | crossterm |
 | Agent protocol | JSONL | Same JSONL | Same JSONL | Same JSONL |
-| Tests | 473 | ~266 | 242 | 339 |
+| Tests | 569 | ~314 | 280 | 351 |
 | Async | `*_async()` | goroutines | native async/await | tokio |
 
 All implementations share the same protocol spec. An agent that learns from one can drive any of the others.
