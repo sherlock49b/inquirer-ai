@@ -82,6 +82,23 @@ All notable changes to this project will be documented in this file.
 
 - Add pyright type checking to CI pipeline
 
+## v0.4.0 (2026-06-02)
+
+### Bug Fixes
+
+- **conformance**: use relative import path in the TypeScript driver
+- **ci**: keep go/vX.Y.Z submodule tags; correct deletion guidance
+- **extensions**: fix cz-ai body loss, gh-contribute safety, cargo-deps urlencode
+- **ci**: reconcile commitizen plugin, sync Cargo.lock, harden release
+- **ts**: converge to parity contract, fix retry budget and socket reader
+- **go**: converge to parity contract, route editor via socket, harden socket
+- **rust**: converge to parity contract, harden socket, secure editor tempfile
+- **python**: converge to parity contract, harden socket, fix prompt bugs
+
+### Protocol Changes
+
+- **spec**: document spec-strict cross-language parity contract
+
 ## v0.3.2 (2026-05-27)
 
 ### Fix
