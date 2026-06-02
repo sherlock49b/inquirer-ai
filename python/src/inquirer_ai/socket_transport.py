@@ -96,13 +96,17 @@ class SocketTransport:
             os.chmod(self.path, 0o600)
         self._server.listen(1)
 
-        self._send_stdout_handshake()
-
+        # Install cleanup handlers BEFORE advertising the socket via the stdout
+        # handshake: otherwise a signal arriving in the window between a client
+        # observing the handshake and the handlers being installed would
+        # terminate the process with default disposition, leaking the socket file.
         atexit.register(self.cleanup)
         self._prev_sigint = signal.getsignal(signal.SIGINT)
         self._prev_sigterm = signal.getsignal(signal.SIGTERM)
         signal.signal(signal.SIGINT, self._make_signal_handler(self._prev_sigint))
         signal.signal(signal.SIGTERM, self._make_signal_handler(self._prev_sigterm))
+
+        self._send_stdout_handshake()
 
     def _make_signal_handler(self, prev: Any) -> Callable[[int, types.FrameType | None], None]:
         def _handler(signo: int, frame: types.FrameType | None) -> None:

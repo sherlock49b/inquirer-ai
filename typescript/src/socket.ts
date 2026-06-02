@@ -162,9 +162,11 @@ export class SocketTransport {
       }
     });
 
-    this._sendStdoutHandshake();
-
     // Remove the socket file on SIGINT, SIGTERM, and normal exit (R10).
+    // Install these BEFORE advertising the socket via the stdout handshake:
+    // otherwise a signal arriving in the window between a client observing the
+    // handshake and the handlers being registered would terminate the process
+    // with default disposition, leaking the socket file.
     this._onExit = () => this.cleanup();
     this._onSigterm = () => {
       this.cleanup();
@@ -177,6 +179,8 @@ export class SocketTransport {
     process.on("exit", this._onExit);
     process.on("SIGTERM", this._onSigterm);
     process.on("SIGINT", this._onSigint);
+
+    this._sendStdoutHandshake();
   }
 
   cleanup(): void {
