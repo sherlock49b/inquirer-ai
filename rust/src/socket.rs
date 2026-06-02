@@ -91,7 +91,11 @@ mod inner {
                 step: AtomicUsize::new(0),
             };
 
-            transport.send_stdout_handshake()?;
+            // Arm cleanup BEFORE advertising the socket via the handshake.
+            // Otherwise a signal arriving in the window between a client
+            // observing the handshake and the handlers being installed would
+            // kill the process with default disposition, leaking the socket
+            // file. Bind already created the file, so the path is valid here.
 
             // Store path for cleanup handlers
             let _ = CLEANUP_PATH.set(transport.path.clone());
@@ -114,6 +118,8 @@ mod inner {
                     signal_cleanup_handler as *const () as libc::sighandler_t,
                 );
             }
+
+            transport.send_stdout_handshake()?;
 
             Ok(transport)
         }

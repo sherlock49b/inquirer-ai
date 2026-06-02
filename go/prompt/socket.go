@@ -111,8 +111,12 @@ func newSocketTransport(path string) (*SocketTransport, error) {
 		listener: listener,
 	}
 
-	t.sendStdoutHandshake()
+	// Install cleanup handlers BEFORE advertising the socket via the stdout
+	// handshake: otherwise a signal arriving in the window between a client
+	// observing the handshake and the handlers being installed would terminate
+	// the process with default disposition, leaking the socket file.
 	t.installCleanupHandlers()
+	t.sendStdoutHandshake()
 
 	return t, nil
 }
