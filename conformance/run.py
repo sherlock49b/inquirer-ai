@@ -23,16 +23,25 @@ It then NORMALIZES and cross-compares all four languages:
   * the final results array (numeric-normalized).
 
 Python is treated as the REFERENCE, but ALL pairwise divergences are reported.
+
+It then runs a SECOND pass over the SOCKET transport (the documented default
+for agent mode): the runner acts as the per-prompt Unix-socket client, drives
+the same fixture, and asserts the socket path yields results identical to stdio
+(per language and cross-language) and that the handshake advertises a socket.
+
 Exits non-zero if ANY divergence is found.
 """
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
+import socket as socketmod
 import subprocess
 import sys
 import tempfile
+import time
 from typing import Any
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -172,6 +181,205 @@ def run_driver(lang: str) -> RunResult:
 
 
 # --------------------------------------------------------------------------- #
+# Socket transport pass
+# --------------------------------------------------------------------------- #
+#
+# The stdio pass above proves parity on the default-for-piped-stdin transport.
+# This pass exercises the SOCKET transport (the documented default for agent
+# mode) by acting as the per-prompt socket client: read the stdout handshake to
+# discover the socket, then for each prompt open a connection, read the prompt
+# line(s), send the fixture answer, and read {"status":"accepted"} — handling
+# the spec's same-connection validation-retry loop. We then assert the socket
+# pass yields results IDENTICAL to the stdio pass (per language and across
+# languages) and that the handshake advertises a socket path. Socket file
+# lifecycle (0600, stale-socket refusal, signal cleanup, 1 MiB cap) is covered
+# by each language's unit tests and the macOS CI matrix.
+
+SOCKET_BASE = "/tmp"  # short dir to stay under the macOS sun_path 104-byte limit
+
+
+class _SockLineReader:
+    """Buffered newline-delimited reader over a connected AF_UNIX socket."""
+
+    def __init__(self, conn: socketmod.socket):
+        self.conn = conn
+        self.buf = b""
+
+    def readline(self, timeout: float = 10.0) -> str | None:
+        self.conn.settimeout(timeout)
+        while b"\n" not in self.buf:
+            try:
+                chunk = self.conn.recv(65536)
+            except OSError:  # includes socket timeout (TimeoutError)
+                return None
+            if not chunk:
+                if self.buf:
+                    line, self.buf = self.buf, b""
+                    return line.decode("utf-8", "replace").strip()
+                return None
+            self.buf += chunk
+        line, self.buf = self.buf.split(b"\n", 1)
+        return line.decode("utf-8", "replace").strip()
+
+
+def run_driver_socket(lang: str) -> RunResult:
+    rr = RunResult(lang)
+    sock_path = os.path.join(SOCKET_BASE, f"inqconf-{lang}-{os.getpid()}.sock")
+    with contextlib.suppress(OSError):
+        os.unlink(sock_path)
+
+    with open(FIXTURE, "rb") as fh:
+        answers = [ln for ln in fh.read().decode("utf-8").splitlines() if ln.strip()]
+
+    env = dict(os.environ)
+    env["INQUIRER_AI_MODE"] = "agent"
+    env["INQUIRER_AI_TRANSPORT"] = "socket"
+    env["INQUIRER_AI_SOCKET"] = sock_path
+
+    with tempfile.NamedTemporaryFile(
+        prefix=f"conf_sock_{lang}_", suffix=".json", delete=False
+    ) as tf:
+        results_file = tf.name
+
+    proc = None
+    try:
+        proc = subprocess.Popen(
+            driver_command(lang, results_file),
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            env=env,
+            cwd=REPO,
+        )
+
+        # Discover the socket via the stdout handshake (first line).
+        hs_raw = proc.stdout.readline() if proc.stdout else b""
+        if not hs_raw:
+            rr.error = "no handshake on stdout (socket mode)"
+            return rr
+        try:
+            obj = json.loads(hs_raw.decode("utf-8", "replace").strip())
+        except json.JSONDecodeError as e:
+            rr.error = f"stdout handshake not JSON: {e}"
+            return rr
+        if obj.get("kind") != "handshake":
+            rr.error = f"first stdout line is not a handshake: {obj!r}"
+            return rr
+        rr.handshake = obj
+        rr.version = obj.get("version")
+
+        # Wait for the socket file to appear.
+        deadline = time.time() + 15
+        while not os.path.exists(sock_path):
+            if proc.poll() is not None:
+                rr.error = "driver exited before creating the socket"
+                return rr
+            if time.time() > deadline:
+                rr.error = "socket file not created within 15s"
+                return rr
+            time.sleep(0.02)
+
+        ai = 0
+        while True:
+            if proc.poll() is not None and not os.path.exists(sock_path):
+                break  # driver finished and cleaned up the socket
+            try:
+                conn = socketmod.socket(socketmod.AF_UNIX, socketmod.SOCK_STREAM)
+                conn.settimeout(10)
+                conn.connect(sock_path)
+            except OSError:
+                break  # driver finished and unlinked the socket
+            try:
+                lr = _SockLineReader(conn)
+                # Read until a prompt (skip the first-connection socket handshake
+                # and any blank keep-alive lines).
+                payload = None
+                while True:
+                    line = lr.readline()
+                    if line is None:
+                        break
+                    if not line:
+                        continue
+                    try:
+                        msg = json.loads(line)
+                    except json.JSONDecodeError:
+                        continue
+                    kind = msg.get("kind")
+                    if kind == "handshake":
+                        continue
+                    if kind == "prompt":
+                        rr.messages.append(msg)
+                        payload = msg
+                        break
+                    rr.messages.append(msg)  # unexpected verror/error pre-answer
+                if payload is None:
+                    if proc.poll() is not None:
+                        break
+                    continue
+                # Answer loop — same-connection validation retry (per spec).
+                while True:
+                    if ai >= len(answers):
+                        rr.error = "ran out of fixture answers (socket)"
+                        break
+                    try:
+                        conn.sendall((answers[ai] + "\n").encode("utf-8"))
+                    except OSError:
+                        rr.error = "broken pipe while sending answer (socket)"
+                        break
+                    ai += 1
+                    resp = lr.readline()
+                    if resp is None:
+                        rr.error = "connection closed before a response (socket)"
+                        break
+                    try:
+                        rmsg = json.loads(resp)
+                    except json.JSONDecodeError:
+                        rr.error = f"response not JSON (socket): {resp!r}"
+                        break
+                    if rmsg.get("status") == "accepted":
+                        break
+                    if rmsg.get("kind") == "validation_error":
+                        rr.messages.append(rmsg)
+                        continue
+                    if rmsg.get("kind") == "error":
+                        rr.messages.append(rmsg)
+                        break
+                    rr.error = f"unexpected response (socket): {resp!r}"
+                    break
+            finally:
+                conn.close()
+            if rr.error:
+                break
+
+        try:
+            proc.wait(timeout=30)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+        rr.returncode = proc.returncode if proc.returncode is not None else 0
+        with contextlib.suppress(Exception):
+            rr.stderr = proc.stderr.read().decode("utf-8", "replace")
+
+        if rr.error:
+            return rr
+        try:
+            with open(results_file, "r", encoding="utf-8") as fh:
+                rr.results = json.loads(fh.read())
+        except (OSError, json.JSONDecodeError) as e:
+            rr.error = f"could not read results file (socket): {e}"
+    except FileNotFoundError as e:
+        rr.error = f"toolchain missing: {e}"
+    except Exception as e:  # noqa: BLE001
+        rr.error = f"socket driver error: {type(e).__name__}: {e}"
+    finally:
+        if proc and proc.poll() is None:
+            proc.kill()
+        for p in (results_file, sock_path):
+            with contextlib.suppress(OSError):
+                os.unlink(p)
+    return rr
+
+
+# --------------------------------------------------------------------------- #
 # Normalization + comparison
 # --------------------------------------------------------------------------- #
 
@@ -226,9 +434,12 @@ class Divergence:
     def render(self) -> str:
         head = f"[{self.category}] {self.locus} — field `{self.field}`"
         lines = [head]
-        for lang in LANGS:
-            if lang in self.values:
-                lines.append(f"    {lang:<11}: {jdump(self.values[lang])}")
+        # Render LANGS in order first, then any extra keys (e.g. cross-transport
+        # labels like "python/socket").
+        keys = [k for k in LANGS if k in self.values]
+        keys += [k for k in self.values if k not in LANGS]
+        for k in keys:
+            lines.append(f"    {k:<14}: {jdump(self.values[k])}")
         return "\n".join(lines)
 
 
@@ -397,6 +608,63 @@ def main() -> int:
                 divergences.append(Divergence(
                     "results", "results array", "whole array",
                     {REFERENCE: ref_results, lang: other_results}))
+
+    # ---- 6. SOCKET TRANSPORT PASS ----
+    # Re-run every driver over the Unix-socket transport and assert the socket
+    # path produces results identical to stdio (per language and cross-language)
+    # and that the handshake advertises a socket. This closes the gap where the
+    # default agent transport was never exercised cross-language.
+    print("\n" + "=" * 78)
+    print("SOCKET TRANSPORT PASS")
+    print("=" * 78)
+    sock_runs: dict[str, RunResult] = {}
+    sock_fatal = False
+    for lang in LANGS:
+        print(f"\n>>> running {lang} driver (socket) ...", flush=True)
+        sr = run_driver_socket(lang)
+        sock_runs[lang] = sr
+        if sr.error:
+            print(f"    FATAL: {sr.error}")
+            if sr.stderr.strip():
+                for ln in sr.stderr.strip().splitlines()[:15]:
+                    print(f"        {ln}")
+            sock_fatal = True
+            continue
+        p, v = classify_messages(sr)
+        advertises = bool(sr.handshake and sr.handshake.get("socket"))
+        print(f"    ok: handshake v{sr.version}, advertises socket={advertises}, "
+              f"{len(p)} prompts, {len(v)} validation_error, "
+              f"{len(sr.results) if sr.results is not None else '?'} results")
+
+    if sock_fatal:
+        divergences.append(Divergence(
+            "results", "socket pass", "driver could not run",
+            {lang: sock_runs[lang].error for lang in LANGS if sock_runs[lang].error}))
+    else:
+        # 6a. handshake must advertise a socket path in socket mode.
+        for lang in LANGS:
+            if not (sock_runs[lang].handshake or {}).get("socket"):
+                divergences.append(Divergence(
+                    "handshake", f"[socket] {lang}", "socket",
+                    {lang: (sock_runs[lang].handshake or {}).get("socket")}))
+        # 6b. cross-language socket results parity.
+        sref = normalize(sock_runs[REFERENCE].results)
+        for lang in LANGS:
+            if lang == REFERENCE:
+                continue
+            other = normalize(sock_runs[lang].results)
+            if other != sref:
+                divergences.append(Divergence(
+                    "results", "[socket] cross-language", "results array",
+                    {REFERENCE: sref, lang: other}))
+        # 6c. cross-transport: socket results must equal stdio results per lang.
+        for lang in LANGS:
+            st = normalize(runs[lang].results)
+            so = normalize(sock_runs[lang].results)
+            if st != so:
+                divergences.append(Divergence(
+                    "results", f"[socket vs stdio] {lang}", "results array",
+                    {f"{lang}/stdio": st, f"{lang}/socket": so}))
 
     # ---- report ----
     print("\n" + "=" * 78)

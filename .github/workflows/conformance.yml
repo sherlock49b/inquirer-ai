@@ -1,8 +1,9 @@
 name: Conformance
 
 # Cross-language conformance: drives all four implementations (Python, Rust, Go,
-# TypeScript) through one fixed scenario in STDIO agent mode and asserts they
-# emit a byte-identical protocol and identical results. See conformance/scenario.md.
+# TypeScript) through one fixed scenario over BOTH the stdio and Unix-socket
+# agent transports, asserting they emit a byte-identical protocol and identical
+# results (and that socket and stdio agree). See conformance/scenario.md.
 #
 # This is a separate workflow from ci.yml / release.yml on purpose; do not merge.
 

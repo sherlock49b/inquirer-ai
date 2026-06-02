@@ -6,12 +6,28 @@ of the library emit a **byte-for-byte identical** agent protocol (handshake +
 prompt payloads + validation errors) and return identical answers for one fixed,
 carefully chosen scenario.
 
-All four drivers exercise the **REAL** library in **STDIO AGENT MODE**:
+The harness runs the fixture through **two transports**: first **STDIO**, then
+the **SOCKET** transport (the documented default for agent mode).
+
+All four drivers exercise the **REAL** library. The stdio pass uses:
 
 ```
 INQUIRER_AI_MODE=agent
 INQUIRER_AI_TRANSPORT=stdio      # NO socket
 ```
+
+The socket pass sets `INQUIRER_AI_TRANSPORT=socket` and `INQUIRER_AI_SOCKET=<path>`;
+`run.py` then acts as the per-prompt Unix-socket client (read the stdout
+handshake to discover the socket, open one connection per prompt, send the
+fixture answer, read `{"status":"accepted"}`, handling the same-connection
+validation-retry loop). It asserts the socket pass returns results **identical
+to stdio** (per language and cross-language) and that the handshake advertises a
+socket path. (Over sockets a retried prompt is not re-emitted, so the socket
+pass shows one `prompt` per logical prompt — 11 — vs stdio's 14, which re-emits
+on retry; both are internally consistent across all four languages and the
+**results** are identical.) Socket *file* lifecycle — `0600` permissions,
+stale-socket refusal, SIGINT/SIGTERM cleanup, the 1 MiB line cap — is covered by
+each language's unit tests and the macOS CI matrix.
 
 In this mode the library reads the agent's answers from **stdin** (one JSON
 object per line) and writes the protocol JSONL stream to **stdout** (a handshake
