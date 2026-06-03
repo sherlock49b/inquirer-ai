@@ -36,7 +36,7 @@ an answer fails validation). Each driver collects every prompt's **return value*
 and writes them as a single JSON array to the **results file** path given in
 `argv[1]`. Protocol stays on stdout; results go to the file; stderr stays empty.
 
-## The 11 prompts (exact order, exact wording)
+## The 12 prompts (exact order, exact wording)
 
 The wording, choices, and options below are **load-bearing** — the runner
 compares the emitted payloads byte-for-byte after JSON parse.
@@ -54,6 +54,7 @@ compares the emitted payloads byte-for-byte after JSON parse.
 | P9 | expand | `Conflict` | choices: `{key:"Y", Yes:yes}`, `{key:"n", No:no}` — key `Y` is uppercase **on purpose** and must be lowercased to `y` |
 | P10 | autocomplete | `Free` | choices: `["Python","Go"]` (unconstrained free text) |
 | P11 | path | `Dir` | `default="."` (no `~` expansion of the returned value) |
+| P12 | editor | `Bio` | `default="draft"` (agent answer overrides the default; `postfix` defaults to `.txt`) |
 
 ### Notes on library API shape (per-driver, not divergences)
 
@@ -85,21 +86,24 @@ logical prompts.
 {"answer":"y"}           # P9 -> "yes" (key Y lowercased)
 {"answer":"whatever"}    # P10 -> "whatever" (verbatim, unconstrained)
 {"answer":"~/proj"}      # P11 -> "~/proj" (verbatim, no ~ expansion)
+{"answer":"edited"}      # P12 -> "edited" (overrides the "draft" default)
 ```
 
 ## Expected protocol stream (per language)
 
 Every language must emit the **same number of stdout lines in the same order**:
 
-- **1** handshake (`{"kind":"handshake","protocol":"inquirer-ai","version":"0.3.1",...}`)
-- **14** `prompt` lines = 11 distinct prompts + 3 re-sends (the library re-emits
+- **1** handshake (`{"kind":"handshake","protocol":"inquirer-ai","version":"0.4.1",...}`)
+- **15** `prompt` lines = 12 distinct prompts + 3 re-sends (the library re-emits
   the full prompt payload on each validation retry: P3, P4, P6).
 - **3** `validation_error` lines, at the positions following P3, P4, P6:
   - P3: `Decimal numbers are not allowed`
   - P4: invalid choice (`rs` is disabled)
   - P6: invalid choice (non-integer index `1.5`)
 
-> Total = **18** stdout lines.
+> Total = **19** stdout lines (stdio). Over the socket transport a retried
+> prompt is not re-emitted, so the socket pass shows **12** `prompt` lines; both
+> are internally consistent across all four languages and the results match.
 >
 > (The original task brief's summary line said "11 prompts + 2 validation_errors";
 > that undercounts. The fixture/scenario unambiguously prescribes **3** validation

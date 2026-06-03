@@ -1,6 +1,6 @@
 //! Conformance driver (Rust) for inquirer-ai.
 //!
-//! Runs the 11-prompt conformance scenario through the REAL inquirer-ai
+//! Runs the 12-prompt conformance scenario through the REAL inquirer-ai
 //! library in STDIO AGENT MODE. The library reads answers from stdin and
 //! writes the JSONL protocol (handshake + prompts + validation_errors) to
 //! stdout. Each prompt's RETURN VALUE is collected and written as a single
@@ -10,6 +10,7 @@ use inquirer_ai::choice::{Choice, ChoiceItem, Separator};
 use inquirer_ai::prompts::autocomplete::{autocomplete, AutocompleteConfig};
 use inquirer_ai::prompts::checkbox::{checkbox, CheckboxConfig};
 use inquirer_ai::prompts::confirm::{confirm, ConfirmConfig};
+use inquirer_ai::prompts::editor::{editor, EditorConfig};
 use inquirer_ai::prompts::expand::{expand, ExpandChoice, ExpandConfig};
 use inquirer_ai::prompts::number::{number, NumberConfig};
 use inquirer_ai::prompts::password::{password, PasswordConfig};
@@ -140,6 +141,12 @@ fn main() {
     p11.default = Some(".".to_string());
     let r11 = path(p11).expect("P11 path failed");
     results.push(json!(r11));
+
+    // P12 editor  message="Bio" default="draft"
+    let mut p12 = EditorConfig::new("Bio");
+    p12.default = Some("draft".to_string());
+    let r12 = editor(p12).expect("P12 editor failed");
+    results.push(json!(r12));
 
     // Write the results array to argv[1]. Protocol stays on stdout.
     let array = Value::Array(results);

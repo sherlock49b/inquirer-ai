@@ -1,6 +1,6 @@
 // Conformance driver (Go) for inquirer-ai.
 //
-// Runs the 11-prompt conformance scenario through the REAL inquirer-ai Go
+// Runs the 12-prompt conformance scenario through the REAL inquirer-ai Go
 // library in STDIO AGENT MODE (INQUIRER_AI_MODE=agent,
 // INQUIRER_AI_TRANSPORT=stdio). The library reads answers from stdin and
 // writes the JSONL protocol (handshake + prompts + validation_errors) to
@@ -173,6 +173,16 @@ func main() {
 		fatal(err)
 	}
 	results = append(results, p11)
+
+	// P12 editor — message "Bio", default "draft".
+	p12, err := prompt.Editor(prompt.EditorConfig{
+		Message: "Bio",
+		Default: "draft",
+	})
+	if err != nil {
+		fatal(err)
+	}
+	results = append(results, p12)
 
 	// Write the results array to the results file (NOT stdout — stdout carries
 	// the protocol).

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Cross-language conformance runner for inquirer-ai (stdlib only).
 
-Runs the SAME 11-prompt scenario (see scenario.md) through the Python, Rust, Go,
+Runs the SAME 12-prompt scenario (see scenario.md) through the Python, Rust, Go,
 and TypeScript drivers, each driving the REAL library in STDIO AGENT MODE
 (INQUIRER_AI_MODE=agent, INQUIRER_AI_TRANSPORT=stdio). For every language it:
 

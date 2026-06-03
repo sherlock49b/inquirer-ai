@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Conformance driver for inquirer-ai (Python) — STDIO agent transport.
 
-Runs the 11-prompt conformance scenario via the REAL inquirer-ai library in
+Runs the 12-prompt conformance scenario via the REAL inquirer-ai library in
 agent mode over stdio. Protocol JSONL is emitted by the library on stdout;
 the agent's answers are read by the library from stdin. This driver collects
 each prompt's RETURN VALUE and writes them as a single JSON array to the file
@@ -128,6 +128,9 @@ def main() -> int:
 
     # P11 — path, default "." (no ~ expansion on the returned value)
     results.append(inquirer_ai.path("Dir", default="."))
+
+    # P12 — editor, default "draft" (agent answer overrides the default)
+    results.append(inquirer_ai.editor("Bio", default="draft"))
 
     with open(results_path, "w", encoding="utf-8") as fh:
         json.dump(results, fh)
