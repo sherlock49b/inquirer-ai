@@ -20,10 +20,15 @@ jobs:
       bumped: ${{ steps.bump.outputs.bumped }}
       version: ${{ steps.bump.outputs.version }}
     steps:
+      # Check out (and later push the bump commit + tag) with a PAT, not the
+      # default GITHUB_TOKEN. main is protected by a ruleset requiring status
+      # checks; the github-actions bot cannot be exempted on a personal repo,
+      # but the PAT pushes as the repo owner (admin), who is in the ruleset
+      # bypass list — so the auto-bump push to main is allowed.
       - uses: actions/checkout@v5
         with:
           fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.RELEASE_PAT }}
 
       - uses: astral-sh/setup-uv@v6
 
