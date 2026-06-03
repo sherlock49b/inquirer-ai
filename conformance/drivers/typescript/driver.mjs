@@ -1,6 +1,6 @@
 // Conformance driver (TypeScript/Node, ESM).
 //
-// Runs the 11-prompt conformance scenario against the REAL inquirer-ai library
+// Runs the 12-prompt conformance scenario against the REAL inquirer-ai library
 // in STDIO AGENT MODE. The library reads answers from stdin and writes the
 // JSONL protocol (handshake + prompts + validation_errors) to stdout. This
 // driver collects each prompt's RETURN VALUE and writes them as a single JSON
@@ -25,6 +25,7 @@ import {
   expand,
   autocomplete,
   path,
+  editor,
   createSeparator,
 } from "../../../typescript/dist/index.js";
 
@@ -133,6 +134,9 @@ async function main() {
 
   // P11 path  message="Dir"  default="."
   results.push(await path({ message: "Dir", default: "." }));
+
+  // P12 editor  message="Bio"  default="draft"
+  results.push(await editor({ message: "Bio", default: "draft" }));
 
   fs.writeFileSync(resultsFile, JSON.stringify(results));
 }

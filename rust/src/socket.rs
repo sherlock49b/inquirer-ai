@@ -29,7 +29,12 @@ mod inner {
     /// Singleton socket transport instance.
     static TRANSPORT: OnceLock<Option<SocketTransport>> = OnceLock::new();
 
-    /// Path stored for signal handler cleanup (signal-safe: fixed buffer, no alloc).
+    /// Socket path stored for the signal-handler cleanup. NOTE: the handler
+    /// reads this and calls `remove_file`, which is not strictly
+    /// async-signal-safe (the `OnceLock` load is a plain atomic, but building the
+    /// `CString` for `unlink` allocates). It is reachable only after the path is
+    /// set, at process top level, and never re-entrant, so this is an accepted
+    /// trade-off to guarantee socket cleanup on SIGINT/SIGTERM.
     static CLEANUP_PATH: OnceLock<String> = OnceLock::new();
 
     /// Unix socket transport for the inquirer-ai agent protocol.
