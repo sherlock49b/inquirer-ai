@@ -205,18 +205,25 @@ email = inquirer_ai.text(
 )
 ```
 
-## questionary Drop-in Replacement
+## questionary Compatibility Layer
 
 For existing projects using [questionary](https://github.com/tmbo/questionary):
 
 ```python
 from inquirer_ai.compat import questionary
 
-# All existing code works unchanged:
+# Common questionary calls work unchanged:
 questionary.select("Pick", choices=[...]).ask()
 questionary.confirm("Sure?").unsafe_ask()
 questionary.prompt(questions, style=style)
 ```
+
+The layer covers the prompt types and APIs used by tools like commitizen —
+`select`, `confirm`, `checkbox`, `text`/`input`, and `prompt()`, with
+`.ask()`/`.unsafe_ask()` (and their async variants). Other questionary prompt
+types are accepted but fall back to a text prompt, so it is a compatibility
+shim for the common cases rather than a 1:1 replacement for the entire
+questionary API.
 
 ## Async Support
 
