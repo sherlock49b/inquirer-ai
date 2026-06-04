@@ -34,9 +34,11 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@stable
 
-      - name: Install commitizen with the in-repo teamcz plugin
-        # The plugin drives bumps from feat/fix/protocol/compat commits.
-        run: uv tool install commitizen --with ./python --with ./extensions/cz-teamcz
+      - name: Install commitizen with the cz-agentic plugin
+        # cz-agentic drives bumps from feat/fix/refactor/perf and `!` / BREAKING
+        # CHANGE. It is not yet on PyPI, so it is installed from GitHub; ./python
+        # provides the local inquirer-ai that cz-agentic depends on.
+        run: uv tool install commitizen --with ./python --with "git+https://github.com/sherlock49b/cz-agentic.git"
 
       - name: Configure git
         run: |
@@ -46,7 +48,7 @@ jobs:
       - name: Bump version
         id: bump
         run: |
-          # Run cz bump (uses [tool.commitizen] name = "teamcz" from pyproject.toml).
+          # Run cz bump (uses [tool.commitizen] name = "cz_agentic" from pyproject.toml).
           # --no-verify so the generated "bump:" commit is not blocked by hooks.
           set +e
           cz bump --yes --changelog --no-verify 2>&1 | tee /tmp/bump.log
@@ -73,7 +75,7 @@ jobs:
             echo "version=v${VERSION}" >> "$GITHUB_OUTPUT"
             echo "bumped=true" >> "$GITHUB_OUTPUT"
           elif [ "$rc" -eq 21 ]; then
-            # Exit code 21 == NoneIncrementExit: no feat/fix/protocol/compat/
+            # Exit code 21 == NoneIncrementExit: no feat/fix/refactor/perf/
             # breaking commits since the last tag. Not an error.
             echo "No version bump needed (nothing to bump since last tag)"
             echo "bumped=false" >> "$GITHUB_OUTPUT"

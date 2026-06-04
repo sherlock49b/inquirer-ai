@@ -19,25 +19,6 @@ gh contribute
 
 **Source:** [`extensions/gh-contribute/`](gh-contribute/)
 
-## cz-teamcz
-
-A custom commitizen plugin with project-specific commit types and scopes. Demonstrates how inquirer-ai's questionary compatibility layer lets custom plugins be driven by AI agents without any extra work.
-
-Commit types: `feat`, `fix`, `protocol`, `compat`, `refactor`, `test`, `docs`, `chore`, `ci`
-
-Scopes: `python`, `go`, `spec`, and individual prompt types (`select`, `checkbox`, etc.)
-
-```bash
-# Install
-uv tool install commitizen --with ./python --with ./extensions/cz-teamcz
-
-# Configure in pyproject.toml:
-[tool.commitizen]
-name = "teamcz"
-```
-
-**Source:** [`extensions/cz-teamcz/`](cz-teamcz/)
-
 ## cz-ai
 
 A Node.js commitizen adapter powered by inquirer-ai's TypeScript library. Provides agent-protocol-aware conventional commits — any AI agent can drive the commit flow via the JSON line protocol without knowing your project's conventions in advance.
