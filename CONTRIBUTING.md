@@ -9,7 +9,7 @@
 - Node.js 18+ and npm (for the TypeScript library)
 - Rust (stable toolchain) with `clippy` and `rustfmt` (for the Rust library) — `rustup component add clippy rustfmt`
 - [uv](https://docs.astral.sh/uv/)
-- [commitizen](https://commitizen-tools.github.io/commitizen/) (`uv tool install commitizen --with ./python --with ./extensions/cz-teamcz`)
+- [commitizen](https://commitizen-tools.github.io/commitizen/) with the [cz-agentic](https://github.com/sherlock49b/cz-agentic) plugin (`uv tool install commitizen --with ./python --with "git+https://github.com/sherlock49b/cz-agentic.git"`)
 
 ### Setup
 
@@ -59,28 +59,43 @@ cargo fmt -- --check                   # Format check
 
 ### Committing
 
-Use `cz commit` instead of `git commit`. This project uses a custom commitizen plugin (`teamcz`) with project-specific types and scopes:
+Use `cz commit` instead of `git commit`. This project uses the
+[cz-agentic](https://github.com/sherlock49b/cz-agentic) commitizen plugin, which
+extends Conventional Commits with structured decision-context fields:
 
 ```bash
 cz commit
 ```
 
-Types: `feat`, `fix`, `protocol`, `compat`, `refactor`, `perf`, `test`, `docs`, `chore`, `ci`
+Types: `feat`, `fix`, `refactor`, `perf`, `docs`, `style`, `test`, `build`, `ci`, `chore`
 
-Scopes: `python`, `go`, `spec`, or a specific prompt type (`select`, `checkbox`, `compat`, etc.)
+Scope is free-form — use the most specific one (`python`, `go`, `spec`, `protocol`,
+`compat`, a prompt type like `select`/`checkbox`, etc.). Whitespace in a scope is
+hyphenated automatically.
 
-The `commit-msg` hook rejects malformed commit messages.
+Two fields are **required** on every commit and enforced by the `commit-msg` hook:
+
+- `[tags]` — comma-separated retrieval keywords (specific terms, e.g. `handshake`, `socket-transport`).
+- `[intent]` — why the change is necessary (the motivation, not the mechanism).
+
+Optional fields (`[constraints]`, `[alternatives]`, `[uncertainty]`, `[refs]`) capture
+decision context that isn't inferable from the diff — include them when they apply.
+Run `cz info`, `cz example`, and `cz schema` to see the full convention.
+
+> cz-agentic does not define the old `protocol`/`compat`/`hotfix` types. A protocol
+> change is now e.g. `feat(protocol): …` / `fix(spec): …` with the protocol impact
+> spelled out in `[intent]` (see *Protocol changes* below).
 
 ### Releasing
 
 Releases are normally automated: pushing to `main` runs the `auto-bump` job in
-`.github/workflows/release.yml`, which runs `cz bump` with the in-repo `teamcz`
-plugin, regenerates `rust/Cargo.lock`, and pushes the bump commit + tag. To bump
-manually (the `teamcz` plugin reads `[tool.commitizen]` in the root
+`.github/workflows/release.yml`, which runs `cz bump` with the cz-agentic plugin
+(installed from GitHub), regenerates `rust/Cargo.lock`, and pushes the bump commit +
+tag. To bump manually (cz-agentic reads `[tool.commitizen]` in the root
 `pyproject.toml`):
 
 ```bash
-cz bump --changelog     # Auto-determine version from commit history (feat/fix/protocol/compat/breaking)
+cz bump --yes --changelog   # Auto-determine version (feat/fix/refactor/perf, `!`/BREAKING CHANGE)
 git push --follow-tags
 ```
 
@@ -120,42 +135,57 @@ Run `cz commit`. In agent mode (non-TTY stdin), the tool auto-creates a Unix soc
 INQUIRER_AI_MODE=agent cz commit > /tmp/handshake.txt &
 SOCK=$(jq -r .socket /tmp/handshake.txt)
 
-# Answer each prompt with an independent command
-echo '{"answer":"feat"}'        | nc -U -q1 $SOCK
-echo '{"answer":"python"}'      | nc -U -q1 $SOCK
-echo '{"answer":"add feature"}' | nc -U -q1 $SOCK
-echo '{"answer":""}'            | nc -U -q1 $SOCK
-echo '{"answer":false}'         | nc -U -q1 $SOCK
-echo '{"answer":""}'            | nc -U -q1 $SOCK
+# Answer each prompt with an independent command, in order
+echo '{"answer":"feat"}'                            | nc -U -q1 $SOCK  # type
+echo '{"answer":"select"}'                          | nc -U -q1 $SOCK  # scope (free-form, enter to skip)
+echo '{"answer":"show context on focused choice"}'  | nc -U -q1 $SOCK  # short description
+echo '{"answer":""}'                                | nc -U -q1 $SOCK  # body (skip)
+echo '{"answer":"select, choice-context, focus"}'   | nc -U -q1 $SOCK  # [tags]   (required)
+echo '{"answer":"Users could not see per-choice context until selecting."}' | nc -U -q1 $SOCK  # [intent] (required)
+echo '{"answer":""}'                                | nc -U -q1 $SOCK  # [constraints]
+echo '{"answer":""}'                                | nc -U -q1 $SOCK  # [alternatives]
+echo '{"answer":""}'                                | nc -U -q1 $SOCK  # [uncertainty]
+echo '{"answer":""}'                                | nc -U -q1 $SOCK  # [refs]
+echo '{"answer":false}'                             | nc -U -q1 $SOCK  # breaking change?
 ```
 
-Each `nc` call connects, receives the prompt, sends the answer, and gets `{"status":"accepted"}`. No persistent session needed.
+Each `nc` call connects, receives the prompt, sends the answer, and gets `{"status":"accepted"}`. No persistent session needed. The flow is **dynamic**: answering `true` to the breaking-change prompt adds one final prompt asking what breaks and how to migrate. Read each prompt before answering rather than assuming a fixed count; `[tags]` and `[intent]` reject empty answers.
 
 ### Commit question flow
 
-`cz commit` asks 6 questions in order:
+`cz commit` walks these prompts in order (the last one appears only for breaking changes, so the count is 11 or 12):
 
-| # | Type | Question | Valid answers |
-|---|------|----------|---------------|
-| 1 | select | Commit type | `feat`, `fix`, `protocol`, `compat`, `refactor`, `perf`, `test`, `docs`, `chore`, `ci` |
-| 2 | select | Scope | `python`, `go`, `spec`, `prompt`, `choice`, `theme`, `select`, `checkbox`, `text`, `confirm`, `password`, `number`, `editor`, `search`, `expand`, `rawlist`, `path`, `autocomplete`, `compat`, `ci`, `deps` |
-| 3 | input | Short summary | Imperative mood, no period |
-| 4 | input | Context (optional) | Any text, or empty string to skip |
-| 5 | confirm | Breaking change? | `true` or `false` |
-| 6 | input | References (optional) | Issue/PR numbers, or empty to skip |
+| # | Type | Field | Valid answers |
+|---|------|-------|---------------|
+| 1 | select | Commit type | `feat`, `fix`, `refactor`, `perf`, `docs`, `style`, `test`, `build`, `ci`, `chore` |
+| 2 | input | Scope | Free-form (`python`, `go`, `spec`, `select`, …), or empty to skip |
+| 3 | input | Short description | Imperative mood, no period. **Required** |
+| 4 | input | Body | Any text, or empty to skip |
+| 5 | input | `[tags]` | Comma-separated retrieval keywords. **Required** |
+| 6 | input | `[intent]` | Why the change is necessary. **Required** |
+| 7 | input | `[constraints]` | Limitations not visible in the code, or empty to skip |
+| 8 | input | `[alternatives]` | Rejected approaches + reasons, or empty to skip |
+| 9 | input | `[uncertainty]` | Arbitrary values / temp solutions / unverified assumptions, or empty to skip |
+| 10 | input | `[refs]` | Related commits (`hash — reason`), or empty to skip |
+| 11 | confirm | Breaking change? | `true` or `false` |
+| 12 | input | Breaking-change description | Only asked when #11 is `true`. What breaks + migration. **Required** |
 
 ### Choosing the right type
 
 - `feat` — new prompt type, API, or user-facing capability
 - `fix` — bug fix in prompt behavior, validation, or rendering
-- `protocol` — change to the agent JSON protocol (handshake, prompt format, response schema). Use sparingly — this affects all consumers
-- `compat` — changes to the `questionary` compatibility layer
 - `refactor` — restructuring without behavior change
 - `perf` — performance improvement (no behavior change)
-- `test` — adding or improving tests
 - `docs` — documentation, README, protocol spec
-- `chore` — build, CI, tooling, dependencies
+- `style` — formatting only (no code change)
+- `test` — adding or improving tests
+- `build` — build system or dependencies
 - `ci` — CI/CD pipeline changes
+- `chore` — other changes that don't touch src or tests
+
+There is no dedicated `protocol`/`compat` type. For an agent-protocol or compat-layer
+change, use the type that fits (`feat`/`fix`/`refactor`) with scope `protocol`, `spec`,
+or `compat`, and spell out the impact in `[intent]`.
 
 ### Choosing the right scope
 
@@ -179,7 +209,7 @@ cd go && go test ./prompt/ -count=1 && cd ..
 
 If you change the agent JSON protocol (handshake format, prompt fields, response schema), you MUST:
 
-1. Use commit type `protocol`
+1. Use scope `protocol` (or `spec`) on a `feat`/`fix`/`refactor` commit, and describe the protocol impact in `[intent]`
 2. Update `spec/protocol.md`
 3. Update all 4 implementations: Python, Go, TypeScript, Rust
 4. Ensure all tests pass in all languages
@@ -188,7 +218,7 @@ If you change the agent JSON protocol (handshake format, prompt fields, response
 
 | Hook | Runs | Blocks on failure? |
 |------|------|:------------------------:|
-| `commit-msg` | `cz check` (message format); skips the `bump:` release commit | Yes |
+| `commit-msg` | `cz check` — enforces the cz-agentic format, including required `[tags]`/`[intent]`; skips the `bump:` release commit | Yes |
 | `pre-commit` | Python lint + typecheck + tests, Go fmt + vet + tests, TS tsc + biome + tests, Rust fmt + clippy + tests (only for changed languages, run sequentially) | Yes |
 | `pre-push` | No-op — `pre-commit` already covers the changed languages and CI runs the full matrix | No |
 
@@ -210,14 +240,21 @@ $ echo '{"answer":"feat"}' | nc -U -q1 $SOCK
 {"status":"accepted"}
 
 $ echo '{"answer":"select"}' | nc -U -q1 $SOCK
-{"kind":"prompt","type":"select","message":"What part of the project is affected?","choices":[...]}
+{"kind":"prompt","type":"input","message":"Scope of this change (press enter to skip):"}
 {"status":"accepted"}
 
-$ echo '{"answer":"add description shown on focused choice"}' | nc -U -q1 $SOCK
-{"kind":"prompt","type":"input","message":"Write a short summary..."}
+$ echo '{"answer":"add context shown on focused choice"}' | nc -U -q1 $SOCK
+{"kind":"prompt","type":"input","message":"Short description (imperative mood, no period, required):"}
 {"status":"accepted"}
 
-# ... (3 more prompts)
+# ... body (skip), then the required [tags] and [intent], the optional fields, and the breaking-change confirm
 
-# Result: feat(select): add description shown on focused choice
+# Result:
+#   feat(select): add context shown on focused choice
+#
+#   [tags]
+#   select, choice-context, focus
+#
+#   [intent]
+#   Choices carried extra context that users could not see until selecting.
 ```
