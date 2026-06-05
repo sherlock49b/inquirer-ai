@@ -114,7 +114,7 @@ The first line emitted by the program is a handshake. It is sent exactly once, b
 {
   "kind": "handshake",
   "protocol": "inquirer-ai",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "format": "jsonl",
   "socket": "/tmp/inquirer-ai-29481.sock",
   "interaction": "sequential",

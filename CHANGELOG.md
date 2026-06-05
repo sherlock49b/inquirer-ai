@@ -82,6 +82,12 @@ All notable changes to this project will be documented in this file.
 
 - Add pyright type checking to CI pipeline
 
+## v0.4.2 (2026-06-05)
+
+### Bug Fixes
+
+- **number**: replace ReDoS-prone whitespace regex with a linear trim
+
 ## v0.4.1 (2026-06-02)
 
 ### Bug Fixes
