@@ -1,1 +1,6 @@
 node_modules/
+# Not committed: commitizen is a peerDependency the consumer supplies, so this
+# adapter must not vendor/pin commitizen's tree (its old inquirer->external-editor
+# ->tmp and lodash are the consumer's concern, not ours). The sibling extensions
+# commit no lockfile either. See git history for the Dependabot-alert cleanup.
+package-lock.json
