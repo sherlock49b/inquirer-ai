@@ -1,0 +1,70 @@
+name: CodeQL
+
+# SAST for the three CodeQL-supported languages in this repo. Rust is not
+# supported by CodeQL; it is covered by `clippy -D warnings` + `cargo audit`
+# (see the Security workflow / dependency review). Runs on every push/PR to
+# main and weekly, so the security queries also catch newly-disclosed patterns.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: "23 5 * * 1" # Mondays 05:23 UTC
+
+jobs:
+  analyze:
+    name: Analyze (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      actions: read
+      contents: read
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - language: python
+            build-mode: none
+          - language: javascript-typescript
+            build-mode: none
+          - language: go
+            build-mode: manual
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - if: matrix.language == 'go'
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.23"
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: ${{ matrix.build-mode }}
+          # Source only — skip build artifacts, deps, and generated output.
+          config: |
+            paths-ignore:
+              - '**/node_modules'
+              - '**/dist'
+              - '**/target'
+              - '**/.venv'
+              - '**/__pycache__'
+              - 'conformance/drivers'
+
+      # build-mode: manual — CodeQL traces the commands run here. The Go module
+      # lives in go/, so build it from there.
+      - if: matrix.language == 'go'
+        shell: bash
+        run: |
+          cd go
+          go build ./...
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:${{ matrix.language }}"

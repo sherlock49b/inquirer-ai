@@ -1,0 +1,47 @@
+version: 2
+
+# SCA floor for a multi-language library published to npm + PyPI + crates.
+# Dependabot opens grouped weekly PRs for version updates and (with repo-level
+# vulnerability alerts on) targeted PRs for known CVEs. The test matrix is the
+# backstop against a breaking upgrade. github-actions is included because a
+# pinned action is a supply-chain dependency too.
+updates:
+  - package-ecosystem: "uv" # Python lib (uv.lock); fall back to "pip" if rejected
+    directory: "/python"
+    schedule:
+      interval: "weekly"
+    groups:
+      python:
+        patterns: ["*"]
+
+  - package-ecosystem: "npm"
+    directory: "/typescript"
+    schedule:
+      interval: "weekly"
+    groups:
+      typescript:
+        patterns: ["*"]
+
+  - package-ecosystem: "cargo"
+    directory: "/rust"
+    schedule:
+      interval: "weekly"
+    groups:
+      rust:
+        patterns: ["*"]
+
+  - package-ecosystem: "gomod"
+    directory: "/go"
+    schedule:
+      interval: "weekly"
+    groups:
+      go:
+        patterns: ["*"]
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    groups:
+      actions:
+        patterns: ["*"]
