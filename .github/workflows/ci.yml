@@ -79,7 +79,11 @@ jobs:
         run: go vet ./prompt/ ./examples/...
 
       - name: Run tests
-        run: go test ./prompt/ -v -cover -count=1
+        # -race: the agent/socket transport spawns goroutines; the detector guards
+        # the concurrent paths. Runs in CI (authoritative) not pre-commit, which
+        # stays fast — see the precommit-contention note. TMPDIR=/tmp (job env)
+        # keeps Unix-socket paths under the macOS sun_path limit.
+        run: go test ./prompt/ -race -v -cover -count=1
 
       - name: Build example
         run: go build ./examples/demo/

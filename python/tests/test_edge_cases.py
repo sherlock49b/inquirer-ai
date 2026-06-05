@@ -2,7 +2,6 @@
 
 import io
 import json
-import threading
 
 import pytest
 
@@ -102,46 +101,58 @@ class TestHandshakeDefense:
         assert "inquirer-ai" not in output
 
 
-class TestConcurrentHandshake:
-    """_agent_handshake_sent is a global — verify it doesn't corrupt under threads."""
+class TestHandshakeIdempotency:
+    """The agent handshake is emitted exactly once per process. The protocol is
+    sequential by contract (one prompt at a time over one stream), so the real
+    invariant is idempotency across calls — the handshake must not repeat on
+    every prompt — and ``_reset_agent_handshake`` must re-arm it for a new session.
+    (Thread-safety of the global is out of contract; concurrent prompting is not
+    a supported transport. See the handshake-race note in the test-flight run.)
+    """
 
-    def test_handshake_sent_exactly_once_under_threads(self, monkeypatch):
+    @staticmethod
+    def _count_kind(output: str, kind: str) -> int:
+        count = 0
+        for line in output.splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                msg = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if isinstance(msg, dict) and msg.get("kind") == kind:
+                count += 1
+        return count
+
+    def test_handshake_sent_exactly_once_across_sequential_prompts(self, monkeypatch):
         monkeypatch.setenv("INQUIRER_AI_MODE", "agent")
         _base._reset_agent_handshake()
 
-        handshake_count = 0
-        lock = threading.Lock()
-        original_write = io.StringIO.write
-
-        class CountingWriter(io.StringIO):
-            def write(self, s):
-                nonlocal handshake_count
-                if "inquirer-ai" in s:
-                    with lock:
-                        handshake_count += 1
-                return original_write(self, s)
-
-        stdout = CountingWriter()
+        answers = "".join(json.dumps({"answer": f"t{i}"}) + "\n" for i in range(3))
+        monkeypatch.setattr("sys.stdin", io.StringIO(answers))
+        stdout = io.StringIO()
         monkeypatch.setattr("sys.stdout", stdout)
 
-        answers = "\n".join(json.dumps({"answer": f"t{i}"}) for i in range(10)) + "\n"
-        monkeypatch.setattr("sys.stdin", io.StringIO(answers))
+        results = [TextPrompt(f"Q{i}").execute() for i in range(3)]
+        output = stdout.getvalue()
 
-        results = []
-        errors = []
+        assert results == ["t0", "t1", "t2"]  # every prompt answered
+        assert self._count_kind(output, "handshake") == 1  # once, not per-prompt
+        assert self._count_kind(output, "prompt") == 3  # each prompt still announced
 
-        def run_prompt(i):
-            try:
-                r = TextPrompt(f"Q{i}").execute()
-                results.append(r)
-            except Exception as e:
-                errors.append(e)
+    def test_reset_rearms_handshake(self, monkeypatch):
+        monkeypatch.setenv("INQUIRER_AI_MODE", "agent")
 
-        threads = [threading.Thread(target=run_prompt, args=(i,)) for i in range(5)]
-        for t in threads:
-            t.start()
-        for t in threads:
-            t.join()
+        def run_once(answer: str) -> str:
+            monkeypatch.setattr("sys.stdin", io.StringIO(json.dumps({"answer": answer}) + "\n"))
+            out = io.StringIO()
+            monkeypatch.setattr("sys.stdout", out)
+            TextPrompt("Q").execute()
+            return out.getvalue()
 
-        # Document the race condition — don't fail, just observe
-        _ = handshake_count  # may be >1 due to race on _agent_handshake_sent
+        _base._reset_agent_handshake()
+        assert self._count_kind(run_once("a"), "handshake") == 1  # first session: handshake
+        assert self._count_kind(run_once("b"), "handshake") == 0  # same session: not repeated
+        _base._reset_agent_handshake()
+        assert self._count_kind(run_once("c"), "handshake") == 1  # after reset: re-armed

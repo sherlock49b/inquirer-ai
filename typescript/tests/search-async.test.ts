@@ -265,60 +265,15 @@ describe("SearchPrompt async and debounce tests", () => {
     );
   });
 
-  // 6. Debounce timing test
-  it("debounce coalesces rapid source calls with ~150ms spacing", async () => {
-    vi.useRealTimers();
-
-    const callTimestamps: number[] = [];
-    const source = (term: string) => {
-      callTimestamps.push(Date.now());
-      return [{ name: `result-${term}`, value: term }];
-    };
-
-    const _prompt = new SearchPrompt({
-      message: "Search?",
-      source,
-      pageSize: 5,
-    });
-
-    // Access the private refreshSource logic by simulating what executeTerminal does.
-    // We construct the internal debounce mechanism manually here to test timing.
-    let debounceTimer: ReturnType<typeof setTimeout> | null = null;
-
-    const refreshSource = (searchTerm: string): void => {
-      if (debounceTimer) clearTimeout(debounceTimer);
-      debounceTimer = setTimeout(() => {
-        source(searchTerm);
-      }, 150);
-    };
-
-    // Fire 5 rapid calls
-    refreshSource("a");
-    refreshSource("ab");
-    refreshSource("abc");
-    refreshSource("abcd");
-    refreshSource("abcde");
-
-    // Wait for debounce to settle
-    await new Promise((r) => setTimeout(r, 300));
-
-    // Only the last call should have fired (debounce coalesced the rest)
-    expect(callTimestamps.length).toBe(1);
-
-    // Fire two calls spaced apart
-    callTimestamps.length = 0;
-    refreshSource("x");
-    await new Promise((r) => setTimeout(r, 200));
-    refreshSource("y");
-    await new Promise((r) => setTimeout(r, 200));
-
-    // Both should have fired since they were spaced beyond debounce interval
-    expect(callTimestamps.length).toBe(2);
-
-    // Verify the spacing between the two calls is >= 150ms
-    const gap = callTimestamps[1]! - callTimestamps[0]!;
-    expect(gap).toBeGreaterThanOrEqual(140); // small tolerance for timer jitter
-  });
+  // NOTE: the former "debounce timing" test was deleted in the test-flight suite
+  // audit. It reimplemented the 150ms debounce inline and asserted on that copy,
+  // so it could only fail if the test's own copy broke — zero signal about the
+  // real SearchPrompt. The real debounce lives in a readline keypress loop
+  // (executeTerminal) that the TUI harness cannot drive and that does not compose
+  // with fake timers; it is terminal-only (the agent protocol does not debounce),
+  // and the source-calling path is already covered by the agent-mode tests above.
+  // Residual (see disposition): to unit-test the coalescing, extract the debounce
+  // closure into a pure, clock-injectable helper.
 
   // 7. Async source error handling
   // When a source throws a plain Error (not ValidationError/PromptAbortedError),

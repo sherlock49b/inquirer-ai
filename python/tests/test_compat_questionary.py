@@ -239,7 +239,9 @@ def test_text_default_empty_string(monkeypatch):
 
 
 def test_multiple_styles_ignored(monkeypatch):
+    # `style=` is a terminal-only cosmetic kwarg; in agent mode it must be
+    # accepted and ignored, leaving the agent-provided answers unaffected.
     _agent(monkeypatch, "a", True, ["x"])
-    questionary.select("Q", choices=["a"], style="s1").ask()
-    questionary.confirm("Q", style="s2").ask()
-    questionary.checkbox("Q", choices=["x"], style="s3").ask()
+    assert questionary.select("Q", choices=["a"], style="s1").ask() == "a"
+    assert questionary.confirm("Q", style="s2").ask() is True
+    assert questionary.checkbox("Q", choices=["x"], style="s3").ask() == ["x"]
