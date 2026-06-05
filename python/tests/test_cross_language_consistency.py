@@ -14,6 +14,7 @@ from hypothesis import strategies as st
 
 from inquirer_ai.choice import Choice, value_matches
 from inquirer_ai.exceptions import ValidationError
+from inquirer_ai.prompts.choice_base import ChoiceBasePrompt
 from inquirer_ai.prompts.confirm import ConfirmPrompt
 from inquirer_ai.prompts.number import NumberPrompt
 from inquirer_ai.prompts.rawlist import RawlistPrompt
@@ -371,3 +372,58 @@ class TestTypedValueMatchingCrossLanguage:
         assert p._validate_answer(1) == "a"
         with pytest.raises(ValidationError):
             p._validate_answer(True)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# 6. Viewport scroll window — the centered, clamped page that select / checkbox
+#    / rawlist / expand render around the cursor. All four languages compute the
+#    same [start, end) for a given (cursor, total, page_size); the reference is
+#    Go ``visibleRange``. This golden table is replicated verbatim in
+#    go/prompt/tui_boundary_test.go, typescript/tests/cross-language.test.ts and
+#    rust/src/prompts/select.rs — if any implementation drifts, its own copy of
+#    this table reddens. Oracle: spec formula
+#    ``ps = min(page_size, total); start = clamp(cursor - ps//2, 0, total - ps)``.
+# ══════════════════════════════════════════════════════════════════════════════
+
+
+# (cursor, total, page_size, expected_start, expected_end)
+VIEWPORT_GOLDEN = [
+    (0, 3, 10, 0, 3),  # total < page_size: no scroll
+    (2, 3, 10, 0, 3),  # total < page_size: centered cursor still no scroll
+    (0, 10, 10, 0, 10),  # total == page_size
+    (0, 20, 10, 0, 10),  # cursor at top
+    (5, 20, 10, 0, 10),  # cursor == floor(ps/2): still pinned to 0
+    (6, 20, 10, 1, 11),  # first scroll — off-by-one sentinel
+    (15, 20, 10, 10, 20),  # centered mid-list
+    (19, 20, 10, 10, 20),  # near end: clamped to total - ps
+    (5, 12, 3, 4, 7),  # odd page_size, floor(3/2) == 1
+    (5, 12, 4, 3, 7),  # even page_size, floor(4/2) == 2
+    (7, 10, 1, 7, 8),  # page_size == 1
+    (99, 100, 10, 90, 100),  # end clamp
+    (50, 100, 10, 45, 55),  # mid large list
+    (0, 0, 5, 0, 0),  # empty list (defensive: rejected upstream, must not crash)
+]
+
+
+class TestViewportWindowCrossLanguage:
+    @pytest.mark.parametrize(("cursor", "total", "page_size", "start", "end"), VIEWPORT_GOLDEN)
+    def test_window(self, cursor, total, page_size, start, end):
+        assert ChoiceBasePrompt._visible_window(cursor, total, page_size) == (start, end)
+
+    def test_window_never_exceeds_page_size(self):
+        # Span is min(page_size, total) for every reachable state — the window
+        # never shows more rows than the page allows, nor more than exist.
+        for total in range(0, 25):
+            for page_size in (1, 3, 4, 10):
+                for cursor in range(0, max(total, 1)):
+                    s, e = ChoiceBasePrompt._visible_window(cursor, total, page_size)
+                    assert 0 <= s <= e <= total
+                    assert e - s == min(page_size, total)
+
+    def test_cursor_stays_inside_window(self):
+        # The whole point of centering: a valid cursor is always visible.
+        for total in range(1, 25):
+            for page_size in (1, 3, 4, 10):
+                for cursor in range(total):
+                    s, e = ChoiceBasePrompt._visible_window(cursor, total, page_size)
+                    assert s <= cursor < e

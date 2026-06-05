@@ -173,9 +173,7 @@ fn render_items(
     t: &crate::theme::Theme,
 ) -> Vec<(String, String)> {
     let total = choices.len();
-    let ps = page_size.min(total);
-    let start = cursor.saturating_sub(ps / 2).min(total.saturating_sub(ps));
-    let end = (start + ps).min(total);
+    let (start, end) = super::visible_range(cursor, total, page_size);
 
     let mut items = Vec::new();
     let mc = ansi_color(t.muted);

@@ -1,6 +1,6 @@
 import { type Choice, type ChoiceItem, choiceToDict, invalidChoiceMessage, isSeparator, parseChoice, type RawChoice, valuesMatch } from "../choice.js";
 import { InvalidChoiceError, PromptAbortedError, ValidationError } from "../errors.js";
-import { type ListItem, runListPrompt } from "../terminal.js";
+import { type ListItem, runListPrompt, visibleRange } from "../terminal.js";
 import { ansi, getTheme, RESET } from "../theme.js";
 import { type BaseConfig, BasePrompt } from "./base.js";
 
@@ -109,9 +109,7 @@ export class CheckboxPrompt<V = unknown> extends BasePrompt<V[]> {
 
     const getItems = (): ListItem[] => {
       const total = this.items.length;
-      const ps = Math.min(this.pageSize, total);
-      const start = Math.max(0, Math.min(cursor - Math.floor(ps / 2), total - ps));
-      const end = start + ps;
+      const { start, end } = visibleRange(cursor, total, this.pageSize);
       const result: ListItem[] = [];
 
       if (start > 0) result.push({ text: `  ${ansi(t.muted)}(more above)${RESET}`, style: "" });

@@ -93,6 +93,21 @@ export interface ListItem {
   style: string;
 }
 
+/**
+ * The [start, end) slice of items visible around `cursor` in a scrolling list.
+ *
+ * Centers the cursor in a window of `min(pageSize, total)` rows, clamping so it
+ * never runs off either end. Pure function shared by select and checkbox so the
+ * scroll math is unit-testable rather than duplicated inline in each render
+ * loop. Mirrors Go `visibleRange` / Python `_visible_window` / Rust
+ * `visible_range`; the cross-language golden table pins them together.
+ */
+export function visibleRange(cursor: number, total: number, pageSize: number): { start: number; end: number } {
+  const ps = Math.min(pageSize, total);
+  const start = Math.max(0, Math.min(cursor - Math.floor(ps / 2), total - ps));
+  return { start, end: start + ps };
+}
+
 export interface ListConfig {
   message: string;
   getItems: () => ListItem[];

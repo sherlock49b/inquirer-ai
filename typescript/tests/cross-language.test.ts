@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { ValidationError } from "../src/errors.js";
 import { ConfirmPrompt } from "../src/prompts/confirm.js";
 import { NumberPrompt } from "../src/prompts/number.js";
+import { visibleRange } from "../src/terminal.js";
 
 /**
  * Cross-language consistency tests.
@@ -337,5 +338,61 @@ describe("Cross-language: property-based", () => {
         },
       ),
     );
+  });
+});
+
+// The viewport scroll window that select/checkbox render around the cursor.
+// All four languages compute the same [start, end); the reference is Go
+// `visibleRange`. This golden table is replicated verbatim in
+// python/tests/test_cross_language_consistency.py, go/prompt/tui_boundary_test.go
+// and rust/src/prompts/select.rs — drift reddens whichever copy diverged.
+// Oracle: ps = min(pageSize, total); start = clamp(cursor - floor(ps/2), 0, total - ps).
+describe("Cross-language: viewport window", () => {
+  // [cursor, total, pageSize, expectedStart, expectedEnd]
+  const GOLDEN: [number, number, number, number, number][] = [
+    [0, 3, 10, 0, 3], // total < pageSize: no scroll
+    [2, 3, 10, 0, 3], // total < pageSize: centered cursor still no scroll
+    [0, 10, 10, 0, 10], // total == pageSize
+    [0, 20, 10, 0, 10], // cursor at top
+    [5, 20, 10, 0, 10], // cursor == floor(ps/2): still pinned to 0
+    [6, 20, 10, 1, 11], // first scroll — off-by-one sentinel
+    [15, 20, 10, 10, 20], // centered mid-list
+    [19, 20, 10, 10, 20], // near end: clamped to total - ps
+    [5, 12, 3, 4, 7], // odd pageSize, floor(3/2) == 1
+    [5, 12, 4, 3, 7], // even pageSize, floor(4/2) == 2
+    [7, 10, 1, 7, 8], // pageSize == 1
+    [99, 100, 10, 90, 100], // end clamp
+    [50, 100, 10, 45, 55], // mid large list
+    [0, 0, 5, 0, 0], // empty list (defensive: rejected upstream, must not crash)
+  ];
+
+  it.each(GOLDEN)("window(%i, %i, %i) == [%i, %i)", (cursor, total, pageSize, start, end) => {
+    expect(visibleRange(cursor, total, pageSize)).toEqual({ start, end });
+  });
+
+  it("span is min(pageSize, total) and stays within bounds", () => {
+    for (let total = 0; total < 25; total++) {
+      for (const pageSize of [1, 3, 4, 10]) {
+        for (let cursor = 0; cursor < Math.max(total, 1); cursor++) {
+          const { start, end } = visibleRange(cursor, total, pageSize);
+          expect(start).toBeGreaterThanOrEqual(0);
+          expect(start).toBeLessThanOrEqual(end);
+          expect(end).toBeLessThanOrEqual(total);
+          expect(end - start).toBe(Math.min(pageSize, total));
+        }
+      }
+    }
+  });
+
+  it("a valid cursor is always inside the window", () => {
+    for (let total = 1; total < 25; total++) {
+      for (const pageSize of [1, 3, 4, 10]) {
+        for (let cursor = 0; cursor < total; cursor++) {
+          const { start, end } = visibleRange(cursor, total, pageSize);
+          expect(start).toBeLessThanOrEqual(cursor);
+          expect(cursor).toBeLessThan(end);
+        }
+      }
+    }
   });
 });

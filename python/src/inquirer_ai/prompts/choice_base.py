@@ -76,6 +76,20 @@ class ChoiceBasePrompt(BasePrompt[T]):
         new_pos = new_pos % len(indices) if self.loop else max(0, min(new_pos, len(indices) - 1))
         return indices[new_pos]
 
+    @staticmethod
+    def _visible_window(cursor: int, total: int, page_size: int) -> tuple[int, int]:
+        """Return the [start, end) slice of items visible around *cursor*.
+
+        Centers the cursor in a window of ``min(page_size, total)`` items,
+        clamping so it never runs off either end. Pure function — the render
+        closures delegate here so the scroll math is unit-testable rather than
+        trapped inside the live prompt_toolkit Application. Mirrors Go
+        ``visibleRange`` / the cross-language golden table in the test suites.
+        """
+        ps = min(page_size, total)
+        start = max(0, min(cursor - ps // 2, total - ps))
+        return start, start + ps
+
     def _execute_terminal(self) -> T:
         t = get_theme()
         items = self.items
@@ -123,11 +137,7 @@ class ChoiceBasePrompt(BasePrompt[T]):
             )
 
         def _visible_range() -> tuple[int, int]:
-            cursor = state["cursor"]
-            total = len(items)
-            ps = min(self.page_size, total)
-            start = max(0, min(cursor - ps // 2, total - ps))
-            return start, start + ps
+            return self._visible_window(state["cursor"], len(items), self.page_size)
 
         def get_formatted_choices() -> FormattedText:
             lines: list[tuple[str, str]] = []
@@ -206,11 +216,7 @@ class ChoiceBasePrompt(BasePrompt[T]):
             )
 
         def _visible_range() -> tuple[int, int]:
-            cursor = state["cursor"]
-            total = len(items)
-            ps = min(self.page_size, total)
-            start = max(0, min(cursor - ps // 2, total - ps))
-            return start, start + ps
+            return self._visible_window(state["cursor"], len(items), self.page_size)
 
         def get_formatted_choices() -> FormattedText:
             lines: list[tuple[str, str]] = []

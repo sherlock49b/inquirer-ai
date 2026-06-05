@@ -397,38 +397,9 @@ func TestTuiBoundaryRawlistNegativeIndex(t *testing.T) {
 	}
 }
 
-// Additional boundary tests for visibleRange pagination logic.
-
-func TestTuiBoundaryVisibleRangeSmallList(t *testing.T) {
-	// When total < pageSize, the entire list should be visible.
-	start, end := visibleRange(0, 3, 10)
-	if start != 0 || end != 3 {
-		t.Fatalf("expected [0,3), got [%d,%d)", start, end)
-	}
-}
-
-func TestTuiBoundaryVisibleRangeCursorAtEnd(t *testing.T) {
-	// Cursor at the last item of a 100-item list with pageSize 10.
-	start, end := visibleRange(99, 100, 10)
-	if start != 90 || end != 100 {
-		t.Fatalf("expected [90,100), got [%d,%d)", start, end)
-	}
-}
-
-func TestTuiBoundaryVisibleRangeCursorAtStart(t *testing.T) {
-	start, end := visibleRange(0, 100, 10)
-	if start != 0 || end != 10 {
-		t.Fatalf("expected [0,10), got [%d,%d)", start, end)
-	}
-}
-
-func TestTuiBoundaryVisibleRangeMiddle(t *testing.T) {
-	// Cursor in the middle: window should center around cursor.
-	start, end := visibleRange(50, 100, 10)
-	if start != 45 || end != 55 {
-		t.Fatalf("expected [45,55), got [%d,%d)", start, end)
-	}
-}
+// visibleRange pagination boundaries are covered exhaustively by the
+// cross-language golden table in TestVisibleRangeCrossLanguageGolden below
+// (small-list, cursor-at-start/end, centered, off-by-one, page_size==1, empty).
 
 // Select with Disabled as a string reason (not just bool).
 func TestTuiBoundaryDisabledWithStringReason(t *testing.T) {
@@ -500,5 +471,39 @@ func TestTuiBoundaryRawlistExactMaxIndex(t *testing.T) {
 	}
 	if result != "3rd" {
 		t.Fatalf("expected '3rd', got %v", result)
+	}
+}
+
+// Cross-language golden table for the viewport scroll window. Go's visibleRange
+// is the reference implementation; this exact table is replicated verbatim in
+// python/tests/test_cross_language_consistency.py,
+// typescript/tests/cross-language.test.ts and rust/src/prompts/mod.rs — if any
+// implementation drifts, its own copy of the table reddens. Oracle:
+// ps = min(pageSize, total); start = clamp(cursor - ps/2, 0, total - ps).
+func TestVisibleRangeCrossLanguageGolden(t *testing.T) {
+	cases := []struct {
+		cursor, total, pageSize, wantStart, wantEnd int
+	}{
+		{0, 3, 10, 0, 3},       // total < pageSize: no scroll
+		{2, 3, 10, 0, 3},       // total < pageSize: centered cursor still no scroll
+		{0, 10, 10, 0, 10},     // total == pageSize
+		{0, 20, 10, 0, 10},     // cursor at top
+		{5, 20, 10, 0, 10},     // cursor == ps/2: still pinned to 0
+		{6, 20, 10, 1, 11},     // first scroll — off-by-one sentinel
+		{15, 20, 10, 10, 20},   // centered mid-list
+		{19, 20, 10, 10, 20},   // near end: clamped to total - ps
+		{5, 12, 3, 4, 7},       // odd pageSize, 3/2 == 1
+		{5, 12, 4, 3, 7},       // even pageSize, 4/2 == 2
+		{7, 10, 1, 7, 8},       // pageSize == 1
+		{99, 100, 10, 90, 100}, // end clamp
+		{50, 100, 10, 45, 55},  // mid large list
+		{0, 0, 5, 0, 0},        // empty list (defensive: must not panic)
+	}
+	for _, c := range cases {
+		start, end := visibleRange(c.cursor, c.total, c.pageSize)
+		if start != c.wantStart || end != c.wantEnd {
+			t.Errorf("visibleRange(%d, %d, %d) = [%d,%d), want [%d,%d)",
+				c.cursor, c.total, c.pageSize, start, end, c.wantStart, c.wantEnd)
+		}
 	}
 }
