@@ -74,9 +74,12 @@ jobs:
 
             echo "version=v${VERSION}" >> "$GITHUB_OUTPUT"
             echo "bumped=true" >> "$GITHUB_OUTPUT"
-          elif [ "$rc" -eq 21 ]; then
-            # Exit code 21 == NoneIncrementExit: no feat/fix/refactor/perf/
-            # breaking commits since the last tag. Not an error.
+          elif [ "$rc" -eq 21 ] || [ "$rc" -eq 3 ]; then
+            # Not an error — nothing to release this run:
+            #   21 == NoneIncrementExit: commits exist but none bump (build/test/...).
+            #    3 == NO_COMMITS_FOUND: no new commits since the last tag — this is
+            #         what the "bump:" commit's own push to main produces, so the
+            #         re-triggered Release run must treat it as a clean no-op.
             echo "No version bump needed (nothing to bump since last tag)"
             echo "bumped=false" >> "$GITHUB_OUTPUT"
           else
@@ -125,7 +128,15 @@ jobs:
         run: uv build --out-dir dist/
 
       - name: Publish to PyPI
-        run: uv publish dist/*
+        # Idempotent: a single bumped release fires this job from both the branch
+        # push and the tag push, so skip if the version is already on PyPI.
+        run: |
+          VERSION=$(grep '^version' pyproject.toml | head -1 | sed 's/.*"\(.*\)"/\1/')
+          if curl -fsSo /dev/null "https://pypi.org/pypi/inquirer-ai/${VERSION}/json"; then
+            echo "inquirer-ai ${VERSION} already on PyPI — skipping."
+          else
+            uv publish dist/*
+          fi
         env:
           UV_PUBLISH_TOKEN: ${{ secrets.PYPI_TOKEN }}
 
@@ -153,7 +164,14 @@ jobs:
         run: npx tsc
 
       - name: Publish to npm
-        run: npm publish
+        # Idempotent — skip if this version is already on npm (see PyPI note).
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          if [ -n "$(npm view "inquirer-ai@${VERSION}" version 2>/dev/null)" ]; then
+            echo "inquirer-ai ${VERSION} already on npm — skipping."
+          else
+            npm publish
+          fi
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
@@ -172,6 +190,13 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
 
       - name: Publish to crates.io
-        run: cargo publish --allow-dirty
+        # Idempotent — skip if this version is already on crates.io (see PyPI note).
+        run: |
+          VERSION=$(grep '^version' Cargo.toml | head -1 | sed 's/.*"\(.*\)"/\1/')
+          if curl -fsSo /dev/null -H "User-Agent: inquirer-ai-release" "https://crates.io/api/v1/crates/inquirer-ai/${VERSION}"; then
+            echo "inquirer-ai ${VERSION} already on crates.io — skipping."
+          else
+            cargo publish --allow-dirty
+          fi
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CRATES_TOKEN }}
