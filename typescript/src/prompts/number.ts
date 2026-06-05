@@ -7,6 +7,20 @@ import { type BaseConfig, BasePrompt } from "./base.js";
 // rejects "1_000", "3abc", "0x10", ".5", "5.", "", "+".
 const NUMBER_GRAMMAR = /^[+-]?\d+(\.\d+)?([eE][+-]?\d+)?$/;
 
+// Trim the R2 ASCII whitespace set (\t \n \v \f \r and space) with a linear
+// two-pointer scan instead of a regex. The previous /^[ws]+|[ws]+$/g pattern was
+// polynomial-ReDoS-prone on long whitespace runs (CodeQL js/polynomial-redos);
+// this is O(n) and strips the exact same characters, so behavior is unchanged.
+function trimAsciiWs(s: string): string {
+  const isWs = (c: number): boolean =>
+    c === 9 || c === 10 || c === 11 || c === 12 || c === 13 || c === 32;
+  let start = 0;
+  let end = s.length;
+  while (start < end && isWs(s.charCodeAt(start))) start++;
+  while (end > start && isWs(s.charCodeAt(end - 1))) end--;
+  return s.slice(start, end);
+}
+
 export interface NumberConfig extends BaseConfig<number> {
   min?: number | null;
   max?: number | null;
@@ -51,7 +65,7 @@ export class NumberPrompt extends BasePrompt<number> {
       // 3) JSON string: trim leading/trailing ASCII whitespace, then the
       //    remainder MUST fully match the grammar; parse with the native float
       //    parser. Rejects "1_000", "3abc", "0x10", ".5", "5.", "", "+".
-      const trimmed = value.replace(/^[\t\n\v\f\r ]+|[\t\n\v\f\r ]+$/g, "");
+      const trimmed = trimAsciiWs(value);
       if (!NUMBER_GRAMMAR.test(trimmed)) {
         throw new ValidationError(`Not a valid number: ${JSON.stringify(value)}`);
       }
