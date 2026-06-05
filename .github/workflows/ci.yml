@@ -121,6 +121,11 @@ jobs:
         run: npx biome check src/ tests/
 
       - name: Run tests
+        # The library supports Node >=18 (package.json engines), but the test
+        # runner vitest >=4 requires Node >=20 (it imports node:util styleText).
+        # Node 18 still runs install + typecheck + build + lint above, proving the
+        # shipped code compiles for Node 18 consumers; the suite runs on 20/22.
+        if: matrix.node-version != '18'
         run: npx vitest run
 
   rust:
