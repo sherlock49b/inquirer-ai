@@ -15,7 +15,7 @@ import { NumberPrompt } from "../src/prompts/number.js";
 // Helper: call the private validateAnswer on ConfirmPrompt
 function coerceBool(value: unknown): boolean {
   const prompt = new ConfirmPrompt({ message: "x" });
-  return (prompt as any).validateAnswer(value);
+  return (prompt as unknown as { validateAnswer(value: unknown): boolean }).validateAnswer(value);
 }
 
 // Helper: call the private validateAnswer on NumberPrompt with options
@@ -24,7 +24,7 @@ function validateNumber(
   opts: { min?: number; max?: number; floatAllowed?: boolean } = {},
 ): number {
   const prompt = new NumberPrompt({ message: "x", ...opts });
-  return (prompt as any).validateAnswer(value);
+  return (prompt as unknown as { validateAnswer(value: unknown): number }).validateAnswer(value);
 }
 
 // --------------------------------------------------------------------------

@@ -108,9 +108,9 @@ def _read_stdout_handshake(proc: subprocess.Popen, timeout: float = 5.0) -> dict
 
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
-        ready, _, _ = sel.select([proc.stdout], [], [], 0.1)  # type: ignore
+        ready, _, _ = sel.select([proc.stdout], [], [], 0.1)  # type: ignore[reportArgumentType]
         if ready:
-            line = proc.stdout.readline().decode().strip()  # type: ignore
+            line = proc.stdout.readline().decode().strip()  # type: ignore[reportOptionalMemberAccess]
             if line:
                 return json.loads(line)
     raise TimeoutError("No handshake on stdout")
@@ -137,7 +137,7 @@ class TestSocketTransport:
             _close(s, rf, wf)
 
             proc.wait(timeout=5)
-            stderr = proc.stderr.read().decode()  # type: ignore
+            stderr = proc.stderr.read().decode()  # type: ignore[reportOptionalMemberAccess]
             assert "RESULT:Alice" in stderr
         finally:
             proc.kill()
@@ -160,7 +160,7 @@ class TestSocketTransport:
             _close(s, rf, wf)
 
             proc.wait(timeout=5)
-            stderr = proc.stderr.read().decode()  # type: ignore
+            stderr = proc.stderr.read().decode()  # type: ignore[reportOptionalMemberAccess]
             assert "RESULT:Go" in stderr
         finally:
             proc.kill()
@@ -188,7 +188,7 @@ class TestSocketTransport:
             _close(s2, rf2, wf2)
 
             proc.wait(timeout=5)
-            stderr = proc.stderr.read().decode()  # type: ignore
+            stderr = proc.stderr.read().decode()  # type: ignore[reportOptionalMemberAccess]
             assert "RESULT:Bob" in stderr
         finally:
             proc.kill()
@@ -213,7 +213,7 @@ class TestSocketTransport:
             _close(s, rf, wf)
 
             proc.wait(timeout=5)
-            stderr = proc.stderr.read().decode()  # type: ignore
+            stderr = proc.stderr.read().decode()  # type: ignore[reportOptionalMemberAccess]
             assert "RESULT:8080" in stderr
         finally:
             proc.kill()
@@ -238,7 +238,7 @@ class TestSocketTransport:
             _close(s, rf, wf)
 
             proc.wait(timeout=5)
-            stderr = proc.stderr.read().decode()  # type: ignore
+            stderr = proc.stderr.read().decode()  # type: ignore[reportOptionalMemberAccess]
             assert "RESULT:test@example.com" in stderr
         finally:
             proc.kill()
@@ -268,7 +268,7 @@ class TestSocketTransport:
             _close(s2, rf2, wf2)
 
             proc.wait(timeout=5)
-            stderr = proc.stderr.read().decode()  # type: ignore
+            stderr = proc.stderr.read().decode()  # type: ignore[reportOptionalMemberAccess]
             assert "RESULT:Charlie,False" in stderr
         finally:
             proc.kill()
@@ -374,7 +374,7 @@ import sys; print(f"RESULT:{name}", file=sys.stderr, flush=True)
             _close(s, rf, wf)
 
             proc.wait(timeout=5)
-            stderr = proc.stderr.read().decode()  # type: ignore
+            stderr = proc.stderr.read().decode()  # type: ignore[reportOptionalMemberAccess]
             assert "RESULT:auto-test" in stderr
         finally:
             proc.kill()
@@ -398,7 +398,7 @@ import sys; print(f"RESULT:{name}", file=sys.stderr, flush=True)
             stderr=subprocess.PIPE,
         )
         proc.wait(timeout=5)
-        stdout = proc.stdout.read().decode().strip()  # type: ignore
+        stdout = proc.stdout.read().decode().strip()  # type: ignore[reportOptionalMemberAccess]
         assert stdout == "False"
 
     # ------------------------------------------------------------------ #
@@ -428,7 +428,7 @@ import sys; print(f"RESULT:{name}", file=sys.stderr, flush=True)
             _close(s2, rf2, wf2)
 
             proc.wait(timeout=5)
-            stderr = proc.stderr.read().decode()  # type: ignore
+            stderr = proc.stderr.read().decode()  # type: ignore[reportOptionalMemberAccess]
             assert "RESULT:rapid" in stderr
         finally:
             proc.kill()
@@ -460,7 +460,7 @@ import sys; print(f"RESULT:{name}", file=sys.stderr, flush=True)
             _close(s, rf, wf)
 
             proc.wait(timeout=5)
-            stderr = proc.stderr.read().decode()  # type: ignore
+            stderr = proc.stderr.read().decode()  # type: ignore[reportOptionalMemberAccess]
             assert "RESULT:partial" in stderr
         finally:
             proc.kill()
@@ -490,7 +490,7 @@ import sys; print(f"RESULT:{name}", file=sys.stderr, flush=True)
             _close(s2, rf2, wf2)
 
             proc.wait(timeout=5)
-            stderr = proc.stderr.read().decode()  # type: ignore
+            stderr = proc.stderr.read().decode()  # type: ignore[reportOptionalMemberAccess]
             assert "RESULT:client2" in stderr
         finally:
             proc.kill()
@@ -527,7 +527,7 @@ import sys; print(f"RESULT:{name}", file=sys.stderr, flush=True)
         # Read stderr in a background thread to prevent pipe buffer deadlock
         def _drain_stderr():
             while True:
-                chunk = proc.stderr.read(4096)  # type: ignore
+                chunk = proc.stderr.read(4096)  # type: ignore[reportOptionalMemberAccess]
                 if not chunk:
                     break
                 stderr_chunks.append(chunk)

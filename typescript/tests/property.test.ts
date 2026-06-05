@@ -62,7 +62,7 @@ describe("Property-based tests", () => {
             max: maxVal,
           });
           try {
-            const result = (prompt as any).validateAnswer(value);
+            const result = (prompt as unknown as { validateAnswer(value: unknown): number }).validateAnswer(value);
             expect(result).toBeGreaterThanOrEqual(minVal);
             expect(result).toBeLessThanOrEqual(maxVal);
           } catch (e) {
@@ -79,7 +79,7 @@ describe("Property-based tests", () => {
         fc.oneof(fc.boolean(), fc.string(), fc.integer()),
         (value) => {
           const prompt = new ConfirmPrompt({ message: "x" });
-          const result = (prompt as any).validateAnswer(value);
+          const result = (prompt as unknown as { validateAnswer(value: unknown): boolean }).validateAnswer(value);
           expect(typeof result).toBe("boolean");
         },
       ),
@@ -89,7 +89,7 @@ describe("Property-based tests", () => {
   it("NumberPrompt rejects non-finite values", () => {
     const prompt = new NumberPrompt({ message: "x" });
     for (const val of [NaN, Infinity, -Infinity, "NaN", "Infinity", "-Infinity"]) {
-      expect(() => (prompt as any).validateAnswer(val)).toThrow(ValidationError);
+      expect(() => (prompt as unknown as { validateAnswer(value: unknown): number }).validateAnswer(val)).toThrow(ValidationError);
     }
   });
 });

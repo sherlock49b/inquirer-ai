@@ -117,7 +117,7 @@ export function renderPrompt<T>(
   mockStdin.isTTY = true;
   mockStdin.setRawMode = () => {};
   // fd is needed for some tty checks
-  (mockStdin as any).fd = 0;
+  mockStdin.fd = 0;
 
   // --- Build mock stderr (capture buffer) ---
   const outputChunks: string[] = [];
@@ -130,7 +130,7 @@ export function renderPrompt<T>(
   mockStderr.isTTY = true;
   mockStderr.columns = 80;
   mockStderr.rows = 24;
-  (mockStderr as any).fd = 2;
+  mockStderr.fd = 2;
   mockStderr.on("data", (chunk: Buffer) => {
     outputChunks.push(chunk.toString());
   });
