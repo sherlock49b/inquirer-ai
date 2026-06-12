@@ -25,12 +25,12 @@ jobs:
       # checks; the github-actions bot cannot be exempted on a personal repo,
       # but the PAT pushes as the repo owner (admin), who is in the ruleset
       # bypass list — so the auto-bump push to main is allowed.
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
           token: ${{ secrets.RELEASE_PAT }}
 
-      - uses: astral-sh/setup-uv@v6
+      - uses: astral-sh/setup-uv@v7
 
       - uses: dtolnay/rust-toolchain@stable
 
@@ -92,7 +92,7 @@ jobs:
     if: always() && (needs.auto-bump.outputs.bumped == 'true' || (needs.auto-bump.result == 'skipped' && github.ref_type == 'tag'))
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
           ref: ${{ needs.auto-bump.outputs.version || github.ref_name }}
@@ -105,7 +105,7 @@ jobs:
           args: --latest --strip header
 
       - name: Create GitHub release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ needs.auto-bump.outputs.version || github.ref_name }}
           body: ${{ steps.changelog.outputs.content }}
@@ -118,11 +118,11 @@ jobs:
       run:
         working-directory: python
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
         with:
           ref: ${{ needs.auto-bump.outputs.version || github.ref_name }}
 
-      - uses: astral-sh/setup-uv@v6
+      - uses: astral-sh/setup-uv@v7
 
       - name: Build
         run: uv build --out-dir dist/
@@ -148,11 +148,11 @@ jobs:
       run:
         working-directory: typescript
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
         with:
           ref: ${{ needs.auto-bump.outputs.version || github.ref_name }}
 
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@v6
         with:
           node-version: "22"
           registry-url: "https://registry.npmjs.org"
@@ -183,7 +183,7 @@ jobs:
       run:
         working-directory: rust
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
         with:
           ref: ${{ needs.auto-bump.outputs.version || github.ref_name }}
 
